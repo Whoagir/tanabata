@@ -24,7 +24,7 @@ func NewWaveSystem(ecs *entity.ECS, hexMap *hexmap.HexMap, eventDispatcher *even
 		eventDispatcher: eventDispatcher,
 		activeEnemies:   0,
 	}
-	eventDispatcher.Subscribe(event.EnemyDestroyed, ws) // Подписываемся на событие уничтожения врага
+	eventDispatcher.Subscribe(event.EnemyDestroyed, ws)
 	return ws
 }
 
@@ -63,18 +63,7 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 	x, y := s.hexMap.Entry.ToPixel(config.HexSize)
 	s.ecs.Positions[id] = &component.Position{X: x + float64(config.ScreenWidth)/2, Y: y + float64(config.ScreenHeight)/2}
 	s.ecs.Velocities[id] = &component.Velocity{Speed: config.EnemySpeed}
-
-	pathToCheckpoint1 := hexmap.AStar(s.hexMap.Entry, s.hexMap.Checkpoint1, s.hexMap)
-	pathToCheckpoint2 := hexmap.AStar(s.hexMap.Checkpoint1, s.hexMap.Checkpoint2, s.hexMap)
-	pathToExit := hexmap.AStar(s.hexMap.Checkpoint2, s.hexMap.Exit, s.hexMap)
-	if pathToCheckpoint1 == nil || pathToCheckpoint2 == nil || pathToExit == nil {
-		log.Println("Не удалось найти путь через чекпоинты!")
-		return
-	}
-	fullPath := append(pathToCheckpoint1, pathToCheckpoint2[1:]...)
-	fullPath = append(fullPath, pathToExit[1:]...)
-
-	s.ecs.Paths[id] = &component.Path{Hexes: fullPath, CurrentIndex: 0}
+	s.ecs.Paths[id] = &component.Path{Hexes: wave.CurrentPath, CurrentIndex: 0}
 	s.ecs.Healths[id] = &component.Health{Value: config.EnemyHealth}
 	s.ecs.Renderables[id] = &component.Renderable{Color: config.EnemyColor, Radius: float32(config.EnemyRadius), HasStroke: false}
 	s.activeEnemies++
@@ -82,15 +71,38 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 
 func (s *WaveSystem) StartWave(waveNumber int) *component.Wave {
 	enemiesToSpawn := config.EnemiesPerWave + (waveNumber-1)*config.EnemiesIncrementPerWave
-	pathToCheckpoint1 := hexmap.AStar(s.hexMap.Entry, s.hexMap.Checkpoint1, s.hexMap)
-	pathToCheckpoint2 := hexmap.AStar(s.hexMap.Checkpoint1, s.hexMap.Checkpoint2, s.hexMap)
-	pathToExit := hexmap.AStar(s.hexMap.Checkpoint2, s.hexMap.Exit, s.hexMap)
-	if pathToCheckpoint1 == nil || pathToCheckpoint2 == nil || pathToExit == nil {
-		log.Println("Не удалось найти путь через чекпоинты при старте волны!")
-		return nil
+	fullPath := []hexmap.Hex{}
+
+	if len(s.hexMap.Checkpoints) == 0 {
+		path := hexmap.AStar(s.hexMap.Entry, s.hexMap.Exit, s.hexMap)
+		if path == nil {
+			log.Println("Не удалось найти путь от входа до выхода при старте волны!")
+			return nil
+		}
+		fullPath = path
+	} else {
+		current := s.hexMap.Entry
+		for i, cp := range s.hexMap.Checkpoints {
+			pathSegment := hexmap.AStar(current, cp, s.hexMap)
+			if pathSegment == nil {
+				log.Println("Не удалось найти путь до чекпоинта", i+1, "при старте волны!")
+				return nil
+			}
+			if len(fullPath) == 0 {
+				fullPath = pathSegment
+			} else {
+				fullPath = append(fullPath, pathSegment[1:]...)
+			}
+			current = cp
+		}
+		pathToExit := hexmap.AStar(current, s.hexMap.Exit, s.hexMap)
+		if pathToExit == nil {
+			log.Println("Не удалось найти путь до выхода при старте волны!")
+			return nil
+		}
+		fullPath = append(fullPath, pathToExit[1:]...)
 	}
-	fullPath := append(pathToCheckpoint1, pathToCheckpoint2[1:]...)
-	fullPath = append(fullPath, pathToExit[1:]...)
+
 	return &component.Wave{
 		Number:         waveNumber,
 		EnemiesToSpawn: enemiesToSpawn,
@@ -102,6 +114,6 @@ func (s *WaveSystem) StartWave(waveNumber int) *component.Wave {
 
 func (s *WaveSystem) OnEvent(e event.Event) {
 	if e.Type == event.EnemyDestroyed {
-		s.activeEnemies-- // Уменьшаем счётчик активных врагов
+		s.activeEnemies--
 	}
 }

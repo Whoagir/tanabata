@@ -22,19 +22,21 @@ import (
 )
 
 type HexRenderer struct {
-	hexMap       *hexmap.HexMap
-	hexSize      float64
-	screenWidth  int
-	screenHeight int
-	fillImg      *ebiten.Image
-	strokeImg    *ebiten.Image
-	sortedHexes  []hexmap.Hex
-	fillVs       []ebiten.Vertex
-	fillIs       []uint16
-	strokeVs     []ebiten.Vertex
-	strokeIs     []uint16
-	fontFace     font.Face
-	mapImage     *ebiten.Image // Поле для предрендеренной карты
+	hexMap             *hexmap.HexMap
+	hexSize            float64
+	screenWidth        int
+	screenHeight       int
+	fillImg            *ebiten.Image
+	strokeImg          *ebiten.Image
+	sortedHexes        []hexmap.Hex
+	fillVs             []ebiten.Vertex
+	fillIs             []uint16
+	strokeVs           []ebiten.Vertex
+	strokeIs           []uint16
+	fontFace           font.Face // Шрифт для координат (10 пунктов)
+	checkpointFontFace font.Face // Шрифт для номеров чекпоинтов (12 пунктов)
+	mapImage           *ebiten.Image
+	checkpointMap      map[hexmap.Hex]int
 }
 
 func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenHeight int) *HexRenderer {
@@ -49,7 +51,6 @@ func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenH
 		hexes = append(hexes, hex)
 	}
 
-	// Загрузка TTF-шрифта
 	fontData, err := ioutil.ReadFile("assets/fonts/arial.ttf")
 	if err != nil {
 		log.Fatal(err)
@@ -58,6 +59,8 @@ func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenH
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Шрифт для координат (10 пунктов)
 	const fontSize = 10
 	face, err := opentype.NewFace(tt, &opentype.FaceOptions{
 		Size:    fontSize,
@@ -68,23 +71,40 @@ func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenH
 		log.Fatal(err)
 	}
 
-	renderer := &HexRenderer{
-		hexMap:       hexMap,
-		hexSize:      hexSize,
-		screenWidth:  screenWidth,
-		screenHeight: screenHeight,
-		fillImg:      fillImg,
-		strokeImg:    strokeImg,
-		sortedHexes:  hexes,
-		fillVs:       make([]ebiten.Vertex, 0, 18),
-		fillIs:       make([]uint16, 0, 18),
-		strokeVs:     make([]ebiten.Vertex, 0, 36),
-		strokeIs:     make([]uint16, 0, 36),
-		fontFace:     face,
-		mapImage:     ebiten.NewImage(screenWidth, screenHeight), // Создаём изображение размером с экран
+	// Шрифт для номеров чекпоинтов (12 пунктов)
+	const checkpointFontSize = 12
+	checkpointFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    checkpointFontSize,
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	// Отрисовываем карту один раз при инициализации
+	renderer := &HexRenderer{
+		hexMap:             hexMap,
+		hexSize:            hexSize,
+		screenWidth:        screenWidth,
+		screenHeight:       screenHeight,
+		fillImg:            fillImg,
+		strokeImg:          strokeImg,
+		sortedHexes:        hexes,
+		fillVs:             make([]ebiten.Vertex, 0, 18),
+		fillIs:             make([]uint16, 0, 18),
+		strokeVs:           make([]ebiten.Vertex, 0, 36),
+		strokeIs:           make([]uint16, 0, 36),
+		fontFace:           face,
+		checkpointFontFace: checkpointFace,
+		mapImage:           ebiten.NewImage(screenWidth, screenHeight),
+		checkpointMap:      make(map[hexmap.Hex]int),
+	}
+
+	// Заполняем checkpointMap данными из hexMap.Checkpoints
+	for i, cp := range hexMap.Checkpoints {
+		renderer.checkpointMap[cp] = i + 1
+	}
+
 	renderer.RenderMapImage()
 
 	return renderer
@@ -101,34 +121,20 @@ func (r *HexRenderer) RenderMapImage() {
 	for _, hex := range r.sortedHexes {
 		r.drawHexOutline(r.mapImage, hex, nil)
 	}
-
-	// Добавляем визуальное обозначение чекпоинта
-	// checkpointHex := r.hexMap.Checkpoint
-	// x, y := checkpointHex.ToPixel(r.hexSize)
-	// x += float64(r.screenWidth) / 2
-	// y += float64(r.screenHeight) / 2
-	// textStr := "1"
-	// textWidth := text.BoundString(r.fontFace, textStr).Max.X - text.BoundString(r.fontFace, textStr).Min.X
-	// textHeight := text.BoundString(r.fontFace, textStr).Max.Y - text.BoundString(r.fontFace, textStr).Min.Y
-	// text.Draw(r.mapImage, textStr, r.fontFace, int(x)-textWidth/2, int(y)+textHeight/2, color.RGBA{255, 255, 0, 255}) // Жёлтый цвет для номера
 }
 
 func (r *HexRenderer) Draw(screen *ebiten.Image, towerHexes []hexmap.Hex, renderSystem *system.RenderSystem) {
-	// Рисуем предрендеренную карту одним вызовом
 	screen.DrawImage(r.mapImage, nil)
 
-	// Создаём map для быстрого доступа к гексам с башнями
 	towerHexSet := make(map[hexmap.Hex]struct{})
 	for _, hex := range towerHexes {
 		towerHexSet[hex] = struct{}{}
 	}
 
-	// Рисуем обводку только для гексов с башнями
 	for _, hex := range towerHexes {
 		r.drawHexOutline(screen, hex, towerHexSet)
 	}
 
-	// Рисуем динамические сущности (башни, враги и т.д.)
 	renderSystem.Draw(screen)
 }
 
@@ -152,21 +158,54 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 
 	tile := r.hexMap.Tiles[hex]
 	var fillColor color.RGBA
+
+	// Переменная для цвета текста координат
+	var coordsTextColor color.RGBA
+	// Переменная для цвета текста чекпоинта (всегда яркий)
+	var checkpointNumTextColor = color.RGBA{255, 255, 0, 255} // Желтый, как ты и хотел
+
+	isCurrentHexCheckpoint := false
+	if _, isCheckpoint := r.checkpointMap[hex]; isCheckpoint {
+		isCurrentHexCheckpoint = true
+	}
+
 	if hex == r.hexMap.Entry {
 		fillColor = config.EntryColor
+		coordsTextColor = config.TextDarkColor // или config.TextLightColor, зависит от фона
 	} else if hex == r.hexMap.Exit {
 		fillColor = config.ExitColor
-	} else if hex == r.hexMap.Checkpoint1 || hex == r.hexMap.Checkpoint2 {
+		coordsTextColor = config.TextDarkColor // или config.TextLightColor
+	} else if isCurrentHexCheckpoint {
+		// Затемненный цвет для гекса чекпоинта
 		fillColor = color.RGBA{
 			R: config.PassableColor.R / 2,
 			G: config.PassableColor.G / 2,
 			B: config.PassableColor.B / 2,
 			A: config.PassableColor.A,
 		}
+		// Затемненный цвет для текста координат, если это чекпоинт
+		coordsTextColor = color.RGBA{
+			R: config.TextLightColor.R / 2, // Или config.TextDarkColor / 2, в зависимости от изначального цвета
+			G: config.TextLightColor.G / 2,
+			B: config.TextLightColor.B / 2,
+			A: config.TextLightColor.A,
+		}
 	} else if tile.Passable {
 		fillColor = config.PassableColor
+		// Обычный цвет для текста координат, если гекс не чекпоинт
+		if (fillColor.R+fillColor.G+fillColor.B)/3 > 128 {
+			coordsTextColor = config.TextDarkColor
+		} else {
+			coordsTextColor = config.TextLightColor
+		}
 	} else {
 		fillColor = config.ImpassableColor
+		// Обычный цвет для текста координат
+		if (fillColor.R+fillColor.G+fillColor.B)/3 > 128 {
+			coordsTextColor = config.TextDarkColor
+		} else {
+			coordsTextColor = config.TextLightColor
+		}
 	}
 
 	r.fillVs, r.fillIs = path.AppendVerticesAndIndicesForFilling(r.fillVs[:0], r.fillIs[:0])
@@ -180,27 +219,19 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 		AntiAlias: true,
 	})
 
+	// Отрисовка текста координат (Q, R)
 	label := fmt.Sprintf("%d,%d", hex.Q, hex.R)
-	var textColor color.RGBA
-	if (fillColor.R+fillColor.G+fillColor.B)/3 > 128 {
-		textColor = config.TextDarkColor
-	} else {
-		textColor = config.TextLightColor
-	}
 	textWidth := text.BoundString(r.fontFace, label).Max.X - text.BoundString(r.fontFace, label).Min.X
 	textHeight := text.BoundString(r.fontFace, label).Max.Y - text.BoundString(r.fontFace, label).Min.Y
-	text.Draw(target, label, r.fontFace, int(x)-textWidth/2, int(y)+textHeight/2, textColor)
+	text.Draw(target, label, r.fontFace, int(x)-textWidth/2, int(y)+textHeight/2, coordsTextColor)
 
-	if hex == r.hexMap.Checkpoint1 {
-		checkpointText := "1"
-		checkpointTextWidth := text.BoundString(r.fontFace, checkpointText).Max.X - text.BoundString(r.fontFace, checkpointText).Min.X
-		checkpointTextHeight := text.BoundString(r.fontFace, checkpointText).Max.Y - text.BoundString(r.fontFace, checkpointText).Min.Y
-		text.Draw(target, checkpointText, r.fontFace, int(x)-checkpointTextWidth/2, int(y)+checkpointTextHeight/2, color.RGBA{255, 255, 0, 255})
-	} else if hex == r.hexMap.Checkpoint2 {
-		checkpointText := "2"
-		checkpointTextWidth := text.BoundString(r.fontFace, checkpointText).Max.X - text.BoundString(r.fontFace, checkpointText).Min.X
-		checkpointTextHeight := text.BoundString(r.fontFace, checkpointText).Max.Y - text.BoundString(r.fontFace, checkpointText).Min.Y
-		text.Draw(target, checkpointText, r.fontFace, int(x)-checkpointTextWidth/2, int(y)+checkpointTextHeight/2, color.RGBA{255, 255, 0, 255})
+	// Отрисовка номера чекпоинта
+	if num, isCheckpoint := r.checkpointMap[hex]; isCheckpoint {
+		checkpointText := fmt.Sprintf("%d", num)
+		checkpointTextWidth := text.BoundString(r.checkpointFontFace, checkpointText).Max.X - text.BoundString(r.checkpointFontFace, checkpointText).Min.X
+		checkpointTextHeight := text.BoundString(r.checkpointFontFace, checkpointText).Max.Y - text.BoundString(r.checkpointFontFace, checkpointText).Min.Y
+		// Используем яркий цвет для номера чекпоинта
+		text.Draw(target, checkpointText, r.checkpointFontFace, int(x)-checkpointTextWidth/2, int(y)+checkpointTextHeight/2, checkpointNumTextColor)
 	}
 }
 
@@ -237,7 +268,7 @@ func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, tower
 	var strokeColor color.RGBA
 	if towerHexSet != nil {
 		if _, hasTower := towerHexSet[hex]; hasTower {
-			strokeColor = color.RGBA{R: 255, G: 100, B: 100, A: 255} // Красноватый для башен
+			strokeColor = color.RGBA{R: 255, G: 100, B: 100, A: 255}
 		} else {
 			strokeColor = color.RGBA{
 				R: uint8(min(255, int(fillColor.R)+40)),

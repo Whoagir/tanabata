@@ -9,6 +9,7 @@ import (
 	"go-tower-defense/internal/system"
 	"go-tower-defense/internal/ui"
 	"go-tower-defense/pkg/hexmap"
+	"log"
 	"math/rand"
 )
 
@@ -127,15 +128,23 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 		}
 	}
 
-	// Проверка путей через чекпоинт
 	originalPassable := tile.Passable
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
-	pathToCheckpoint1 := hexmap.AStar(g.HexMap.Entry, g.HexMap.Checkpoint1, g.HexMap)
-	pathToCheckpoint2 := hexmap.AStar(g.HexMap.Checkpoint1, g.HexMap.Checkpoint2, g.HexMap)
-	pathToExit := hexmap.AStar(g.HexMap.Checkpoint2, g.HexMap.Exit, g.HexMap)
+	checkpoints := g.HexMap.Checkpoints
+	current := g.HexMap.Entry
+	for i, cp := range checkpoints {
+		path := hexmap.AStar(current, cp, g.HexMap)
+		if path == nil {
+			g.HexMap.Tiles[hex] = hexmap.Tile{Passable: originalPassable, CanPlaceTower: tile.CanPlaceTower}
+			log.Println("Путь до чекпоинта", i+1, "заблокирован!")
+			return false
+		}
+		current = cp
+	}
+	pathToExit := hexmap.AStar(current, g.HexMap.Exit, g.HexMap)
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: originalPassable, CanPlaceTower: tile.CanPlaceTower}
-
-	if pathToCheckpoint1 == nil || pathToCheckpoint2 == nil || pathToExit == nil {
+	if pathToExit == nil {
+		log.Println("Путь до выхода заблокирован!")
 		return false
 	}
 

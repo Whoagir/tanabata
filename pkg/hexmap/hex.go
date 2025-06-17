@@ -21,12 +21,13 @@ type Tile struct {
 
 // HexMap хранит карту гексов и их свойств
 type HexMap struct {
-	Tiles       map[Hex]Tile // Карта гексов
-	Radius      int          // Радиус карты (для шестиугольника)
-	Entry       Hex          // Вход
-	Exit        Hex          // Выход
-	Checkpoint1 Hex          // Первый чекпоинт
-	Checkpoint2 Hex          // Второй чекпоинт
+	Tiles  map[Hex]Tile // Карта гексов
+	Radius int          // Радиус карты (для шестиугольника)
+	Entry  Hex          // Вход
+	Exit   Hex          // Выход
+	// Checkpoint1 Hex          // Первый чекпоинт
+	// Checkpoint2 Hex          // Второй чекпоинт
+	Checkpoints []Hex // Список чекпоинтов в порядке прохождения
 }
 
 // NewHexMap создает новую гексагональную карту с процедурно сгенерированными краями
@@ -50,12 +51,27 @@ func NewHexMap() *HexMap {
 	tiles[exit] = Tile{Passable: true, CanPlaceTower: false}
 
 	hm := &HexMap{
-		Tiles:       tiles,
-		Radius:      radius,
-		Entry:       entry,
-		Exit:        exit,
-		Checkpoint1: Hex{Q: -10, R: 10},
-		Checkpoint2: Hex{Q: 10, R: -10},
+		Tiles:  tiles,
+		Radius: radius,
+		Entry:  entry,
+		Exit:   exit,
+	}
+
+	// Установка шести чекпоинтов с случайным вращением
+	D := hm.Radius - 3
+	if D < 1 {
+		hm.Checkpoints = []Hex{}
+	} else {
+		baseCheckpoints := []Hex{
+			{Q: -D, R: D}, // -10,10
+			{Q: D, R: -D}, // 10,-10
+			{Q: 0, R: -D}, // 0,-10
+			{Q: 0, R: D},  // 0,10
+			{Q: D, R: 0},  // 10,0
+			{Q: -D, R: 0}, // -10,0
+		}
+		k := rand.Intn(6)
+		hm.Checkpoints = append(baseCheckpoints[k:], baseCheckpoints[:k]...)
 	}
 
 	// Получаем зоны исключения (радиус 3 от входа и выхода)
@@ -85,6 +101,16 @@ func NewHexMap() *HexMap {
 	hm.postProcessMap()
 
 	return hm
+}
+
+// isCheckpoint проверяет, является ли гекс чекпоинтом
+func (hm *HexMap) isCheckpoint(hex Hex) bool {
+	for _, cp := range hm.Checkpoints {
+		if cp == hex {
+			return true
+		}
+	}
+	return false
 }
 
 // getExclusionZones возвращает гексы в радиусе от входа и выхода
