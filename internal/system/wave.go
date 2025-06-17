@@ -7,6 +7,7 @@ import (
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/pkg/hexmap"
+	"log"
 )
 
 type WaveSystem struct {
@@ -62,21 +63,40 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 	x, y := s.hexMap.Entry.ToPixel(config.HexSize)
 	s.ecs.Positions[id] = &component.Position{X: x + float64(config.ScreenWidth)/2, Y: y + float64(config.ScreenHeight)/2}
 	s.ecs.Velocities[id] = &component.Velocity{Speed: config.EnemySpeed}
-	s.ecs.Paths[id] = &component.Path{Hexes: wave.CurrentPath, CurrentIndex: 0}
+
+	pathToCheckpoint1 := hexmap.AStar(s.hexMap.Entry, s.hexMap.Checkpoint1, s.hexMap)
+	pathToCheckpoint2 := hexmap.AStar(s.hexMap.Checkpoint1, s.hexMap.Checkpoint2, s.hexMap)
+	pathToExit := hexmap.AStar(s.hexMap.Checkpoint2, s.hexMap.Exit, s.hexMap)
+	if pathToCheckpoint1 == nil || pathToCheckpoint2 == nil || pathToExit == nil {
+		log.Println("Не удалось найти путь через чекпоинты!")
+		return
+	}
+	fullPath := append(pathToCheckpoint1, pathToCheckpoint2[1:]...)
+	fullPath = append(fullPath, pathToExit[1:]...)
+
+	s.ecs.Paths[id] = &component.Path{Hexes: fullPath, CurrentIndex: 0}
 	s.ecs.Healths[id] = &component.Health{Value: config.EnemyHealth}
 	s.ecs.Renderables[id] = &component.Renderable{Color: config.EnemyColor, Radius: float32(config.EnemyRadius), HasStroke: false}
-	s.activeEnemies++ // Увеличиваем счётчик активных врагов
+	s.activeEnemies++
 }
 
 func (s *WaveSystem) StartWave(waveNumber int) *component.Wave {
 	enemiesToSpawn := config.EnemiesPerWave + (waveNumber-1)*config.EnemiesIncrementPerWave
-	currentPath := hexmap.AStar(s.hexMap.Entry, s.hexMap.Exit, s.hexMap)
+	pathToCheckpoint1 := hexmap.AStar(s.hexMap.Entry, s.hexMap.Checkpoint1, s.hexMap)
+	pathToCheckpoint2 := hexmap.AStar(s.hexMap.Checkpoint1, s.hexMap.Checkpoint2, s.hexMap)
+	pathToExit := hexmap.AStar(s.hexMap.Checkpoint2, s.hexMap.Exit, s.hexMap)
+	if pathToCheckpoint1 == nil || pathToCheckpoint2 == nil || pathToExit == nil {
+		log.Println("Не удалось найти путь через чекпоинты при старте волны!")
+		return nil
+	}
+	fullPath := append(pathToCheckpoint1, pathToCheckpoint2[1:]...)
+	fullPath = append(fullPath, pathToExit[1:]...)
 	return &component.Wave{
 		Number:         waveNumber,
 		EnemiesToSpawn: enemiesToSpawn,
 		SpawnTimer:     0,
-		SpawnInterval:  float64(config.InitialSpawnInterval) / 1000.0, // Начальный интервал в секундах
-		CurrentPath:    currentPath,
+		SpawnInterval:  float64(config.InitialSpawnInterval) / 1000.0,
+		CurrentPath:    fullPath,
 	}
 }
 

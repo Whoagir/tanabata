@@ -1,3 +1,4 @@
+// pkg/render/hex_renderer.go
 package render
 
 import (
@@ -91,18 +92,25 @@ func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenH
 
 // RenderMapImage создаёт предрендеренное изображение задника
 func (r *HexRenderer) RenderMapImage() {
-	// Очищаем изображение перед отрисовкой
 	r.mapImage.Clear()
 
-	// Рисуем заполнение всех гексов
 	for _, hex := range r.sortedHexes {
 		r.drawHexFill(r.mapImage, hex)
 	}
 
-	// Рисуем обводку всех гексов (без учёта башен, они динамические)
 	for _, hex := range r.sortedHexes {
-		r.drawHexOutline(r.mapImage, hex, nil) // nil, так как башни отрисовываются позже
+		r.drawHexOutline(r.mapImage, hex, nil)
 	}
+
+	// Добавляем визуальное обозначение чекпоинта
+	// checkpointHex := r.hexMap.Checkpoint
+	// x, y := checkpointHex.ToPixel(r.hexSize)
+	// x += float64(r.screenWidth) / 2
+	// y += float64(r.screenHeight) / 2
+	// textStr := "1"
+	// textWidth := text.BoundString(r.fontFace, textStr).Max.X - text.BoundString(r.fontFace, textStr).Min.X
+	// textHeight := text.BoundString(r.fontFace, textStr).Max.Y - text.BoundString(r.fontFace, textStr).Min.Y
+	// text.Draw(r.mapImage, textStr, r.fontFace, int(x)-textWidth/2, int(y)+textHeight/2, color.RGBA{255, 255, 0, 255}) // Жёлтый цвет для номера
 }
 
 func (r *HexRenderer) Draw(screen *ebiten.Image, towerHexes []hexmap.Hex, renderSystem *system.RenderSystem) {
@@ -148,6 +156,13 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 		fillColor = config.EntryColor
 	} else if hex == r.hexMap.Exit {
 		fillColor = config.ExitColor
+	} else if hex == r.hexMap.Checkpoint1 || hex == r.hexMap.Checkpoint2 {
+		fillColor = color.RGBA{
+			R: config.PassableColor.R / 2,
+			G: config.PassableColor.G / 2,
+			B: config.PassableColor.B / 2,
+			A: config.PassableColor.A,
+		}
 	} else if tile.Passable {
 		fillColor = config.PassableColor
 	} else {
@@ -175,6 +190,18 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 	textWidth := text.BoundString(r.fontFace, label).Max.X - text.BoundString(r.fontFace, label).Min.X
 	textHeight := text.BoundString(r.fontFace, label).Max.Y - text.BoundString(r.fontFace, label).Min.Y
 	text.Draw(target, label, r.fontFace, int(x)-textWidth/2, int(y)+textHeight/2, textColor)
+
+	if hex == r.hexMap.Checkpoint1 {
+		checkpointText := "1"
+		checkpointTextWidth := text.BoundString(r.fontFace, checkpointText).Max.X - text.BoundString(r.fontFace, checkpointText).Min.X
+		checkpointTextHeight := text.BoundString(r.fontFace, checkpointText).Max.Y - text.BoundString(r.fontFace, checkpointText).Min.Y
+		text.Draw(target, checkpointText, r.fontFace, int(x)-checkpointTextWidth/2, int(y)+checkpointTextHeight/2, color.RGBA{255, 255, 0, 255})
+	} else if hex == r.hexMap.Checkpoint2 {
+		checkpointText := "2"
+		checkpointTextWidth := text.BoundString(r.fontFace, checkpointText).Max.X - text.BoundString(r.fontFace, checkpointText).Min.X
+		checkpointTextHeight := text.BoundString(r.fontFace, checkpointText).Max.Y - text.BoundString(r.fontFace, checkpointText).Min.Y
+		text.Draw(target, checkpointText, r.fontFace, int(x)-checkpointTextWidth/2, int(y)+checkpointTextHeight/2, color.RGBA{255, 255, 0, 255})
+	}
 }
 
 func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, towerHexSet map[hexmap.Hex]struct{}) {

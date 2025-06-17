@@ -5,6 +5,7 @@ import (
 	"container/heap"
 	"go-tower-defense/internal/config"
 	"math"
+	"math/rand"
 )
 
 // Hex представляет гекс в осевых координатах (Q, R)
@@ -20,18 +21,20 @@ type Tile struct {
 
 // HexMap хранит карту гексов и их свойств
 type HexMap struct {
-	Tiles  map[Hex]Tile // Карта гексов
-	Radius int          // Радиус карты (для шестиугольника)
-	Entry  Hex          // Вход
-	Exit   Hex          // Выход
+	Tiles       map[Hex]Tile // Карта гексов
+	Radius      int          // Радиус карты (для шестиугольника)
+	Entry       Hex          // Вход
+	Exit        Hex          // Выход
+	Checkpoint1 Hex          // Первый чекпоинт
+	Checkpoint2 Hex          // Второй чекпоинт
 }
 
-// NewHexMap создает новую гексагональную карту заданного радиуса
+// NewHexMap создает новую гексагональную карту с процедурно сгенерированными краями
 func NewHexMap() *HexMap {
 	tiles := make(map[Hex]Tile)
 	radius := config.MapRadius
 
-	// Генерация шестиугольной карты
+	// Генерация базовой шестиугольной карты
 	for q := -radius; q <= radius; q++ {
 		r1 := max(-radius, -q-radius)
 		r2 := min(radius, -q+radius)
@@ -41,18 +44,253 @@ func NewHexMap() *HexMap {
 	}
 
 	// Установка входа и выхода
-	entry := Hex{Q: -(radius + 1), R: radius - radius/2 + 1} // Для R=7: (-8, 5)
-	exit := Hex{Q: radius + 1, R: -(radius - radius/2 + 1)}  // Для R=7: (8, -5)
-
-	// Вход и выход проходимы, но нельзя ставить башни
+	entry := Hex{Q: -(radius + 1), R: radius - radius/2 + 1}
+	exit := Hex{Q: radius + 1, R: -(radius - radius/2 + 1)}
 	tiles[entry] = Tile{Passable: true, CanPlaceTower: false}
 	tiles[exit] = Tile{Passable: true, CanPlaceTower: false}
 
-	return &HexMap{
-		Tiles:  tiles,
-		Radius: radius,
-		Entry:  entry,
-		Exit:   exit,
+	hm := &HexMap{
+		Tiles:       tiles,
+		Radius:      radius,
+		Entry:       entry,
+		Exit:        exit,
+		Checkpoint1: Hex{Q: -10, R: 10},
+		Checkpoint2: Hex{Q: 10, R: -10},
+	}
+
+	// Получаем зоны исключения (радиус 3 от входа и выхода)
+	exclusion := hm.getExclusionZones(3)
+
+	// Определяем все секции по 3 гекса для каждой из 6 сторон
+	sections := hm.getBorderSections()
+
+	// Применяем процедурную генерацию
+	for _, section := range sections {
+		if hm.sectionIntersectsExclusion(section, exclusion) {
+			continue
+		}
+		// Случайное действие: 30% — добавить, 30% — убрать, 40% — ничего
+		action := rand.Intn(10)
+		if action < 3 {
+			hm.addOuterSection(section)
+		} else if action < 6 {
+			hm.removeInnerSection(section)
+		}
+	}
+
+	// Обрабатываем углы отдельно
+	hm.processCorners(exclusion)
+
+	// Пост-обработка для устранения аномалий
+	hm.postProcessMap()
+
+	return hm
+}
+
+// getExclusionZones возвращает гексы в радиусе от входа и выхода
+func (hm *HexMap) getExclusionZones(radius int) map[Hex]struct{} {
+	exclusion := make(map[Hex]struct{})
+	entryZone := hm.GetHexesInRange(hm.Entry, radius)
+	exitZone := hm.GetHexesInRange(hm.Exit, radius)
+	for _, hex := range entryZone {
+		exclusion[hex] = struct{}{}
+	}
+	for _, hex := range exitZone {
+		exclusion[hex] = struct{}{}
+	}
+	return exclusion
+}
+
+// getBorderSections возвращает секции по 3 гекса для каждой стороны шестиугольника
+func (hm *HexMap) getBorderSections() [][]Hex {
+	var sections [][]Hex
+	radius := hm.Radius
+	sides := []struct {
+		coords func(int) Hex
+		start  int
+		end    int
+	}{
+		{func(r int) Hex { return Hex{radius, r} }, -radius, 0},
+		{func(q int) Hex { return Hex{q, radius - q} }, 0, radius},
+		{func(q int) Hex { return Hex{q, -radius} }, 0, radius},
+		{func(r int) Hex { return Hex{-radius, r} }, 0, radius},
+		{func(q int) Hex { return Hex{q, -radius - q} }, -radius, 0},
+		{func(q int) Hex { return Hex{q, radius} }, -radius, 0},
+	}
+
+	for _, side := range sides {
+		for i := side.start; i <= side.end-2; i += 3 {
+			section := []Hex{
+				side.coords(i),
+				side.coords(i + 1),
+				side.coords(i + 2),
+			}
+			valid := true
+			for _, hex := range section {
+				if !hm.Contains(hex) {
+					valid = false
+					break
+				}
+			}
+			if valid {
+				sections = append(sections, section)
+			}
+		}
+	}
+	return sections
+}
+
+// sectionIntersectsExclusion проверяет, пересекается ли секция с зоной исключения
+func (hm *HexMap) sectionIntersectsExclusion(section []Hex, exclusion map[Hex]struct{}) bool {
+	for _, hex := range section {
+		if _, excluded := exclusion[hex]; excluded {
+			return true
+		}
+	}
+	return false
+}
+
+// addOuterSection добавляет внешнюю группу из 3 гексов
+func (hm *HexMap) addOuterSection(section []Hex) {
+	for _, hex := range section {
+		neighbors := hex.AllPossibleNeighbors()
+		for _, n := range neighbors {
+			if !hm.Contains(n) {
+				hm.Tiles[n] = Tile{Passable: true, CanPlaceTower: true}
+			}
+		}
+	}
+}
+
+// removeInnerSection убирает секцию, если это не нарушит связность
+func (hm *HexMap) removeInnerSection(section []Hex) {
+	for _, hex := range section {
+		tile := hm.Tiles[hex]
+		tile.Passable = false
+		hm.Tiles[hex] = tile
+	}
+	path := AStar(hm.Entry, hm.Exit, hm)
+	for _, hex := range section {
+		tile := hm.Tiles[hex]
+		tile.Passable = true
+		hm.Tiles[hex] = tile
+	}
+	if path == nil {
+		return
+	}
+	for _, hex := range section {
+		delete(hm.Tiles, hex)
+	}
+}
+
+// processCorners обрабатывает угловые гексы с особыми правилами
+func (hm *HexMap) processCorners(exclusion map[Hex]struct{}) {
+	corners := []Hex{
+		{hm.Radius, 0},
+		{0, hm.Radius},
+		{-hm.Radius, hm.Radius},
+		{-hm.Radius, 0},
+		{0, -hm.Radius},
+		{hm.Radius, -hm.Radius},
+	}
+
+	for _, corner := range corners {
+		if _, excluded := exclusion[corner]; excluded {
+			continue
+		}
+		action := rand.Intn(10)
+		if action < 3 { // 30% — добавить 3 гекса
+			var additions []Hex
+			switch corner {
+			case Hex{hm.Radius, 0}:
+				additions = []Hex{{hm.Radius + 1, 0}, {hm.Radius + 1, -1}, {hm.Radius, -1}}
+			case Hex{0, hm.Radius}:
+				additions = []Hex{{1, hm.Radius}, {0, hm.Radius + 1}, {-1, hm.Radius}}
+			case Hex{-hm.Radius, hm.Radius}:
+				additions = []Hex{{-hm.Radius, hm.Radius + 1}, {-hm.Radius - 1, hm.Radius}, {-hm.Radius - 1, hm.Radius + 1}}
+			case Hex{-hm.Radius, 0}:
+				additions = []Hex{{-hm.Radius - 1, 0}, {-hm.Radius - 1, 1}, {-hm.Radius, 1}}
+			case Hex{0, -hm.Radius}:
+				additions = []Hex{{1, -hm.Radius}, {0, -hm.Radius - 1}, {-1, -hm.Radius}}
+			case Hex{hm.Radius, -hm.Radius}:
+				additions = []Hex{{hm.Radius + 1, -hm.Radius}, {hm.Radius, -hm.Radius - 1}, {hm.Radius + 1, -hm.Radius - 1}}
+			}
+			for _, hex := range additions {
+				if !hm.Contains(hex) {
+					hm.Tiles[hex] = Tile{Passable: true, CanPlaceTower: true}
+				}
+			}
+		} else if action < 6 { // 30% — убрать угол
+			tile := hm.Tiles[corner]
+			tile.Passable = false
+			hm.Tiles[corner] = tile
+			path := AStar(hm.Entry, hm.Exit, hm)
+			tile = hm.Tiles[corner]
+			tile.Passable = true
+			hm.Tiles[corner] = tile
+			if path != nil {
+				delete(hm.Tiles, corner)
+			}
+		}
+	}
+}
+
+// postProcessMap устраняет аномалии: единичные клетки и дыры
+func (hm *HexMap) postProcessMap() {
+	extraRadius := 2
+	for {
+		changes := false
+		potentialHexes := hm.getAllPotentialHexes(extraRadius)
+		for _, hex := range potentialHexes {
+			neighbors := hex.AllPossibleNeighbors()
+			onMapNeighbors := 0
+			for _, n := range neighbors {
+				if hm.Contains(n) {
+					onMapNeighbors++
+				}
+			}
+			if !hm.Contains(hex) {
+				if onMapNeighbors >= 4 { // Заполняем дыры
+					hm.Tiles[hex] = Tile{Passable: true, CanPlaceTower: true}
+					changes = true
+				}
+			} else {
+				// Удаляем единичные клетки, но не трогаем вход и выход
+				if hex != hm.Entry && hex != hm.Exit && onMapNeighbors <= 2 {
+					delete(hm.Tiles, hex)
+					changes = true
+				}
+			}
+		}
+		if !changes {
+			break
+		}
+	}
+}
+
+// getAllPotentialHexes возвращает все возможные гексы в расширенном радиусе
+func (hm *HexMap) getAllPotentialHexes(extraRadius int) []Hex {
+	radius := hm.Radius + extraRadius
+	var hexes []Hex
+	for q := -radius; q <= radius; q++ {
+		r1 := max(-radius, -q-radius)
+		r2 := min(radius, -q+radius)
+		for r := r1; r <= r2; r++ {
+			hexes = append(hexes, Hex{q, r})
+		}
+	}
+	return hexes
+}
+
+// AllPossibleNeighbors возвращает всех возможных соседей гекса
+func (h Hex) AllPossibleNeighbors() []Hex {
+	return []Hex{
+		{h.Q + 1, h.R},
+		{h.Q + 1, h.R - 1},
+		{h.Q, h.R - 1},
+		{h.Q - 1, h.R},
+		{h.Q - 1, h.R + 1},
+		{h.Q, h.R + 1},
 	}
 }
 
@@ -81,14 +319,7 @@ func (h Hex) Distance(to Hex) int {
 
 // Neighbors возвращает существующих соседей гекса
 func (h Hex) Neighbors(hm *HexMap) []Hex {
-	allNeighbors := []Hex{
-		{h.Q + 1, h.R},     // Восток
-		{h.Q + 1, h.R - 1}, // Северо-восток
-		{h.Q, h.R - 1},     // Северо-запад
-		{h.Q - 1, h.R},     // Запад
-		{h.Q - 1, h.R + 1}, // Юго-запад
-		{h.Q, h.R + 1},     // Юго-восток
-	}
+	allNeighbors := h.AllPossibleNeighbors()
 	validNeighbors := make([]Hex, 0, 6)
 	for _, n := range allNeighbors {
 		if _, exists := hm.Tiles[n]; exists {
@@ -109,7 +340,6 @@ func (h Hex) ToPixel(hexSize float64) (x, y float64) {
 func PixelToHex(x, y, hexSize float64) Hex {
 	x -= float64(config.ScreenWidth) / 2
 	y -= float64(config.ScreenHeight) / 2
-
 	q := (Sqrt3/3*x - 1.0/3*y) / hexSize
 	r := (2.0 / 3 * y) / hexSize
 	return axialRound(q, r)
@@ -166,12 +396,10 @@ func (a Hex) Lerp(b Hex, t float64) Hex {
 func (start Hex) LineTo(end Hex) []Hex {
 	n := start.Distance(end)
 	results := make([]Hex, 0, n+1)
-
 	for i := 0; i <= n; i++ {
 		t := 1.0 / float64(n) * float64(i)
 		results = append(results, start.Lerp(end, t))
 	}
-
 	return results
 }
 
@@ -180,17 +408,14 @@ func AStar(start, goal Hex, hm *HexMap) []Hex {
 	pq := &PriorityQueue{}
 	heap.Init(pq)
 	heap.Push(pq, &Node{Hex: start, Cost: 0, Parent: nil})
-
 	cameFrom := make(map[Hex]*Node)
 	costSoFar := make(map[Hex]int)
 	costSoFar[start] = 0
-
 	for pq.Len() > 0 {
 		current := heap.Pop(pq).(*Node)
 		if current.Hex == goal {
 			return reconstructPath(current)
 		}
-
 		for _, neighbor := range current.Hex.Neighbors(hm) {
 			if !hm.IsPassable(neighbor) {
 				continue
@@ -273,11 +498,9 @@ func cubeRound(x, y, z float64) (rx, ry, rz int) {
 	xf := math.Round(x)
 	yf := math.Round(y)
 	zf := math.Round(z)
-
 	xd := math.Abs(xf - x)
 	yd := math.Abs(yf - y)
 	zd := math.Abs(zf - z)
-
 	if xd > yd && xd > zd {
 		xf = -yf - zf
 	} else if yd > zd {
@@ -285,7 +508,6 @@ func cubeRound(x, y, z float64) (rx, ry, rz int) {
 	} else {
 		zf = -xf - yf
 	}
-
 	return int(xf), int(yf), int(zf)
 }
 

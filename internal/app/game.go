@@ -127,12 +127,15 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 		}
 	}
 
+	// Проверка путей через чекпоинт
 	originalPassable := tile.Passable
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
-	tempPath := hexmap.AStar(g.HexMap.Entry, g.HexMap.Exit, g.HexMap)
+	pathToCheckpoint1 := hexmap.AStar(g.HexMap.Entry, g.HexMap.Checkpoint1, g.HexMap)
+	pathToCheckpoint2 := hexmap.AStar(g.HexMap.Checkpoint1, g.HexMap.Checkpoint2, g.HexMap)
+	pathToExit := hexmap.AStar(g.HexMap.Checkpoint2, g.HexMap.Exit, g.HexMap)
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: originalPassable, CanPlaceTower: tile.CanPlaceTower}
 
-	if tempPath == nil {
+	if pathToCheckpoint1 == nil || pathToCheckpoint2 == nil || pathToExit == nil {
 		return false
 	}
 
@@ -143,7 +146,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	g.ECS.Positions[id] = &component.Position{X: px, Y: py}
 
 	towerType := rand.Intn(4)
-	isActive := g.towersBuilt == 0 // Первая башня активна
+	isActive := g.towersBuilt == 0
 	g.ECS.Towers[id] = &component.Tower{
 		Type:     towerType,
 		Range:    config.TowerRange,
@@ -151,7 +154,6 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 		IsActive: isActive,
 	}
 
-	// Только активная башня получает компонент Combat
 	if isActive {
 		g.ECS.Combats[id] = &component.Combat{
 			FireRate:     config.TowerFireRate[towerType],
@@ -160,7 +162,6 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 		}
 	}
 
-	// Цвет: активная башня — свой, пассивная — серая
 	color := config.TowerColors[towerType]
 	if !isActive {
 		color = config.TowerColors[4]
