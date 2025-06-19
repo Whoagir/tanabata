@@ -1,3 +1,4 @@
+// internal/entity/ecs.go
 package entity
 
 import (
@@ -15,6 +16,8 @@ type ECS struct {
 	Towers      map[types.EntityID]*component.Tower
 	Projectiles map[types.EntityID]*component.Projectile
 	Combats     map[types.EntityID]*component.Combat
+	Ores        map[types.EntityID]*component.Ore
+	Enemies     map[types.EntityID]*component.Enemy // Новое поле для врагов
 	Wave        *component.Wave
 	GameState   component.GameState
 }
@@ -30,6 +33,8 @@ func NewECS() *ECS {
 		Towers:      make(map[types.EntityID]*component.Tower),
 		Projectiles: make(map[types.EntityID]*component.Projectile),
 		Combats:     make(map[types.EntityID]*component.Combat),
+		Ores:        make(map[types.EntityID]*component.Ore),
+		Enemies:     make(map[types.EntityID]*component.Enemy), // Инициализация нового поля
 		Wave:        nil,
 		GameState:   component.BuildState,
 	}

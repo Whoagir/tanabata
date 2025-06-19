@@ -66,6 +66,7 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 	s.ecs.Paths[id] = &component.Path{Hexes: wave.CurrentPath, CurrentIndex: 0}
 	s.ecs.Healths[id] = &component.Health{Value: config.EnemyHealth}
 	s.ecs.Renderables[id] = &component.Renderable{Color: config.EnemyColor, Radius: float32(config.EnemyRadius), HasStroke: false}
+	s.ecs.Enemies[id] = &component.Enemy{}
 	s.activeEnemies++
 }
 

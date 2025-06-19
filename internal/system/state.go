@@ -38,6 +38,7 @@ func (s *StateSystem) Update(deltaTime float64) {
 func (s *StateSystem) SwitchToBuildState() {
 	s.ecs.GameState = component.BuildState
 	s.gameContext.ClearEnemies()
+	s.gameContext.ClearProjectiles()
 	s.gameContext.SetTowersBuilt(0)
 	// log.Println("Switched to BuildState, towersBuilt reset to:", s.gameContext.GetTowersBuilt())
 }

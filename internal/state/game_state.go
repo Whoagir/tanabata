@@ -88,12 +88,6 @@ func (g *GameState) Update(deltaTime float64) {
 			g.lastClickTime = time.Now()
 		}
 	}
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-		mx, my := ebiten.CursorPosition()
-		if g.isInsidePauseButton(float32(mx), float32(my)) {
-			g.game.HandlePauseClick()
-		}
-	}
 
 }
 
@@ -148,8 +142,7 @@ func (g *GameState) handleClick(x, y int, button ebiten.MouseButton) {
 func (g *GameState) Draw(screen *ebiten.Image) {
 	screen.Fill(config.BackgroundColor)
 	towerHexes := g.game.GetTowerHexes()
-	g.renderer.Draw(screen, towerHexes, g.game.RenderSystem)
-
+	g.renderer.Draw(screen, towerHexes, g.game.RenderSystem, g.game.GetGameTime())
 	var stateColor color.Color
 	switch g.game.ECS.GameState {
 	case component.BuildState:

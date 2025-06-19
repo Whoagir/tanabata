@@ -9,6 +9,7 @@ import (
 	"go-tower-defense/internal/system"
 	"go-tower-defense/internal/ui"
 	"go-tower-defense/pkg/hexmap"
+	"image/color"
 	"log"
 	"math/rand"
 )
@@ -29,6 +30,7 @@ type Game struct {
 	SpeedButton      *ui.SpeedButton
 	SpeedMultiplier  float64
 	PauseButton      *ui.PauseButton
+	gameTime         float64 // Накопленное игровое время
 }
 
 func NewGame(hexMap *hexmap.HexMap) *Game {
@@ -49,24 +51,40 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		ProjectileSystem: system.NewProjectileSystem(ecs, eventDispatcher),
 		EventDispatcher:  eventDispatcher,
 		towersBuilt:      0,
+		gameTime:         0.0, // Инициализация игрового времени
 	}
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
 
-	// Инициализация кнопки ускорения через config
+	// Создание сущностей руды
+	for hex, power := range hexMap.EnergyVeins {
+		id := ecs.NewEntity()
+		px, py := hex.ToPixel(config.HexSize)
+		px += float64(config.ScreenWidth) / 2
+		py += float64(config.ScreenHeight) / 2
+		ecs.Positions[id] = &component.Position{X: px, Y: py}
+		ecs.Ores[id] = &component.Ore{
+			Power:     power,
+			Position:  component.Position{X: px, Y: py},
+			Radius:    float32(config.HexSize*0.2 + power*config.HexSize),
+			Color:     color.RGBA{0, 0, 255, 128},
+			PulseRate: 2.0,
+		}
+	}
+
 	g.SpeedButton = ui.NewSpeedButton(
-		float32(config.ScreenWidth-config.SpeedButtonOffsetX), // Позиция X
-		float32(config.SpeedButtonY),                          // Позиция Y
-		float32(config.SpeedButtonSize),                       // Размер
-		config.SpeedButtonColors,                              // Цвета
+		float32(config.ScreenWidth-config.SpeedButtonOffsetX),
+		float32(config.SpeedButtonY),
+		float32(config.SpeedButtonSize),
+		config.SpeedButtonColors,
 	)
-	g.SpeedMultiplier = 1.0 // Начальная скорость
+	g.SpeedMultiplier = 1.0
 
 	g.PauseButton = ui.NewPauseButton(
-		float32(config.ScreenWidth-config.IndicatorOffsetX-90), // Слева от индикатора
+		float32(config.ScreenWidth-config.IndicatorOffsetX-90),
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
-		config.BuildStateColor, // Синий для паузы
-		config.WaveStateColor,  // Красный для play
+		config.BuildStateColor,
+		config.WaveStateColor,
 	)
 
 	return g
@@ -74,22 +92,21 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 
 func (g *Game) Update(deltaTime float64) {
 	dt := deltaTime * g.SpeedMultiplier
+	g.gameTime += dt // Накапливаем игровое время
 	if g.ECS.GameState == component.WaveState {
 		g.CombatSystem.Update(dt)
 		g.ProjectileSystem.Update(dt)
 		g.WaveSystem.Update(dt, g.ECS.Wave)
 		g.MovementSystem.Update(dt)
 
-		// Удаляем только врагов, которые дошли до конца пути
 		for id := range g.ECS.Positions {
 			if _, isTower := g.ECS.Towers[id]; isTower {
-				continue // Пропускаем башни
+				continue
 			}
 			if _, isProjectile := g.ECS.Projectiles[id]; isProjectile {
-				continue // Пропускаем снаряды
+				continue
 			}
 			if path, hasPath := g.ECS.Paths[id]; hasPath && path.CurrentIndex >= len(path.Hexes) {
-				// Враг дошёл до конца пути, удаляем его
 				delete(g.ECS.Positions, id)
 				delete(g.ECS.Velocities, id)
 				delete(g.ECS.Paths, id)
@@ -98,9 +115,9 @@ func (g *Game) Update(deltaTime float64) {
 				g.EventDispatcher.Dispatch(event.Event{Type: event.EnemyDestroyed, Data: id})
 			}
 		}
+
 	}
 }
-
 func (g *Game) StartWave() {
 	g.ECS.Wave = g.WaveSystem.StartWave(g.Wave)
 	g.WaveSystem.ResetActiveEnemies()
@@ -218,14 +235,23 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 }
 
 func (g *Game) ClearEnemies() {
-	for id := range g.ECS.Positions {
-		if _, isTower := g.ECS.Towers[id]; !isTower {
-			delete(g.ECS.Positions, id)
-			delete(g.ECS.Velocities, id)
-			delete(g.ECS.Paths, id)
-			delete(g.ECS.Healths, id)
-			delete(g.ECS.Renderables, id)
-		}
+	for id := range g.ECS.Enemies {
+		delete(g.ECS.Positions, id)
+		delete(g.ECS.Velocities, id)
+		delete(g.ECS.Paths, id)
+		delete(g.ECS.Healths, id)
+		delete(g.ECS.Renderables, id)
+		delete(g.ECS.Enemies, id) // Удаляем компонент Enemy
+	}
+}
+
+func (g *Game) ClearProjectiles() {
+	for id := range g.ECS.Projectiles {
+		delete(g.ECS.Positions, id)
+		delete(g.ECS.Velocities, id)
+		delete(g.ECS.Renderables, id)
+		delete(g.ECS.Projectiles, id)
+		// Если у снарядов есть другие компоненты, добавь их удаление сюда
 	}
 }
 
@@ -267,4 +293,8 @@ func (g *Game) SetTowersBuilt(count int) {
 
 func (g *Game) GetTowersBuilt() int {
 	return g.towersBuilt
+}
+
+func (g *Game) GetGameTime() float64 {
+	return g.gameTime
 }
