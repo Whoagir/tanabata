@@ -7,6 +7,7 @@ import (
 )
 
 type ECS struct {
+	GameTime    float64
 	NextID      types.EntityID
 	Positions   map[types.EntityID]*component.Position
 	Velocities  map[types.EntityID]*component.Velocity
@@ -18,6 +19,7 @@ type ECS struct {
 	Combats     map[types.EntityID]*component.Combat
 	Ores        map[types.EntityID]*component.Ore
 	Enemies     map[types.EntityID]*component.Enemy // Новое поле для врагов
+	LineRenders map[types.EntityID]*component.LineRender
 	Wave        *component.Wave
 	GameState   component.GameState
 }
@@ -35,6 +37,7 @@ func NewECS() *ECS {
 		Combats:     make(map[types.EntityID]*component.Combat),
 		Ores:        make(map[types.EntityID]*component.Ore),
 		Enemies:     make(map[types.EntityID]*component.Enemy), // Инициализация нового поля
+		LineRenders: make(map[types.EntityID]*component.LineRender),
 		Wave:        nil,
 		GameState:   component.BuildState,
 	}

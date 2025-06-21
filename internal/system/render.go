@@ -41,4 +41,9 @@ func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64) {
 			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), render.Radius, render.Color, true)
 		}
 	}
+
+	// Отрисовка линий
+	for _, line := range s.ecs.LineRenders {
+		vector.StrokeLine(screen, float32(line.StartX), float32(line.StartY), float32(line.EndX), float32(line.EndY), 2.0, line.Color, true)
+	}
 }

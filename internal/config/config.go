@@ -41,6 +41,16 @@ const (
 	SpeedButtonOffsetX = 80   // Отступ слева от края или индикатора
 	SpeedButtonY       = 30   // Позиция по Y
 	SpeedButtonSize    = 18.0 // Размер кнопки (радиус или ширина, в зависимости от реализации ui.SpeedButton)
+
+	EnergyTransferRadius = 3
+)
+
+const (
+	TowerTypeRed = iota
+	TowerTypeGreen
+	TowerTypeBlue
+	TowerTypePurple
+	TowerTypeMiner // Новый тип для добытчика
 )
 
 var (
@@ -63,6 +73,7 @@ var (
 		{50, 255, 50, 255},   // Green
 		{50, 100, 255, 255},  // Blue
 		{180, 50, 230, 255},  // Purple
+		{255, 215, 0, 255},   // Gold (жёлтый) для добытчика
 		{128, 128, 128, 255}, // Серый цвет для пассивных башен
 	}
 	SpeedButtonColors = []color.Color{

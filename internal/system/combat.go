@@ -1,4 +1,3 @@
-// internal/system/combat.go
 package system
 
 import (
@@ -12,57 +11,76 @@ import (
 
 // CombatSystem управляет атакой башен
 type CombatSystem struct {
-	ecs *entity.ECS
+	ecs         *entity.ECS
+	lastLogTime float64 // Время последнего лога для ограничения спама
 }
 
 func NewCombatSystem(ecs *entity.ECS) *CombatSystem {
-	return &CombatSystem{ecs: ecs}
+	return &CombatSystem{
+		ecs:         ecs,
+		lastLogTime: 0.0,
+	}
 }
+
+const logInterval = 1.0 // Логируем не чаще, чем раз в секунду
 
 func (s *CombatSystem) Update(deltaTime float64) {
 	for id, combat := range s.ecs.Combats {
 		tower, hasTower := s.ecs.Towers[id]
-		if !hasTower || !tower.IsActive {
+		if !hasTower {
+			// log.Printf("Башня %d не имеет компонента Tower", id)
+			continue
+		}
+		if !tower.IsActive {
+			// log.Printf("Башня %d не активна, IsActive: %v", id, tower.IsActive)
 			continue
 		}
 
 		if combat.FireCooldown > 0 {
 			combat.FireCooldown -= deltaTime
+			// Лог про кулдаун убираем или ограничиваем
+			if s.ecs.GameTime-s.lastLogTime >= logInterval {
+				// log.Printf("Башня %d на кулдауне, FireCooldown: %.2f", id, combat.FireCooldown)
+				s.lastLogTime = s.ecs.GameTime
+			}
 			continue
 		}
 
-		enemyID := s.findNearestEnemyInRange(tower.Hex, combat.Range)
+		enemyID := s.findNearestEnemyInRange(id, tower.Hex, combat.Range)
 		if enemyID != 0 {
-			if pos, exists := s.ecs.Positions[enemyID]; exists && pos != nil {
-				if vel, velExists := s.ecs.Velocities[enemyID]; velExists && vel != nil {
-					s.createProjectile(id, enemyID, tower.Type)
-					combat.FireCooldown = 1.0 / combat.FireRate
-				} else {
-					// log.Println("Enemy", enemyID, "has no velocity, skipping projectile")
-				}
-			} else {
-				// log.Println("Enemy", enemyID, "not found or has no position, skipping projectile")
+			if vel, velExists := s.ecs.Velocities[enemyID]; velExists && vel != nil {
+				s.createProjectile(id, enemyID, tower.Type)
+				combat.FireCooldown = 1.0 / combat.FireRate
+			} else if s.ecs.GameTime-s.lastLogTime >= logInterval {
+				// log.Printf("Враг %d не имеет компонента Velocity", enemyID)
+				s.lastLogTime = s.ecs.GameTime
 			}
 		}
 	}
 }
 
-func (s *CombatSystem) findNearestEnemyInRange(towerHex hexmap.Hex, rangeRadius int) types.EntityID {
+func (s *CombatSystem) findNearestEnemyInRange(towerID types.EntityID, towerHex hexmap.Hex, rangeRadius int) types.EntityID {
 	var nearestEnemy types.EntityID
 	minDistance := math.MaxFloat64
-
 	for enemyID, enemyPos := range s.ecs.Positions {
 		if _, isTower := s.ecs.Towers[enemyID]; isTower {
-			continue // Пропускаем башни
+			continue
+		}
+		if _, isEnemy := s.ecs.Enemies[enemyID]; !isEnemy {
+			continue // Пропускаем, если это не враг
 		}
 		enemyHex := hexmap.PixelToHex(enemyPos.X, enemyPos.Y, config.HexSize)
-		distance := float64(towerHex.Distance(enemyHex)) // Приводим int к float64
+		distance := float64(towerHex.Distance(enemyHex))
 		if distance <= float64(rangeRadius) && distance < minDistance {
 			minDistance = distance
 			nearestEnemy = enemyID
 		}
 	}
-
+	if nearestEnemy == 0 {
+		// log.Printf("Башня %d не нашла врагов в радиусе %d", towerID, rangeRadius)
+	} else {
+		// log.Printf("Башня %d нашла врага %d на расстоянии %.2f", towerID, nearestEnemy, minDistance)
+	}
 	return nearestEnemy
 }
 
@@ -71,6 +89,10 @@ func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerTy
 	towerPos := s.ecs.Positions[towerID]
 	enemyPos := s.ecs.Positions[enemyID]
 	enemyVel := s.ecs.Velocities[enemyID]
+
+	// Логируем момент создания снаряда
+	// log.Printf("Башня %d (%.2f, %.2f) выпустила снаряд по врагу %d (%.2f, %.2f)",
+	// towerID, towerPos.X, towerPos.Y, enemyID, enemyPos.X, enemyPos.Y)
 
 	// Вычисляем предсказанную позицию врага
 	predictedPos := predictEnemyPosition(s.ecs, enemyID, towerPos, enemyPos, enemyVel, config.ProjectileSpeed)
@@ -94,46 +116,36 @@ func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerTy
 	}
 }
 
-// Вспомогательная функция для предсказания позиции врага
+// Вспомогательные функции остаются без изменений
 func predictEnemyPosition(ecs *entity.ECS, enemyID types.EntityID, towerPos, enemyPos *component.Position, enemyVel *component.Velocity, projSpeed float64) component.Position {
 	path, hasPath := ecs.Paths[enemyID]
 	if !hasPath || path.CurrentIndex >= len(path.Hexes) {
-		// Если пути нет, возвращаем текущую позицию
 		return *enemyPos
 	}
 
-	// Итеративно уточняем время встречи
 	const maxIterations = 5
 	timeToHit := 0.0
 
 	for iter := 0; iter < maxIterations; iter++ {
-		// Предсказываем позицию врага через timeToHit секунд
 		predictedPos := simulateEnemyMovement(enemyPos, path, enemyVel.Speed, timeToHit, config.HexSize)
-
-		// Вычисляем новое время до этой позиции
 		dx := predictedPos.X - towerPos.X
 		dy := predictedPos.Y - towerPos.Y
 		newTimeToHit := math.Sqrt(dx*dx+dy*dy) / projSpeed
 
-		// Если время сходится, выходим
 		if math.Abs(newTimeToHit-timeToHit) < 0.01 {
 			return predictedPos
 		}
-
 		timeToHit = newTimeToHit
 	}
 
-	// Финальная симуляция с уточнённым временем
 	return simulateEnemyMovement(enemyPos, path, enemyVel.Speed, timeToHit, config.HexSize)
 }
 
-// Симулирует движение врага по пути на заданное время
 func simulateEnemyMovement(startPos *component.Position, path *component.Path, speed float64, duration float64, hexSize float64) component.Position {
 	currentPos := *startPos
 	remainingTime := duration
 	currentIndex := path.CurrentIndex
 
-	// Симулируем движение по пути
 	for currentIndex < len(path.Hexes) && remainingTime > 0 {
 		targetHex := path.Hexes[currentIndex]
 		tx, ty := targetHex.ToPixel(hexSize)
@@ -145,7 +157,6 @@ func simulateEnemyMovement(startPos *component.Position, path *component.Path, s
 		distToNext := math.Sqrt(dx*dx + dy*dy)
 
 		if distToNext < 0.01 {
-			// Уже в целевой точке, переходим к следующей
 			currentIndex++
 			continue
 		}
@@ -153,13 +164,11 @@ func simulateEnemyMovement(startPos *component.Position, path *component.Path, s
 		timeToNext := distToNext / speed
 
 		if timeToNext >= remainingTime {
-			// Двигаемся частично к следующей точке
 			fraction := remainingTime / timeToNext
 			currentPos.X += dx * fraction
 			currentPos.Y += dy * fraction
 			break
 		} else {
-			// Достигаем следующей точки и продолжаем
 			currentPos.X = tx
 			currentPos.Y = ty
 			currentIndex++
@@ -170,7 +179,6 @@ func simulateEnemyMovement(startPos *component.Position, path *component.Path, s
 	return currentPos
 }
 
-// Функция для вычисления направления
 func calculateDirection(from, to *component.Position) float64 {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
