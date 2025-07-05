@@ -130,78 +130,176 @@ func (g *Game) isOnOre(hex hexmap.Hex) bool {
 	return exists
 }
 
+// Edge представляет ребро между двумя башнями
+type Edge struct {
+	Tower1ID types.EntityID
+	Tower2ID types.EntityID
+	Distance float64
+}
+
+// UnionFind уже есть в твоём коде, оставляем как есть
+type UnionFind struct {
+	parent map[types.EntityID]types.EntityID
+	rank   map[types.EntityID]int
+}
+
+func NewUnionFind() *UnionFind {
+	return &UnionFind{
+		parent: make(map[types.EntityID]types.EntityID),
+		rank:   make(map[types.EntityID]int),
+	}
+}
+
+func (uf *UnionFind) Find(id types.EntityID) types.EntityID {
+	if _, exists := uf.parent[id]; !exists {
+		uf.parent[id] = id
+		uf.rank[id] = 0
+	}
+	if uf.parent[id] != id {
+		uf.parent[id] = uf.Find(uf.parent[id]) // Сжатие пути
+	}
+	return uf.parent[id]
+}
+
+func (uf *UnionFind) Union(idA, idB types.EntityID) {
+	rootA := uf.Find(idA)
+	rootB := uf.Find(idB)
+	if rootA == rootB {
+		return
+	}
+	if uf.rank[rootA] < uf.rank[rootB] {
+		uf.parent[rootA] = rootB
+	} else if uf.rank[rootA] > uf.rank[rootB] {
+		uf.parent[rootB] = rootA
+	} else {
+		uf.parent[rootB] = rootA
+		uf.rank[rootA]++
+	}
+}
+
+// collectPossibleEdges собирает все возможные рёбра между башнями
+func (g *Game) collectPossibleEdges(allTowers map[hexmap.Hex]types.EntityID) []Edge {
+	var edges []Edge
+	towerHexes := make([]hexmap.Hex, 0, len(allTowers))
+	for hex := range allTowers {
+		towerHexes = append(towerHexes, hex)
+	}
+
+	for i := 0; i < len(towerHexes); i++ {
+		for j := i + 1; j < len(towerHexes); j++ {
+			hexA := towerHexes[i]
+			hexB := towerHexes[j]
+			idA := allTowers[hexA]
+			idB := allTowers[hexB]
+			towerA := g.ECS.Towers[idA]
+			towerB := g.ECS.Towers[idB]
+			distance := hexA.Distance(hexB)
+
+			if distance == 1 {
+				edges = append(edges, Edge{Tower1ID: idA, Tower2ID: idB, Distance: float64(distance)})
+			} else if towerA.Type == config.TowerTypeMiner && towerB.Type == config.TowerTypeMiner &&
+				distance <= config.EnergyTransferRadius && isOnSameLine(hexA, hexB) {
+				edges = append(edges, Edge{Tower1ID: idA, Tower2ID: idB, Distance: float64(distance)})
+			}
+		}
+	}
+	return edges
+}
+
+// updateTowerActivations обновляет активацию башен и линии с использованием алгоритма Крускала
 func (g *Game) updateTowerActivations() {
 	// 1. Собираем информацию обо всех башнях
 	allTowers := make(map[hexmap.Hex]types.EntityID)
 	for id, tower := range g.ECS.Towers {
 		allTowers[tower.Hex] = id
-		tower.IsActive = false // Сбрасываем состояние
+		tower.IsActive = false
 	}
 
 	if len(allTowers) == 0 {
 		return
 	}
 
-	// 2. Инициализация
-	activeTowers := make(map[hexmap.Hex]bool)
-	queue := make([]hexmap.Hex, 0)
-	parent := make(map[hexmap.Hex]hexmap.Hex)
-
-	// Находим все источники энергии
-	for hex, id := range allTowers {
-		tower := g.ECS.Towers[id]
-		if tower.Type != -1 && g.isOnOre(hex) {
-			tower.IsActive = true
-			activeTowers[hex] = true
-			queue = append(queue, hex)
-			parent[hex] = hexmap.Hex{}
-		}
-	}
-
-	// 3. Распространение активации (BFS)
-	head := 0
-	for head < len(queue) {
-		currentHex := queue[head]
-		currentID := allTowers[currentHex]
-		currentTower := g.ECS.Towers[currentID]
-		head++
-
-		neighbors := currentHex.Neighbors(g.HexMap)
-		for _, neighborHex := range neighbors {
-			neighborID, isTower := allTowers[neighborHex]
-			if isTower && !activeTowers[neighborHex] {
-				neighborTower := g.ECS.Towers[neighborID]
-				if neighborTower.Type != -1 {
-					neighborTower.IsActive = true
-					activeTowers[neighborHex] = true
-					parent[neighborHex] = currentHex
-					queue = append(queue, neighborHex)
-				}
-			}
-		}
-
-		if currentTower.Type == config.TowerTypeMiner {
-			for targetHex, targetID := range allTowers {
-				if !activeTowers[targetHex] {
-					targetTower := g.ECS.Towers[targetID]
-					if targetTower.Type == config.TowerTypeMiner &&
-						currentHex.Distance(targetHex) <= config.EnergyTransferRadius &&
-						isOnSameLine(currentHex, targetHex) {
-						targetTower.IsActive = true
-						activeTowers[targetHex] = true
-						parent[targetHex] = currentHex
-						queue = append(queue, targetHex)
-					}
-				}
-			}
-		}
-	}
-
-	// 4. Обновление внешнего вида
+	// 2. Определяем, какие башни могут быть активными (исключаем стены)
+	potentiallyActiveTowers := make(map[types.EntityID]bool)
 	for _, id := range allTowers {
 		tower := g.ECS.Towers[id]
-		render, exists := g.ECS.Renderables[id]
-		if exists {
+		// Только башни с типом >= 0 могут быть активными (стены имеют тип -1)
+		if tower.Type >= 0 {
+			potentiallyActiveTowers[id] = true
+		}
+	}
+
+	// 3. Инициализация Union-Find только для потенциально активных башен
+	uf := NewUnionFind()
+	for id := range potentiallyActiveTowers {
+		uf.Find(id)
+	}
+
+	// 4. Собираем существующие линии в граф (только между активными башнями)
+	existingEdges := make(map[types.EntityID]map[types.EntityID]bool)
+	linesToRemove := make([]types.EntityID, 0)
+
+	for lineID, line := range g.ECS.LineRenders {
+		tower1, exists1 := g.ECS.Towers[line.Tower1ID]
+		tower2, exists2 := g.ECS.Towers[line.Tower2ID]
+
+		// Удаляем линии, если башни не существуют или являются стенами
+		if !exists1 || !exists2 || tower1.Type == -1 || tower2.Type == -1 {
+			linesToRemove = append(linesToRemove, lineID)
+			continue
+		}
+
+		if existingEdges[line.Tower1ID] == nil {
+			existingEdges[line.Tower1ID] = make(map[types.EntityID]bool)
+		}
+		if existingEdges[line.Tower2ID] == nil {
+			existingEdges[line.Tower2ID] = make(map[types.EntityID]bool)
+		}
+		existingEdges[line.Tower1ID][line.Tower2ID] = true
+		existingEdges[line.Tower2ID][line.Tower1ID] = true
+		uf.Union(line.Tower1ID, line.Tower2ID)
+	}
+
+	// Удаляем недействительные линии
+	for _, lineID := range linesToRemove {
+		delete(g.ECS.LineRenders, lineID)
+	}
+
+	// 5. Собираем все возможные новые рёбра (только между потенциально активными башнями)
+	newEdges := g.collectPossibleEdgesFiltered(allTowers, potentiallyActiveTowers)
+
+	// 6. Применяем алгоритм Крускала для добавления новых рёбер
+	var mstEdges []Edge
+	for _, edge := range newEdges {
+		idA := edge.Tower1ID
+		idB := edge.Tower2ID
+		if uf.Find(idA) != uf.Find(idB) {
+			uf.Union(idA, idB)
+			mstEdges = append(mstEdges, edge)
+		}
+	}
+
+	// 7. Активируем башни на основе компонент связности
+	roots := make(map[types.EntityID]bool)
+	for hex, id := range allTowers {
+		tower := g.ECS.Towers[id]
+		// Только добытчики на руде могут быть корнями сети
+		if tower.Type == config.TowerTypeMiner && g.isOnOre(hex) {
+			roots[uf.Find(id)] = true
+		}
+	}
+
+	// Активируем только те башни, которые связаны с корнями
+	for id := range potentiallyActiveTowers {
+		if roots[uf.Find(id)] {
+			g.ECS.Towers[id].IsActive = true
+		}
+	}
+
+	// 8. Обновляем внешний вид башен
+	for _, id := range allTowers {
+		tower := g.ECS.Towers[id]
+		if render, exists := g.ECS.Renderables[id]; exists {
 			var color color.RGBA
 			if tower.Type >= 0 && tower.Type < len(config.TowerColors)-1 {
 				color = config.TowerColors[tower.Type]
@@ -215,25 +313,69 @@ func (g *Game) updateTowerActivations() {
 		}
 	}
 
-	// 5. Удаляем линии для неактивных башен
-	g.removeInactiveLines(allTowers)
+	// 9. Добавляем новые линии только для новых рёбер между активными башнями
+	for _, edge := range mstEdges {
+		// Проверяем, что обе башни активны
+		tower1 := g.ECS.Towers[edge.Tower1ID]
+		tower2 := g.ECS.Towers[edge.Tower2ID]
 
-	// 6. Собираем и передаём существующие линии
-	existingLines := make(map[types.EntityID]map[types.EntityID]bool)
-	for _, line := range g.ECS.LineRenders {
-		if existingLines[line.Tower1ID] == nil {
-			existingLines[line.Tower1ID] = make(map[types.EntityID]bool)
+		if tower1.IsActive && tower2.IsActive {
+			if _, exists := existingEdges[edge.Tower1ID][edge.Tower2ID]; !exists {
+				posA := g.ECS.Positions[edge.Tower1ID]
+				posB := g.ECS.Positions[edge.Tower2ID]
+				lineID := g.ECS.NewEntity()
+				g.ECS.LineRenders[lineID] = &component.LineRender{
+					StartX:   posA.X,
+					StartY:   posA.Y,
+					EndX:     posB.X,
+					EndY:     posB.Y,
+					Color:    color.RGBA{255, 255, 0, 128},
+					Tower1ID: edge.Tower1ID,
+					Tower2ID: edge.Tower2ID,
+				}
+			}
 		}
-		existingLines[line.Tower1ID][line.Tower2ID] = true
-		if existingLines[line.Tower2ID] == nil {
-			existingLines[line.Tower2ID] = make(map[types.EntityID]bool)
-		}
-		existingLines[line.Tower2ID][line.Tower1ID] = true
 	}
 
-	// 7. Создаём линии активации и соединяем добытчиков
-	g.createActivationLines(parent, allTowers, existingLines)
-	g.connectMinersOnOre(allTowers, activeTowers, existingLines)
+	// 10. Удаляем линии между неактивными башнями
+	g.removeInactiveLines(allTowers)
+}
+
+// collectPossibleEdgesFiltered собирает все возможные рёбра только между потенциально активными башнями
+func (g *Game) collectPossibleEdgesFiltered(allTowers map[hexmap.Hex]types.EntityID, potentiallyActive map[types.EntityID]bool) []Edge {
+	var edges []Edge
+	towerHexes := make([]hexmap.Hex, 0, len(allTowers))
+
+	// Собираем только гексы потенциально активных башен
+	for hex, id := range allTowers {
+		if potentiallyActive[id] {
+			towerHexes = append(towerHexes, hex)
+		}
+	}
+
+	for i := 0; i < len(towerHexes); i++ {
+		for j := i + 1; j < len(towerHexes); j++ {
+			hexA := towerHexes[i]
+			hexB := towerHexes[j]
+			idA := allTowers[hexA]
+			idB := allTowers[hexB]
+			towerA := g.ECS.Towers[idA]
+			towerB := g.ECS.Towers[idB]
+			distance := hexA.Distance(hexB)
+
+			// Проверка для соседних башен
+			if distance == 1 {
+				edges = append(edges, Edge{Tower1ID: idA, Tower2ID: idB, Distance: float64(distance)})
+			} else if towerA.Type == config.TowerTypeMiner && towerB.Type == config.TowerTypeMiner &&
+				distance <= config.EnergyTransferRadius && isOnSameLine(hexA, hexB) {
+				// Для башен типа Б на расстоянии > 1, проверяем, что между ними нет активных башен
+				if !g.hasActiveTowerBetween(hexA, hexB, allTowers, potentiallyActive) {
+					edges = append(edges, Edge{Tower1ID: idA, Tower2ID: idB, Distance: float64(distance)})
+				}
+			}
+		}
+	}
+	return edges
 }
 
 // Добавь это в internal/app/game.go перед методом connectMinersOnOre
@@ -273,13 +415,26 @@ func (g *Game) wouldCreateCycle(idA, idB types.EntityID, existingLines map[types
 }
 
 // connectMinersOnOre соединяет активные добытчики на рудах линиями, если они на одной линии и в радиусе действия, и если это не создаст цикл
-func (g *Game) connectMinersOnOre(allTowers map[hexmap.Hex]types.EntityID, activeTowers map[hexmap.Hex]bool, existingLines map[types.EntityID]map[types.EntityID]bool) {
+func (g *Game) connectMinersOnOre(allTowers map[hexmap.Hex]types.EntityID, activeTowers map[hexmap.Hex]bool, uf *UnionFind) {
 	minersOnOre := make([]hexmap.Hex, 0)
 	for hex, id := range allTowers {
 		tower := g.ECS.Towers[id]
 		if tower.Type == config.TowerTypeMiner && g.isOnOre(hex) && activeTowers[hex] {
 			minersOnOre = append(minersOnOre, hex)
 		}
+	}
+
+	// Собираем существующие линии в граф
+	existingLines := make(map[types.EntityID]map[types.EntityID]bool)
+	for _, line := range g.ECS.LineRenders {
+		if existingLines[line.Tower1ID] == nil {
+			existingLines[line.Tower1ID] = make(map[types.EntityID]bool)
+		}
+		if existingLines[line.Tower2ID] == nil {
+			existingLines[line.Tower2ID] = make(map[types.EntityID]bool)
+		}
+		existingLines[line.Tower1ID][line.Tower2ID] = true
+		existingLines[line.Tower2ID][line.Tower1ID] = true
 	}
 
 	for i := 0; i < len(minersOnOre); i++ {
@@ -290,10 +445,8 @@ func (g *Game) connectMinersOnOre(allTowers map[hexmap.Hex]types.EntityID, activ
 			idB := allTowers[hexB]
 
 			if hexA.Distance(hexB) <= config.EnergyTransferRadius && isOnSameLine(hexA, hexB) {
-				if existingLines[idA] != nil && existingLines[idA][idB] {
-					continue // Линия уже существует
-				}
-				if !g.wouldCreateCycle(idA, idB, existingLines) {
+				if uf.Find(idA) != uf.Find(idB) && !g.wouldCreateCycle(idA, idB, existingLines) {
+					uf.Union(idA, idB)
 					posA := g.ECS.Positions[idA]
 					posB := g.ECS.Positions[idB]
 					lineID := g.ECS.NewEntity()
@@ -306,14 +459,8 @@ func (g *Game) connectMinersOnOre(allTowers map[hexmap.Hex]types.EntityID, activ
 						Tower1ID: idA,
 						Tower2ID: idB,
 					}
-					// Обновляем existingLines
-					if existingLines[idA] == nil {
-						existingLines[idA] = make(map[types.EntityID]bool)
-					}
+					// Обновляем граф после добавления линии
 					existingLines[idA][idB] = true
-					if existingLines[idB] == nil {
-						existingLines[idB] = make(map[types.EntityID]bool)
-					}
 					existingLines[idB][idA] = true
 				}
 			}
@@ -321,33 +468,23 @@ func (g *Game) connectMinersOnOre(allTowers map[hexmap.Hex]types.EntityID, activ
 	}
 }
 
-func (g *Game) createActivationLines(parent map[hexmap.Hex]hexmap.Hex, allTowers map[hexmap.Hex]types.EntityID, existingLines map[types.EntityID]map[types.EntityID]bool) {
+func (g *Game) createActivationLines(parent map[hexmap.Hex]hexmap.Hex, allTowers map[hexmap.Hex]types.EntityID, uf *UnionFind) {
 	for childHex, parentHex := range parent {
-		if parentHex != (hexmap.Hex{}) { // Пропускаем источники
+		if parentHex != (hexmap.Hex{}) {
 			childID := allTowers[childHex]
 			parentID := allTowers[parentHex]
-			if existingLines[parentID] == nil || !existingLines[parentID][childID] {
-				childPos := g.ECS.Positions[childID]
-				parentPos := g.ECS.Positions[parentID]
-				id := g.ECS.NewEntity()
-				g.ECS.LineRenders[id] = &component.LineRender{
-					StartX:   parentPos.X,
-					StartY:   parentPos.Y,
-					EndX:     childPos.X,
-					EndY:     childPos.Y,
-					Color:    color.RGBA{255, 255, 0, 128},
-					Tower1ID: parentID,
-					Tower2ID: childID,
-				}
-				// Обновляем existingLines
-				if existingLines[parentID] == nil {
-					existingLines[parentID] = make(map[types.EntityID]bool)
-				}
-				existingLines[parentID][childID] = true
-				if existingLines[childID] == nil {
-					existingLines[childID] = make(map[types.EntityID]bool)
-				}
-				existingLines[childID][parentID] = true
+			// Линия уже учтена в BFS через uf.Union, просто добавляем её визуально
+			childPos := g.ECS.Positions[childID]
+			parentPos := g.ECS.Positions[parentID]
+			id := g.ECS.NewEntity()
+			g.ECS.LineRenders[id] = &component.LineRender{
+				StartX:   parentPos.X,
+				StartY:   parentPos.Y,
+				EndX:     childPos.X,
+				EndY:     childPos.Y,
+				Color:    color.RGBA{255, 255, 0, 128},
+				Tower1ID: parentID,
+				Tower2ID: childID,
 			}
 		}
 	}
@@ -534,14 +671,47 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	return true
 }
 
+// hasActiveTowerBetween проверяет, есть ли активная башня между двумя гексами на одной линии
+func (g *Game) hasActiveTowerBetween(hexA, hexB hexmap.Hex, allTowers map[hexmap.Hex]types.EntityID, potentiallyActive map[types.EntityID]bool) bool {
+	// Получаем все гексы на линии между A и B
+	line := hexA.LineTo(hexB)
+
+	// Проверяем каждый гекс между начальным и конечным (исключая их самих)
+	for i := 1; i < len(line)-1; i++ {
+		hex := line[i]
+		if towerID, exists := allTowers[hex]; exists {
+			// Если на этом гексе есть потенциально активная башня, блокируем соединение
+			if potentiallyActive[towerID] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Метод для удаления линий у неактивных башен
-func (g *Game) removeInactiveLines(allMiners map[hexmap.Hex]types.EntityID) {
-	for id, line := range g.ECS.LineRenders {
+// Обновляем метод removeInactiveLines
+func (g *Game) removeInactiveLines(allTowers map[hexmap.Hex]types.EntityID) {
+	linesToRemove := make([]types.EntityID, 0)
+
+	for lineID, line := range g.ECS.LineRenders {
 		tower1, exists1 := g.ECS.Towers[line.Tower1ID]
 		tower2, exists2 := g.ECS.Towers[line.Tower2ID]
-		if !exists1 || !exists2 || !tower1.IsActive || !tower2.IsActive {
-			delete(g.ECS.LineRenders, id)
+
+		// Удаляем линию если:
+		// - Одна из башен не существует
+		// - Одна из башен является стеной (тип -1)
+		// - Одна из башен неактивна
+		if !exists1 || !exists2 ||
+			tower1.Type == -1 || tower2.Type == -1 ||
+			!tower1.IsActive || !tower2.IsActive {
+			linesToRemove = append(linesToRemove, lineID)
 		}
+	}
+
+	// Удаляем линии
+	for _, lineID := range linesToRemove {
+		delete(g.ECS.LineRenders, lineID)
 	}
 }
 
