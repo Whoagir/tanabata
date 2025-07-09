@@ -4,7 +4,6 @@ package render
 import (
 	"fmt"
 	"image/color"
-	"log"
 	"math"
 
 	"go-tower-defense/internal/config"
@@ -14,33 +13,27 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
-
-	"io/ioutil"
-
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
 )
 
 type HexRenderer struct {
-	hexMap             *hexmap.HexMap
-	hexSize            float64
-	screenWidth        int
-	screenHeight       int
-	fillImg            *ebiten.Image
-	strokeImg          *ebiten.Image
-	sortedHexes        []hexmap.Hex
-	fillVs             []ebiten.Vertex
-	fillIs             []uint16
-	strokeVs           []ebiten.Vertex
-	strokeIs           []uint16
-	fontFace           font.Face // Шрифт для координат (10 пунктов)
-	checkpointFontFace font.Face // Шрифт для номеров чекпоинтов (12 пунктов)
-	percentFontFace    font.Face // Шрифт для процентов (8 пунктов)
-	mapImage           *ebiten.Image
-	checkpointMap      map[hexmap.Hex]int
+	hexMap        *hexmap.HexMap
+	hexSize       float64
+	screenWidth   int
+	screenHeight  int
+	fillImg       *ebiten.Image
+	strokeImg     *ebiten.Image
+	sortedHexes   []hexmap.Hex
+	fillVs        []ebiten.Vertex
+	fillIs        []uint16
+	strokeVs      []ebiten.Vertex
+	strokeIs      []uint16
+	fontFace      font.Face
+	mapImage      *ebiten.Image
+	checkpointMap map[hexmap.Hex]int
 }
 
-func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenHeight int) *HexRenderer {
+func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenHeight int, fontFace font.Face) *HexRenderer {
 	fillImg := ebiten.NewImage(1, 1)
 	fillImg.Fill(color.White)
 
@@ -52,62 +45,21 @@ func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenH
 		hexes = append(hexes, hex)
 	}
 
-	fontData, err := ioutil.ReadFile("assets/fonts/arial.ttf")
-	if err != nil {
-		log.Fatal(err)
-	}
-	tt, err := opentype.Parse(fontData)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	const fontSize = 10
-	face, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    fontSize,
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	const checkpointFontSize = 12
-	checkpointFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    checkpointFontSize,
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	const percentFontSize = 11
-	percentFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    percentFontSize,
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	renderer := &HexRenderer{
-		hexMap:             hexMap,
-		hexSize:            hexSize,
-		screenWidth:        screenWidth,
-		screenHeight:       screenHeight,
-		fillImg:            fillImg,
-		strokeImg:          strokeImg,
-		sortedHexes:        hexes,
-		fillVs:             make([]ebiten.Vertex, 0, 18),
-		fillIs:             make([]uint16, 0, 18),
-		strokeVs:           make([]ebiten.Vertex, 0, 36),
-		strokeIs:           make([]uint16, 0, 36),
-		fontFace:           face,
-		checkpointFontFace: checkpointFace,
-		percentFontFace:    percentFace,
-		mapImage:           ebiten.NewImage(screenWidth, screenHeight),
-		checkpointMap:      make(map[hexmap.Hex]int),
+		hexMap:        hexMap,
+		hexSize:       hexSize,
+		screenWidth:   screenWidth,
+		screenHeight:  screenHeight,
+		fillImg:       fillImg,
+		strokeImg:     strokeImg,
+		sortedHexes:   hexes,
+		fillVs:        make([]ebiten.Vertex, 0, 18),
+		fillIs:        make([]uint16, 0, 18),
+		strokeVs:      make([]ebiten.Vertex, 0, 36),
+		strokeIs:      make([]uint16, 0, 36),
+		fontFace:      fontFace,
+		mapImage:      ebiten.NewImage(screenWidth, screenHeight),
+		checkpointMap: make(map[hexmap.Hex]int),
 	}
 
 	for i, cp := range hexMap.Checkpoints {
@@ -249,17 +201,9 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 	// Отрисовка номера чекпоинта
 	if num, isCheckpoint := r.checkpointMap[hex]; isCheckpoint {
 		checkpointText := fmt.Sprintf("%d", num)
-		checkpointTextWidth := text.BoundString(r.checkpointFontFace, checkpointText).Max.X - text.BoundString(r.checkpointFontFace, checkpointText).Min.X
-		checkpointTextHeight := text.BoundString(r.checkpointFontFace, checkpointText).Max.Y - text.BoundString(r.checkpointFontFace, checkpointText).Min.Y
-		text.Draw(target, checkpointText, r.checkpointFontFace, int(x)-checkpointTextWidth/2, int(y)+checkpointTextHeight/2, checkpointNumTextColor)
-	}
-
-	// Отрисовка процентов
-	if power, exists := r.hexMap.EnergyVeins[hex]; exists {
-		percentText := fmt.Sprintf("%.0f%%", power*100)
-		percentTextWidth := text.BoundString(r.percentFontFace, percentText).Max.X - text.BoundString(r.percentFontFace, percentText).Min.X
-		percentTextHeight := text.BoundString(r.percentFontFace, percentText).Max.Y - text.BoundString(r.percentFontFace, percentText).Min.Y
-		text.Draw(target, percentText, r.percentFontFace, int(x)-percentTextWidth/2, int(y)+percentTextHeight/2+5, color.RGBA{50, 50, 50, 255}) // Тёмный текст, сдвинут выше
+		checkpointTextWidth := text.BoundString(r.fontFace, checkpointText).Max.X - text.BoundString(r.fontFace, checkpointText).Min.X
+		checkpointTextHeight := text.BoundString(r.fontFace, checkpointText).Max.Y - text.BoundString(r.fontFace, checkpointText).Min.Y
+		text.Draw(target, checkpointText, r.fontFace, int(x)-checkpointTextWidth/2, int(y)+checkpointTextHeight/2, checkpointNumTextColor)
 	}
 }
 

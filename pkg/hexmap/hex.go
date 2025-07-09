@@ -3,6 +3,7 @@ package hexmap
 
 import (
 	"go-tower-defense/internal/config"
+	"go-tower-defense/pkg/utils"
 )
 
 // Hex представляет гекс в осевых координатах (Q, R)
@@ -70,7 +71,7 @@ func (h Hex) Subtract(other Hex) Hex {
 func (h Hex) Distance(to Hex) int {
 	dq := h.Q - to.Q
 	dr := h.R - to.R
-	return (abs(dq) + abs(dr) + abs(dq+dr)) / 2
+	return (utils.Abs(dq) + utils.Abs(dr) + utils.Abs(dq+dr)) / 2
 }
 
 // Lerp выполняет линейную интерполяцию между двумя гексами
@@ -90,4 +91,36 @@ func (start Hex) LineTo(end Hex) []Hex {
 		results = append(results, start.Lerp(end, t))
 	}
 	return results
+}
+
+// IsOnSameLine checks if two hexes are on the same straight line.
+func (h Hex) IsOnSameLine(other Hex) bool {
+	if h == other {
+		return true
+	}
+
+	dQ := h.Q - other.Q
+	dR := h.R - other.R
+	dS := (-h.Q - h.R) - (-other.Q - other.R) // S = -Q - R
+
+	if dQ == 0 && dR == 0 { // dS will also be 0
+		return true
+	}
+
+	commonDivisor := utils.Gcd(utils.Abs(dQ), utils.Gcd(utils.Abs(dR), utils.Abs(dS)))
+	if commonDivisor == 0 {
+		return false
+	}
+
+	normDQ := dQ / commonDivisor
+	normDR := dR / commonDivisor
+
+	// Check if the normalized vector matches one of the 6 base directions.
+	// In cubic coordinates, Q + R + S = 0.
+	// We only need to check two components.
+	isDirection := (utils.Abs(normDQ) == 1 && normDR == 0) ||
+		(normDQ == 0 && utils.Abs(normDR) == 1) ||
+		(utils.Abs(normDQ) == 1 && utils.Abs(normDR) == 1 && normDQ == -normDR)
+
+	return isDirection
 }

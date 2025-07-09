@@ -7,16 +7,19 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	"golang.org/x/image/font"
 )
 
 // RenderSystem рисует сущности
 type RenderSystem struct {
-	ecs *entity.ECS
+	ecs      *entity.ECS
+	fontFace font.Face
 }
 
-func NewRenderSystem(ecs *entity.ECS) *RenderSystem {
-	return &RenderSystem{ecs: ecs}
+func NewRenderSystem(ecs *entity.ECS, fontFace font.Face) *RenderSystem {
+	return &RenderSystem{ecs: ecs, fontFace: fontFace}
 }
 
 func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64) {
@@ -45,5 +48,15 @@ func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64) {
 	// Отрисовка линий
 	for _, line := range s.ecs.LineRenders {
 		vector.StrokeLine(screen, float32(line.StartX), float32(line.StartY), float32(line.EndX), float32(line.EndY), 2.0, line.Color, true)
+	}
+
+	// Отрисовка текста поверх всего
+	for _, txt := range s.ecs.Texts {
+		if txt.IsUI {
+			bounds := text.BoundString(s.fontFace, txt.Value)
+			x := int(txt.Position.X) - bounds.Min.X - bounds.Dx()/2
+			y := int(txt.Position.Y) - bounds.Min.Y - bounds.Dy()/2
+			text.Draw(screen, txt.Value, s.fontFace, x, y, txt.Color)
+		}
 	}
 }

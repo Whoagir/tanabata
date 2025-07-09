@@ -11,14 +11,16 @@ import (
 
 // CombatSystem управляет атакой башен
 type CombatSystem struct {
-	ecs         *entity.ECS
-	lastLogTime float64 // Время последнего лога для ограничения спама
+	ecs               *entity.ECS
+	powerSourceFinder func(towerID types.EntityID) []types.EntityID
+	lastLogTime       float64
 }
 
-func NewCombatSystem(ecs *entity.ECS) *CombatSystem {
+func NewCombatSystem(ecs *entity.ECS, finder func(towerID types.EntityID) []types.EntityID) *CombatSystem {
 	return &CombatSystem{
-		ecs:         ecs,
-		lastLogTime: 0.0,
+		ecs:               ecs,
+		powerSourceFinder: finder,
+		lastLogTime:       0.0,
 	}
 }
 
@@ -27,33 +29,50 @@ const logInterval = 1.0 // Логируем не чаще, чем раз в се
 func (s *CombatSystem) Update(deltaTime float64) {
 	for id, combat := range s.ecs.Combats {
 		tower, hasTower := s.ecs.Towers[id]
-		if !hasTower {
-			// log.Printf("Башня %d не имеет компонента Tower", id)
-			continue
-		}
-		if !tower.IsActive {
-			// log.Printf("Башня %d не активна, IsActive: %v", id, tower.IsActive)
+		if !hasTower || !tower.IsActive {
 			continue
 		}
 
 		if combat.FireCooldown > 0 {
 			combat.FireCooldown -= deltaTime
-			// Лог про кулдаун убираем или ограничиваем
-			if s.ecs.GameTime-s.lastLogTime >= logInterval {
-				// log.Printf("Башня %d на кулдауне, FireCooldown: %.2f", id, combat.FireCooldown)
-				s.lastLogTime = s.ecs.GameTime
-			}
 			continue
+		}
+
+		// Проверка наличия ресурсов
+		powerSources := s.powerSourceFinder(id)
+		if len(powerSources) == 0 {
+			continue // Нет источников энергии, башня не стреляет
+		}
+
+		var totalReserve float64
+		for _, sourceID := range powerSources {
+			if ore, ok := s.ecs.Ores[sourceID]; ok {
+				totalReserve += ore.CurrentReserve
+			}
+		}
+
+		if totalReserve < combat.ShotCost {
+			continue // Недостаточно ресурсов для выстрела
 		}
 
 		enemyID := s.findNearestEnemyInRange(id, tower.Hex, combat.Range)
 		if enemyID != 0 {
-			if vel, velExists := s.ecs.Velocities[enemyID]; velExists && vel != nil {
-				s.createProjectile(id, enemyID, tower.Type)
-				combat.FireCooldown = 1.0 / combat.FireRate
-			} else if s.ecs.GameTime-s.lastLogTime >= logInterval {
-				// log.Printf("Враг %d не имеет компонента Velocity", enemyID)
-				s.lastLogTime = s.ecs.GameTime
+			// Ресурсы есть, враг в зоне досягаемости, производим выстрел
+			s.createProjectile(id, enemyID, tower.Type)
+			combat.FireCooldown = 1.0 / combat.FireRate
+
+			// Списываем стоимость выстрела
+			remainingCost := combat.ShotCost
+			for _, sourceID := range powerSources {
+				if ore, ok := s.ecs.Ores[sourceID]; ok {
+					if ore.CurrentReserve >= remainingCost {
+						ore.CurrentReserve -= remainingCost
+						break
+					} else {
+						remainingCost -= ore.CurrentReserve
+						ore.CurrentReserve = 0
+					}
+				}
 			}
 		}
 	}

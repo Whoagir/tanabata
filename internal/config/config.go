@@ -38,11 +38,12 @@ const (
 	ProjectileSpeed  = 200.0 // pixels per second
 	ProjectileRadius = 5.0   // pixels
 
-	SpeedButtonOffsetX = 80   // Отступ слева от края или индикатора
+	SpeedButtonOffsetX = 80   // Отступ слева от края индикатора
 	SpeedButtonY       = 30   // Позиция по Y
 	SpeedButtonSize    = 18.0 // Размер кнопки (радиус или ширина, в зависимости от реализации ui.SpeedButton)
 
 	EnergyTransferRadius = 3
+	TowerShotCost        = 0.2 // Стоимость одного выстрела
 )
 
 const (
@@ -51,6 +52,7 @@ const (
 	TowerTypeBlue
 	TowerTypePurple
 	TowerTypeMiner // Новый тип для добытчика
+	TowerTypeWall  = -1
 )
 
 var (
@@ -67,6 +69,7 @@ var (
 	BaseColor        = color.RGBA{50, 205, 50, 255}
 	EnemyColor       = color.RGBA{0, 0, 0, 255}
 	TowerStrokeColor = color.RGBA{255, 255, 255, 255}
+	LineColor        = color.RGBA{255, 255, 0, 128}
 	StrokeWidth      = 2.0
 	TowerColors      = []color.RGBA{
 		{255, 50, 50, 255},   // Red
@@ -74,7 +77,7 @@ var (
 		{50, 100, 255, 255},  // Blue
 		{180, 50, 230, 255},  // Purple
 		{255, 215, 0, 255},   // Gold (жёлтый) для добытчика
-		{128, 128, 128, 255}, // Серый цвет для пассивных башен
+		{128, 128, 128, 255}, // Серый цвет для стен
 	}
 	SpeedButtonColors = []color.Color{
 		color.RGBA{70, 130, 180, 220},  // Серый для скорости x1

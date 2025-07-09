@@ -1,0 +1,76 @@
+Структура проекта:
+├── assets
+│   └── fonts
+│       └── arial.ttf
+├── cmd
+│   └── game
+│       └── main.go
+├── internal
+│   ├── app
+│   │   ├── energy_network.go
+│   │   ├── game.go
+│   │   └── tower_management.go
+│   ├── component
+│   │   ├── combat.go
+│   │   ├── enemy.go
+│   │   ├── game_state.go
+│   │   ├── line.go
+│   │   ├── movement.go
+│   │   ├── ore.go
+│   │   ├── projectile.go
+│   │   ├── render.go
+│   │   ├── text.go
+│   │   ├── tower.go
+│   │   └── wave.go
+│   ├── config
+│   │   └── config.go
+│   ├── entity
+│   │   └── ecs.go
+│   ├── event
+│   │   ├── event.go
+│   │   └── types.go
+│   ├── interfaces
+│   │   └── game_context.go
+│   ├── state
+│   │   ├── game_state.go
+│   │   ├── menu_state.go
+│   │   ├── pause_state.go
+│   │   └── state.go
+│   ├── system
+│   │   ├── combat.go
+│   │   ├── movement.go
+│   │   ├── ore.go
+│   │   ├── projectile.go
+│   │   ├── render.go
+│   │   ├── state.go
+│   │   └── wave.go
+│   ├── types
+│   │   └── types.go
+│   └── ui
+│       ├── indicator.go
+│       ├── pause_button.go
+│       └── speed_button.go
+├── pkg
+│   ├── hexmap
+│   │   ├── hex.go
+│   │   ├── map.go
+│   │   ├── pathfinding.go
+│   │   └── utils.go
+│   ├── render
+│   │   ├── color.go
+│   │   └── hex_renderer.go
+│   └── utils
+│       ├── math.go
+│       └── union_find.go
+├── .env
+├── .gitignore
+├── analyze.txt
+├── analyze_project.py
+├── game.exe
+├── GEMINI.md
+├── go.mod
+├── go.sum
+├── profile
+├── reset_env.ps1
+├── stp_td что сделанно.txt
+└── информация.txt

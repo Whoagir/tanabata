@@ -28,8 +28,8 @@ type GameState struct {
 
 func NewGameState(sm *StateMachine) *GameState {
 	hexMap := hexmap.NewHexMap()
-	renderer := render.NewHexRenderer(hexMap, config.HexSize, config.ScreenWidth, config.ScreenHeight)
 	gameLogic := game.NewGame(hexMap)
+	renderer := render.NewHexRenderer(hexMap, config.HexSize, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace)
 	indicator := ui.NewStateIndicator(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
 		float32(config.IndicatorOffsetX),
