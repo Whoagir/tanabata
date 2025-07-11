@@ -31,9 +31,10 @@ type HexRenderer struct {
 	fontFace      font.Face
 	mapImage      *ebiten.Image
 	checkpointMap map[hexmap.Hex]int
+	EnergyVeins   map[hexmap.Hex]float64 // <-- Добавлено
 }
 
-func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenHeight int, fontFace font.Face) *HexRenderer {
+func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, hexSize float64, screenWidth, screenHeight int, fontFace font.Face) *HexRenderer {
 	fillImg := ebiten.NewImage(1, 1)
 	fillImg.Fill(color.White)
 
@@ -60,13 +61,14 @@ func NewHexRenderer(hexMap *hexmap.HexMap, hexSize float64, screenWidth, screenH
 		fontFace:      fontFace,
 		mapImage:      ebiten.NewImage(screenWidth, screenHeight),
 		checkpointMap: make(map[hexmap.Hex]int),
+		EnergyVeins:   energyVeins, // <-- Добавлено
 	}
 
 	for i, cp := range hexMap.Checkpoints {
 		renderer.checkpointMap[cp] = i + 1
 	}
 
-	renderer.RenderMapImage()
+	// renderer.RenderMapImage() // <-- Этот вызов будет удален отсюда
 
 	return renderer
 }
@@ -86,14 +88,14 @@ func (r *HexRenderer) RenderMapImage() {
 func (r *HexRenderer) Draw(screen *ebiten.Image, towerHexes []hexmap.Hex, renderSystem *system.RenderSystem, gameTime float64) {
 	screen.DrawImage(r.mapImage, nil)
 
-	towerHexSet := make(map[hexmap.Hex]struct{})
-	for _, hex := range towerHexes {
-		towerHexSet[hex] = struct{}{}
-	}
+	// towerHexSet := make(map[hexmap.Hex]struct{})
+	// for _, hex := range towerHexes {
+	// 	towerHexSet[hex] = struct{}{}
+	// }
 
-	for _, hex := range towerHexes {
-		r.drawHexOutline(screen, hex, towerHexSet)
-	}
+	// for _, hex := range towerHexes {
+	// 	r.drawHexOutline(screen, hex, towerHexSet)
+	// }
 
 	renderSystem.Draw(screen, gameTime)
 }
@@ -174,7 +176,7 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 	})
 
 	// Подсветка для гекса с рудой
-	if _, exists := r.hexMap.EnergyVeins[hex]; exists {
+	if _, exists := r.EnergyVeins[hex]; exists {
 		highlightColor := color.RGBA{
 			R: uint8(min(255, int(fillColor.R)+60)),
 			G: uint8(min(255, int(fillColor.G)+60)),
@@ -237,25 +239,11 @@ func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, tower
 		Width: float32(config.StrokeWidth),
 	})
 
-	var strokeColor color.RGBA
-	if towerHexSet != nil {
-		if _, hasTower := towerHexSet[hex]; hasTower {
-			strokeColor = color.RGBA{R: 255, G: 100, B: 100, A: 255}
-		} else {
-			strokeColor = color.RGBA{
-				R: uint8(min(255, int(fillColor.R)+40)),
-				G: uint8(min(255, int(fillColor.G)+40)),
-				B: uint8(min(255, int(fillColor.B)+40)),
-				A: 255,
-			}
-		}
-	} else {
-		strokeColor = color.RGBA{
-			R: uint8(min(255, int(fillColor.R)+40)),
-			G: uint8(min(255, int(fillColor.G)+40)),
-			B: uint8(min(255, int(fillColor.B)+40)),
-			A: 255,
-		}
+	strokeColor := color.RGBA{
+		R: uint8(min(255, int(fillColor.R)+40)),
+		G: uint8(min(255, int(fillColor.G)+40)),
+		B: uint8(min(255, int(fillColor.B)+40)),
+		A: 255,
 	}
 
 	for i := range r.strokeVs {
@@ -274,4 +262,9 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+
+func (r *HexRenderer) GetHexAt(x, y int) hexmap.Hex {
+	return hexmap.PixelToHex(float64(x-r.screenWidth/2), float64(y-r.screenHeight/2), r.hexSize)
 }

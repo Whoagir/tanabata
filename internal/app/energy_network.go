@@ -38,6 +38,37 @@ func calculateEdgeWeight(type1, type2 int, distance float64) float64 {
 	return 300 + distance
 }
 
+// sortEnergyEdges provides a deterministic sort for energy edges.
+// It sorts by weight first, then by the tower IDs to resolve ties.
+func sortEnergyEdges(edges []energyEdge) {
+	sort.Slice(edges, func(i, j int) bool {
+		edgeA := edges[i]
+		edgeB := edges[j]
+		weightA := calculateEdgeWeight(edgeA.Type1, edgeA.Type2, edgeA.Distance)
+		weightB := calculateEdgeWeight(edgeB.Type1, edgeB.Type2, edgeB.Distance)
+
+		if weightA != weightB {
+			return weightA < weightB
+		}
+
+		// Tie-breaking logic using tower IDs for determinism.
+		// We sort the IDs within each edge to ensure consistency.
+		minA, maxA := edgeA.Tower1ID, edgeA.Tower2ID
+		if minA > maxA {
+			minA, maxA = maxA, minA
+		}
+		minB, maxB := edgeB.Tower1ID, edgeB.Tower2ID
+		if minB > maxB {
+			minB, maxB = maxB, minB
+		}
+
+		if minA != minB {
+			return minA < minB
+		}
+		return maxA < maxB
+	})
+}
+
 // rebuildEnergyNetwork orchestrates a full energy network rebuild using Kruskal's algorithm.
 // This is expensive and should be used only when necessary (e.g., tower removal).
 func (g *Game) rebuildEnergyNetwork() {
@@ -60,71 +91,84 @@ func (g *Game) rebuildEnergyNetwork() {
 // addTowerToEnergyNetwork incrementally adds a new tower to the energy network.
 // It connects the new tower to the best available active neighbor that doesn't
 // form a visual triangle, and then expands the network from that new point.
+// This function also handles merging previously disconnected networks.
 func (g *Game) addTowerToEnergyNetwork(newTowerID types.EntityID) {
 	newTower, exists := g.ECS.Towers[newTowerID]
 	if !exists || newTower.Type == config.TowerTypeWall {
 		return // Do nothing for walls or non-existent towers
 	}
 
-	// --- Start of interception logic ---
-	// If the new tower is a Miner, check if it lies on an existing Miner-to-Miner line.
-	// If so, intercept the line instead of finding a new connection.
+	// --- Start of interception logic for Miners ---
 	if newTower.Type == config.TowerTypeMiner {
-		var interceptedLineID types.EntityID
-		var tower1ID, tower2ID types.EntityID
-
-		for lineID, line := range g.ECS.LineRenders {
-			t1, ok1 := g.ECS.Towers[line.Tower1ID]
-			t2, ok2 := g.ECS.Towers[line.Tower2ID]
-
-			// Ensure both towers of the line are also miners.
-			if !ok1 || !ok2 || t1.Type != config.TowerTypeMiner || t2.Type != config.TowerTypeMiner {
-				continue
-			}
-
-			dist12 := t1.Hex.Distance(t2.Hex)
-			dist1New := t1.Hex.Distance(newTower.Hex)
-			distNew2 := newTower.Hex.Distance(t2.Hex)
-
-			// Check for collinearity and betweenness. If the new tower is on the segment,
-			// the sum of distances from the ends to the new tower will equal the total distance.
-			if dist1New > 0 && distNew2 > 0 && dist1New+distNew2 == dist12 {
-				interceptedLineID = lineID
-				tower1ID = line.Tower1ID
-				tower2ID = line.Tower2ID
-				break // Found a line to intercept, no need to check others.
-			}
-		}
-
-		if interceptedLineID != 0 {
-			// A line was intercepted. Reroute it through the new tower.
-			delete(g.ECS.LineRenders, interceptedLineID)
-
-			newTower.IsActive = true
-			g.updateTowerAppearance(newTowerID)
-
-			// Create the two new line segments.
-			t1 := g.ECS.Towers[tower1ID]
-			g.createLine(energyEdge{
-				Tower1ID: tower1ID, Tower2ID: newTowerID,
-				Type1: t1.Type, Type2: newTower.Type,
-				Distance: float64(t1.Hex.Distance(newTower.Hex)),
-			})
-			t2 := g.ECS.Towers[tower2ID]
-			g.createLine(energyEdge{
-				Tower1ID: newTowerID, Tower2ID: tower2ID,
-				Type1: newTower.Type, Type2: t2.Type,
-				Distance: float64(newTower.Hex.Distance(t2.Hex)),
-			})
-
-			// Expand the network from the newly added tower to connect any other nearby towers.
+		if g.handleMinerIntercept(newTowerID, newTower) {
 			g.expandNetworkFrom(newTowerID)
-			return // The tower has been added and integrated.
+			return // Interception handled, expansion complete.
 		}
 	}
 	// --- End of interception logic ---
 
 	// 1. Find all possible connections from the new tower to EXISTING ACTIVE towers.
+	connections := g.findPossibleConnections(newTowerID, newTower)
+
+	// A new tower can become active if it's a miner on ore (a root) or can connect to the grid.
+	isNewRoot := newTower.Type == config.TowerTypeMiner && g.isOnOre(newTower.Hex)
+	if len(connections) == 0 && !isNewRoot {
+		g.updateTowerAppearance(newTowerID) // Ensure it's colored as inactive
+		return
+	}
+
+	// 2. Activate the new tower.
+	newTower.IsActive = true
+	g.updateTowerAppearance(newTowerID)
+
+	// 3. Connect to neighbors, handling network merges.
+	if len(connections) > 0 {
+		g.connectToNetworks(newTowerID, connections)
+	}
+
+	// 4. Expand the network from the newly activated tower to connect any nearby inactive towers.
+	g.expandNetworkFrom(newTowerID)
+}
+
+// handleMinerIntercept checks if a new miner tower intercepts an existing miner-to-miner line.
+// If it does, it reroutes the line through the new tower. Returns true if an interception occurred.
+func (g *Game) handleMinerIntercept(newTowerID types.EntityID, newTower *component.Tower) bool {
+	for lineID, line := range g.ECS.LineRenders {
+		t1, ok1 := g.ECS.Towers[line.Tower1ID]
+		t2, ok2 := g.ECS.Towers[line.Tower2ID]
+
+		if !ok1 || !ok2 || t1.Type != config.TowerTypeMiner || t2.Type != config.TowerTypeMiner {
+			continue
+		}
+
+		dist12 := t1.Hex.Distance(t2.Hex)
+		dist1New := t1.Hex.Distance(newTower.Hex)
+		distNew2 := newTower.Hex.Distance(t2.Hex)
+
+		if dist1New > 0 && distNew2 > 0 && dist1New+distNew2 == dist12 {
+			// Interception found.
+			delete(g.ECS.LineRenders, lineID)
+			newTower.IsActive = true
+			g.updateTowerAppearance(newTowerID)
+
+			g.createLine(energyEdge{
+				Tower1ID: line.Tower1ID, Tower2ID: newTowerID,
+				Type1: t1.Type, Type2: newTower.Type,
+				Distance: float64(dist1New),
+			})
+			g.createLine(energyEdge{
+				Tower1ID: newTowerID, Tower2ID: line.Tower2ID,
+				Type1: newTower.Type, Type2: t2.Type,
+				Distance: float64(distNew2),
+			})
+			return true
+		}
+	}
+	return false
+}
+
+// findPossibleConnections finds and sorts all valid connections from a new tower to existing active towers.
+func (g *Game) findPossibleConnections(newTowerID types.EntityID, newTower *component.Tower) []energyEdge {
 	var connections []energyEdge
 	for otherID, otherTower := range g.ECS.Towers {
 		if newTowerID == otherID || !otherTower.IsActive {
@@ -140,57 +184,61 @@ func (g *Game) addTowerToEnergyNetwork(newTowerID types.EntityID) {
 
 		if isNeighbor || isMinerConnection {
 			connections = append(connections, energyEdge{
-				Tower1ID: newTowerID,
-				Tower2ID: otherID,
-				Type1:    newTower.Type,
-				Type2:    otherTower.Type,
+				Tower1ID: newTowerID, Tower2ID: otherID,
+				Type1: newTower.Type, Type2: otherTower.Type,
 				Distance: float64(distance),
 			})
 		}
 	}
 
-	// Also check if the new tower is a miner on an ore vein, making it a root.
-	isNewRoot := newTower.Type == config.TowerTypeMiner && g.isOnOre(newTower.Hex)
+	sortEnergyEdges(connections)
+	return connections
+}
 
-	// If there are no connections and it's not a new root, it remains inactive.
-	if len(connections) == 0 && !isNewRoot {
-		g.updateTowerAppearance(newTowerID) // Ensure it's colored as inactive
-		return
+// connectToNetworks connects a tower to one or more existing networks, preventing cycles.
+func (g *Game) connectToNetworks(towerID types.EntityID, connections []energyEdge) {
+	// Build a Union-Find structure to identify the separate networks based on existing lines.
+	uf := utils.NewUnionFind()
+	for id := range g.ECS.Towers {
+		uf.Find(id) // Initialize all towers.
+	}
+	for _, line := range g.ECS.LineRenders {
+		uf.Union(line.Tower1ID, line.Tower2ID)
 	}
 
-	// 2. Activate the new tower.
-	newTower.IsActive = true
-	g.updateTowerAppearance(newTowerID)
+	adj := g.buildAdjacencyList()
+	connectionMade := false
 
-	// 3. If it can connect to the grid, create the best connection that doesn't form a triangle.
-	if len(connections) > 0 {
-		sort.Slice(connections, func(i, j int) bool {
-			edgeA := connections[i]
-			edgeB := connections[j]
-			weightA := calculateEdgeWeight(edgeA.Type1, edgeA.Type2, edgeA.Distance)
-			weightB := calculateEdgeWeight(edgeB.Type1, edgeB.Type2, edgeB.Distance)
-			return weightA < weightB
-		})
+	for _, edge := range connections {
+		neighborID := edge.Tower2ID
 
-		adj := g.buildAdjacencyList()
-		connectionMade := false
-		for _, edge := range connections {
-			if !g.formsTriangle(edge.Tower1ID, edge.Tower2ID, adj) {
+		// Primary cycle prevention: only connect if the towers are in different components.
+		if uf.Find(towerID) != uf.Find(neighborID) {
+			// Secondary aesthetic check: avoid creating small, visually cluttered triangles.
+			if !g.formsTriangle(towerID, neighborID, adj) {
 				g.createLine(edge)
+				uf.Union(towerID, neighborID) // Update the UF structure with the new connection.
 				connectionMade = true
-				break // Make only one connection
+
+				// Update adjacency list for subsequent triangle checks in this same operation.
+				adj[towerID] = append(adj[towerID], neighborID)
+				adj[neighborID] = append(adj[neighborID], towerID)
 			}
 		}
-
-		// Fallback: if all possible connections form triangles,
-		// make the best one anyway to ensure connectivity.
-		if !connectionMade {
-			g.createLine(connections[0])
-		}
 	}
 
-	// 4. Expand the network from the newly activated tower(s).
-	g.expandNetworkFrom(newTowerID)
+	// Fallback: if all possible connections form triangles, make the best one
+	// that connects to a different component, ignoring the triangle rule.
+	if !connectionMade {
+		for _, edge := range connections {
+			neighborID := edge.Tower2ID
+			if uf.Find(towerID) != uf.Find(neighborID) {
+				g.createLine(edge)
+				// No need to union or update adj here, we're just making one connection.
+				break
+			}
+		}
+	}
 }
 
 // expandNetworkFrom performs a BFS starting from a newly activated tower
@@ -273,7 +321,6 @@ func (g *Game) formsTriangle(id1, id2 types.EntityID, adj map[types.EntityID][]t
 	return false
 }
 
-
 // updateTowerAppearance updates the color of a single tower based on its state.
 func (g *Game) updateTowerAppearance(id types.EntityID) {
 	tower := g.ECS.Towers[id]
@@ -291,7 +338,6 @@ func (g *Game) updateTowerAppearance(id types.EntityID) {
 		render.Color = c
 	}
 }
-
 
 // collectEdgesForNewTower finds all valid connections from a new tower to the existing ones.
 func (g *Game) collectEdgesForNewTower(newTower *component.Tower, allTowers map[hexmap.Hex]types.EntityID, potentiallyActive map[types.EntityID]bool) []energyEdge {
@@ -324,16 +370,7 @@ func (g *Game) collectEdgesForNewTower(newTower *component.Tower, allTowers map[
 		}
 	}
 
-	sort.Slice(edges, func(i, j int) bool {
-		edgeA, edgeB := edges[i], edges[j]
-		isMinerA := edgeA.Type1 == config.TowerTypeMiner || edgeA.Type2 == config.TowerTypeMiner
-		isMinerB := edgeB.Type1 == config.TowerTypeMiner || edgeB.Type2 == config.TowerTypeMiner
-		if isMinerA != isMinerB {
-			return isMinerA
-		}
-		return edgeA.Distance < edgeB.Distance
-	})
-
+	sortEnergyEdges(edges)
 	return edges
 }
 
@@ -404,13 +441,7 @@ func (g *Game) hasActiveTowerBetween(hexA, hexB hexmap.Hex, allTowers map[hexmap
 }
 
 func (g *Game) buildMinimumSpanningTree(edges []energyEdge, potentiallyActive map[types.EntityID]bool) (*utils.UnionFind, []energyEdge) {
-	sort.Slice(edges, func(i, j int) bool {
-		edgeA := edges[i]
-		edgeB := edges[j]
-		weightA := calculateEdgeWeight(edgeA.Type1, edgeA.Type2, edgeA.Distance)
-		weightB := calculateEdgeWeight(edgeB.Type1, edgeB.Type2, edgeB.Distance)
-		return weightA < weightB
-	})
+	sortEnergyEdges(edges)
 
 	uf := utils.NewUnionFind()
 	for id := range potentiallyActive {
@@ -483,45 +514,243 @@ func (g *Game) clearAllLines() {
 }
 
 func (g *Game) isOnOre(hex hexmap.Hex) bool {
-	_, exists := g.HexMap.EnergyVeins[hex]
-	return exists
+	for _, ore := range g.ECS.Ores {
+		oreHex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, config.HexSize)
+		if oreHex == hex {
+			return true
+		}
+	}
+	return false
 }
 
-// handleTowerRemoval intelligently deactivates parts of the energy network
-// after a tower is removed, avoiding a full, disruptive rebuild.
-func (g *Game) handleTowerRemoval(removedTowerID types.EntityID) {
-	// 1. Explicitly remove lines connected to the deleted tower.
-	linesToRemove := []types.EntityID{}
-	for lineID, line := range g.ECS.LineRenders {
-		if line.Tower1ID == removedTowerID || line.Tower2ID == removedTowerID {
-			linesToRemove = append(linesToRemove, lineID)
+// handleTowerRemoval orchestrates the reconnection of the energy network after a tower is removed.
+// It iteratively finds the single best bridge to build and then re-evaluates the entire
+// network state, guaranteeing a cycle-free and complete reconnection.
+func (g *Game) handleTowerRemoval(orphanedNeighbors []types.EntityID) {
+	// --- 1. Establish Ground Truth: Determine which towers are powered from a source ---
+	poweredSet := g.findPoweredTowers()
+	for id, tower := range g.ECS.Towers {
+		tower.IsActive = poweredSet[id]
+	}
+
+	// --- 2. Reconnect Disjoint Active Networks ---
+	// This safely merges any separate, but still powered, network components into a single grid.
+	g.mergeActiveNetworks()
+
+	// --- 3. Iteratively Connect All Reachable Inactive Components ---
+	// This loop ensures that after each new connection is made, the entire network state
+	// is re-evaluated before finding the next best connection. This is crucial for preventing cycles.
+	for {
+		// a. Find all possible bridges in the current state.
+		bridges := g.findAllPossibleBridges()
+		if len(bridges) == 0 {
+			break // No more connections can be made.
+		}
+
+		// b. Build a fresh UnionFind for the current network topology to detect cycles.
+		uf := utils.NewUnionFind()
+		for id := range g.ECS.Towers {
+			uf.Find(id)
+		}
+		for _, line := range g.ECS.LineRenders {
+			uf.Union(line.Tower1ID, line.Tower2ID)
+		}
+
+		// c. Find the single best bridge that doesn't form a cycle and build it.
+		bridgeBuilt := false
+		for _, bridge := range bridges {
+			if uf.Find(bridge.Tower1ID) != uf.Find(bridge.Tower2ID) {
+				g.createLine(bridge)
+				bridgeBuilt = true
+				break // IMPORTANT: Build only one bridge per iteration.
+			}
+		}
+
+		if !bridgeBuilt {
+			// If no non-cyclic bridges were found among the possibilities, we're done.
+			break
+		}
+
+		// d. CRITICAL: Re-evaluate the entire power network from scratch.
+		// This updates the IsActive status of all towers based on the new connection.
+		newPoweredSet := g.findPoweredTowers()
+		for id, tower := range g.ECS.Towers {
+			tower.IsActive = newPoweredSet[id]
 		}
 	}
-	for _, lineID := range linesToRemove {
-		delete(g.ECS.LineRenders, lineID)
-	}
 
-	// 2. Perform a "keep-alive" traversal from all energy sources.
-	poweredTowers := g.findPoweredTowers()
-
-	// 3. Deactivate any tower that is no longer in the powered set.
-	allTowerIDs := g.getAllTowerIDs()
-	for _, towerID := range allTowerIDs {
-		tower := g.ECS.Towers[towerID]
-		// Also ensure towers that are powered are marked active
-		// (in case they were part of a deactivated branch that got reconnected)
-		if _, isPowered := poweredTowers[towerID]; !isPowered {
-			tower.IsActive = false
-		} else {
-			tower.IsActive = true
-		}
-	}
-
-	// 4. Clean up any lines that are now connected to a deactivated tower.
+	// --- 4. Final Cleanup ---
 	g.cleanupOrphanedLines()
+	g.updateAllTowerAppearances()
+}
 
-	// 5. Update visuals for all towers.
-	g.updateTowerAppearances(g.getAllTowersByHex())
+// findAllPossibleBridges collects and sorts all potential connections from any active
+// tower to any inactive tower.
+func (g *Game) findAllPossibleBridges() []energyEdge {
+	var bridges []energyEdge
+	activeTowers := g.getActiveTowers()
+	inactiveTowers := g.getInactiveTowers()
+
+	if len(activeTowers) == 0 || len(inactiveTowers) == 0 {
+		return bridges
+	}
+
+	for _, activeID := range activeTowers {
+		activeTower := g.ECS.Towers[activeID]
+		for _, inactiveID := range inactiveTowers {
+			inactiveTower := g.ECS.Towers[inactiveID]
+
+			if g.isValidConnection(activeTower, inactiveTower) {
+				bridges = append(bridges, energyEdge{
+					Tower1ID: activeID,
+					Tower2ID: inactiveID,
+					Type1:    activeTower.Type,
+					Type2:    inactiveTower.Type,
+					Distance: float64(activeTower.Hex.Distance(inactiveTower.Hex)),
+				})
+			}
+		}
+	}
+
+	sortEnergyEdges(bridges)
+	return bridges
+}
+
+// getActiveTowers returns a slice of IDs for all towers that are currently active.
+func (g *Game) getActiveTowers() []types.EntityID {
+	var activeTowers []types.EntityID
+	for id, tower := range g.ECS.Towers {
+		if tower.IsActive {
+			activeTowers = append(activeTowers, id)
+		}
+	}
+	return activeTowers
+}
+
+// updateAllTowerAppearances iterates through all towers and updates their color.
+func (g *Game) updateAllTowerAppearances() {
+	for id := range g.ECS.Towers {
+		g.updateTowerAppearance(id)
+	}
+}
+
+// getInactiveTowers returns a slice of IDs for all towers that are currently inactive.
+func (g *Game) getInactiveTowers() []types.EntityID {
+	var inactiveTowers []types.EntityID
+	for id, tower := range g.ECS.Towers {
+		if !tower.IsActive {
+			inactiveTowers = append(inactiveTowers, id)
+		}
+	}
+	return inactiveTowers
+}
+
+// mergeActiveNetworks finds and connects any separate, active network components using a
+// Kruskal-like algorithm to prevent cycles.
+func (g *Game) mergeActiveNetworks() {
+	activeTowers := make(map[types.EntityID]*component.Tower)
+	for id, tower := range g.ECS.Towers {
+		if tower.IsActive {
+			activeTowers[id] = tower
+		}
+	}
+
+	// If there's 1 or 0 active towers, there's nothing to merge.
+	if len(activeTowers) <= 1 {
+		return
+	}
+
+	// 1. Initialize Union-Find to determine the initial set of disconnected components.
+	uf := utils.NewUnionFind()
+	for id := range activeTowers {
+		uf.Find(id)
+	}
+	for _, line := range g.ECS.LineRenders {
+		// Only consider lines between two active towers.
+		if _, ok1 := activeTowers[line.Tower1ID]; ok1 {
+			if _, ok2 := activeTowers[line.Tower2ID]; ok2 {
+				uf.Union(line.Tower1ID, line.Tower2ID)
+			}
+		}
+	}
+
+	// 2. Collect all possible "bridge" edges between different active components.
+	var bridgeEdges []energyEdge
+	activeTowerIDs := make([]types.EntityID, 0, len(activeTowers))
+	for id := range activeTowers {
+		activeTowerIDs = append(activeTowerIDs, id)
+	}
+
+	for i := 0; i < len(activeTowerIDs); i++ {
+		for j := i + 1; j < len(activeTowerIDs); j++ {
+			id1, id2 := activeTowerIDs[i], activeTowerIDs[j]
+			// If they are already connected, skip.
+			if uf.Find(id1) == uf.Find(id2) {
+				continue
+			}
+
+			tower1, tower2 := activeTowers[id1], activeTowers[id2]
+			if g.isValidConnection(tower1, tower2) {
+				bridgeEdges = append(bridgeEdges, energyEdge{
+					Tower1ID: id1,
+					Tower2ID: id2,
+					Type1:    tower1.Type,
+					Type2:    tower2.Type,
+					Distance: float64(tower1.Hex.Distance(tower2.Hex)),
+				})
+			}
+		}
+	}
+
+	sortEnergyEdges(bridgeEdges)
+
+	// 4. Add the best bridges that don't form a cycle.
+	for _, edge := range bridgeEdges {
+		// The Union-Find structure is the sole authority on cycle prevention.
+		// If they are not in the same set, adding this edge will not create a cycle.
+		if uf.Find(edge.Tower1ID) != uf.Find(edge.Tower2ID) {
+			g.createLine(edge)
+			uf.Union(edge.Tower1ID, edge.Tower2ID)
+		}
+	}
+}
+
+
+
+// isValidConnection checks if two towers can be connected according to game rules.
+func (g *Game) isValidConnection(tower1, tower2 *component.Tower) bool {
+	// Стены не могут быть частью энергосети
+	if tower1.Type == config.TowerTypeWall || tower2.Type == config.TowerTypeWall {
+		return false
+	}
+
+	distance := tower1.Hex.Distance(tower2.Hex)
+	isAdjacent := distance == 1
+	isMinerConnection := tower1.Type == config.TowerTypeMiner &&
+		tower2.Type == config.TowerTypeMiner &&
+		distance <= config.EnergyTransferRadius &&
+		tower1.Hex.IsOnSameLine(tower2.Hex)
+	return isAdjacent || isMinerConnection
+}
+
+// findPotentialNeighbors finds all towers that could have been connected to a tower
+// at a given hex with a given type.
+func (g *Game) findPotentialNeighbors(removedTowerHex hexmap.Hex, removedTowerType int) []types.EntityID {
+	potentialNeighborIDs := []types.EntityID{}
+	for otherID, otherTower := range g.ECS.Towers {
+		distance := removedTowerHex.Distance(otherTower.Hex)
+		isAdjacent := distance == 1
+
+		isMinerConnection := removedTowerType == config.TowerTypeMiner &&
+			otherTower.Type == config.TowerTypeMiner &&
+			distance <= config.EnergyTransferRadius &&
+			removedTowerHex.IsOnSameLine(otherTower.Hex)
+
+		if isAdjacent || isMinerConnection {
+			potentialNeighborIDs = append(potentialNeighborIDs, otherID)
+		}
+	}
+	return potentialNeighborIDs
 }
 
 // findPoweredTowers performs a BFS from all energy sources to find all towers

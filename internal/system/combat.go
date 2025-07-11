@@ -96,7 +96,7 @@ func (s *CombatSystem) findNearestEnemyInRange(towerID types.EntityID, towerHex 
 		}
 	}
 	if nearestEnemy == 0 {
-		// log.Printf("Башня %d не нашла врагов в радиусе %d", towerID, rangeRadius)
+		// log.Printf("Баш��я %d не нашла врагов в радиусе %d", towerID, rangeRadius)
 	} else {
 		// log.Printf("Башня %d нашла врага %d на расстоянии %.2f", towerID, nearestEnemy, minDistance)
 	}
@@ -202,4 +202,20 @@ func calculateDirection(from, to *component.Position) float64 {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	return math.Atan2(dy, dx)
+}
+
+// ApplyDamage наносит урон сущности
+func (s *CombatSystem) ApplyDamage(entityID types.EntityID, damage int) {
+	if health, ok := s.ecs.Healths[entityID]; ok {
+		health.Value -= damage
+		if health.Value <= 0 {
+			// Сущность уничтожена
+			delete(s.ecs.Positions, entityID)
+			delete(s.ecs.Velocities, entityID)
+			delete(s.ecs.Paths, entityID)
+			delete(s.ecs.Healths, entityID)
+			delete(s.ecs.Renderables, entityID)
+			delete(s.ecs.Enemies, entityID)
+		}
+	}
 }

@@ -124,3 +124,25 @@ func (h Hex) IsOnSameLine(other Hex) bool {
 
 	return isDirection
 }
+
+// Direction returns a normalized hex vector (length 1) pointing from the origin towards h.
+func (h Hex) Direction() Hex {
+	if h.Q == 0 && h.R == 0 {
+		return h // No direction from origin to origin
+	}
+	// A proper way would be to convert to cube, divide by distance, and round.
+	// This simplified version handles the 6 cardinal directions, which is enough for now.
+	absQ, absR, absS := utils.Abs(h.Q), utils.Abs(h.R), utils.Abs(-h.Q-h.R)
+	if absQ >= absR && absQ >= absS {
+		return Hex{h.Q / absQ, h.R / absQ}
+	}
+	if absR >= absQ && absR >= absS {
+		return Hex{h.Q / absR, h.R / absR}
+	}
+	return Hex{h.Q / absS, h.R / absS}
+}
+
+// Scale multiplies a hex vector by a scalar.
+func (h Hex) Scale(factor int) Hex {
+	return Hex{h.Q * factor, h.R * factor}
+}

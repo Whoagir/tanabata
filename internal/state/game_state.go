@@ -29,7 +29,9 @@ type GameState struct {
 func NewGameState(sm *StateMachine) *GameState {
 	hexMap := hexmap.NewHexMap()
 	gameLogic := game.NewGame(hexMap)
-	renderer := render.NewHexRenderer(hexMap, config.HexSize, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace)
+	// Передаем актуальные данные о руде в рендерер
+	renderer := render.NewHexRenderer(hexMap, gameLogic.GetOreHexes(), config.HexSize, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace)
+	renderer.RenderMapImage() // <-- Явный вызов отрисовки карты
 	indicator := ui.NewStateIndicator(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
 		float32(config.IndicatorOffsetX),
@@ -56,6 +58,19 @@ func (g *GameState) Update(deltaTime float64) {
 	if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
 		g.sm.SetState(NewPauseState(g.sm, g))
 		return
+	}
+
+	// Handle debug tower selection
+	if g.game.ECS.GameState == component.BuildState {
+		if inpututil.IsKeyJustPressed(ebiten.Key1) {
+			g.game.DebugTowerType = config.TowerTypeRed // Special value for random attacker
+		}
+		if inpututil.IsKeyJustPressed(ebiten.Key2) {
+			g.game.DebugTowerType = config.TowerTypeMiner
+		}
+		if inpututil.IsKeyJustPressed(ebiten.Key3) {
+			g.game.DebugTowerType = config.TowerTypeWall
+		}
 	}
 
 	g.game.Update(deltaTime)

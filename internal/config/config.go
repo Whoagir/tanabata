@@ -43,7 +43,9 @@ const (
 	SpeedButtonSize    = 18.0 // Размер кнопки (радиус или ширина, в зависимости от реализации ui.SpeedButton)
 
 	EnergyTransferRadius = 3
-	TowerShotCost        = 0.2 // Стоимость одного выстрела
+	TowerShotCost        = 0.14 // Стоимость одного выстрела
+	OrePerHexMin         = 15
+	OrePerHexMax         = 75
 )
 
 const (
@@ -53,6 +55,7 @@ const (
 	TowerTypePurple
 	TowerTypeMiner // Новый тип для добытчика
 	TowerTypeWall  = -1
+	TowerTypeNone  = -2 // Для отладки, когда не выбран специальный тип
 )
 
 var (

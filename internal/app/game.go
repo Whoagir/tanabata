@@ -9,10 +9,8 @@ import (
 	"go-tower-defense/internal/system"
 	"go-tower-defense/internal/ui"
 	"go-tower-defense/pkg/hexmap"
-	"image/color"
 	"io/ioutil"
 	"log"
-	"fmt"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -32,12 +30,13 @@ type Game struct {
 	StateSystem      *system.StateSystem
 	OreSystem        *system.OreSystem
 	EventDispatcher  *event.Dispatcher
-	FontFace         font.Face // <-- Добавлено
+	FontFace         font.Face
 	towersBuilt      int
 	SpeedButton      *ui.SpeedButton
 	SpeedMultiplier  float64
 	PauseButton      *ui.PauseButton
 	gameTime         float64
+	DebugTowerType   int
 }
 
 // NewGame initializes a new game instance.
@@ -46,7 +45,6 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		panic("hexMap cannot be nil")
 	}
 
-	// Загрузка шрифта
 	fontData, err := ioutil.ReadFile("assets/fonts/arial.ttf")
 	if err != nil {
 		log.Fatal(err)
@@ -68,25 +66,56 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	ecs := entity.NewECS()
 	eventDispatcher := event.NewDispatcher()
 	g := &Game{
-		HexMap:           hexMap,
-		Wave:             1,
-		BaseHealth:       config.BaseHealth,
-		ECS:              ecs,
-		MovementSystem:   system.NewMovementSystem(ecs),
-		WaveSystem:       system.NewWaveSystem(ecs, hexMap, eventDispatcher),
-		ProjectileSystem: system.NewProjectileSystem(ecs, eventDispatcher),
-		OreSystem:        system.NewOreSystem(ecs),
-		EventDispatcher:  eventDispatcher,
-		FontFace:         face, // <-- Добавлено
-		towersBuilt:      0,
-		gameTime:         0.0,
+		HexMap:          hexMap,
+		Wave:            1,
+		BaseHealth:      config.BaseHealth,
+		ECS:             ecs,
+		MovementSystem:  system.NewMovementSystem(ecs),
+		WaveSystem:      system.NewWaveSystem(ecs, hexMap, eventDispatcher),
+		OreSystem:       system.NewOreSystem(ecs),
+		EventDispatcher: eventDispatcher,
+		FontFace:        face,
+		towersBuilt:     0,
+		gameTime:        0.0,
+		DebugTowerType:  config.TowerTypeNone,
 	}
-	g.RenderSystem = system.NewRenderSystem(ecs, g.FontFace) // <-- Изменено
+	g.RenderSystem = system.NewRenderSystem(ecs, g.FontFace)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower)
+	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
-	g.createOreEntities()
+	g.generateOre()
 	g.initUI()
+
+	g.placeInitialStones()
+
 	return g
+}
+
+// placeInitialStones places stones around checkpoints at the start of the game.
+func (g *Game) placeInitialStones() {
+	center := hexmap.Hex{Q: 0, R: 0}
+	for _, checkpoint := range g.HexMap.Checkpoints {
+		// --- Place stones towards the center ---
+		dirIn := center.Subtract(checkpoint).Direction()
+		for i := 1; i <= 2; i++ {
+			hexToPlace := checkpoint.Add(dirIn.Scale(i))
+			if g.canPlaceWall(hexToPlace) {
+				g.createPermanentWall(hexToPlace)
+			}
+		}
+
+		// --- Place stones towards the edge ---
+		dirOut := checkpoint.Subtract(center).Direction()
+		for i := 1; ; i++ {
+			hexToPlace := checkpoint.Add(dirOut.Scale(i))
+			if g.canPlaceWall(hexToPlace) {
+				g.createPermanentWall(hexToPlace)
+			} else {
+				// Stop if we hit the edge of the map, an invalid tile, or a path blockage
+				break
+			}
+		}
+	}
 }
 
 // Update progresses the game state by one frame.
@@ -95,7 +124,7 @@ func (g *Game) Update(deltaTime float64) {
 	g.gameTime += dt
 	g.ECS.GameTime = g.gameTime
 
-	g.OreSystem.Update() // <-- Добавлено
+	g.OreSystem.Update()
 
 	if g.ECS.GameState == component.WaveState {
 		g.CombatSystem.Update(dt)
@@ -114,31 +143,6 @@ func (g *Game) StartWave() {
 }
 
 // --- Private Helper Functions ---
-
-func (g *Game) createOreEntities() {
-	for hex, power := range g.HexMap.EnergyVeins {
-		id := g.ECS.NewEntity()
-		px, py := hex.ToPixel(config.HexSize)
-		px += float64(config.ScreenWidth) / 2
-		py += float64(config.ScreenHeight) / 2
-		g.ECS.Positions[id] = &component.Position{X: px, Y: py}
-		g.ECS.Ores[id] = &component.Ore{
-			Power:          power,
-			MaxReserve:     power * 100, // База для расчета процентов
-			CurrentReserve: power * 100,
-			Position:       component.Position{X: px, Y: py},
-			Radius:         float32(config.HexSize*0.2 + power*config.HexSize),
-			Color:          color.RGBA{0, 0, 255, 128},
-			PulseRate:      2.0,
-		}
-		g.ECS.Texts[id] = &component.Text{
-			Value:    fmt.Sprintf("%.0f%%", power*100),
-			Position: component.Position{X: px, Y: py},
-			Color:    color.RGBA{R: 50, G: 50, B: 50, A: 255},
-			IsUI:     true,
-		}
-	}
-}
 
 func (g *Game) initUI() {
 	g.SpeedButton = ui.NewSpeedButton(
@@ -241,4 +245,13 @@ func (g *Game) GetTowersBuilt() int {
 
 func (g *Game) GetGameTime() float64 {
 	return g.gameTime
+}
+
+func (g *Game) GetOreHexes() map[hexmap.Hex]float64 {
+	oreHexes := make(map[hexmap.Hex]float64)
+	for _, ore := range g.ECS.Ores {
+		hex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, config.HexSize)
+		oreHexes[hex] = ore.Power
+	}
+	return oreHexes
 }

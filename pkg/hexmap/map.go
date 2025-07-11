@@ -3,9 +3,7 @@ package hexmap
 
 import (
 	"go-tower-defense/internal/config"
-	"math"
 	"math/rand"
-	"time"
 )
 
 type Tile struct {
@@ -14,20 +12,11 @@ type Tile struct {
 }
 
 type HexMap struct {
-	Tiles         map[Hex]Tile
-	Radius        int
-	Entry         Hex
-	Exit          Hex
-	Checkpoints   []Hex
-	EnergyVeins   map[Hex]float64
-	EnergyCircles []EnergyCircle
-}
-
-type EnergyCircle struct {
-	CenterX float64
-	CenterY float64
-	Radius  float64
-	Power   float64
+	Tiles       map[Hex]Tile
+	Radius      int
+	Entry       Hex
+	Exit        Hex
+	Checkpoints []Hex
 }
 
 func NewHexMap() *HexMap {
@@ -49,13 +38,11 @@ func NewHexMap() *HexMap {
 	tiles[exit] = Tile{Passable: true, CanPlaceTower: false}
 
 	hm := &HexMap{
-		Tiles:         tiles,
-		Radius:        radius,
-		Entry:         entry,
-		Exit:          exit,
-		Checkpoints:   nil,
-		EnergyVeins:   make(map[Hex]float64),
-		EnergyCircles: nil,
+		Tiles:       tiles,
+		Radius:      radius,
+		Entry:       entry,
+		Exit:        exit,
+		Checkpoints: nil,
 	}
 
 	// Генерация чекпоинтов
@@ -72,7 +59,7 @@ func NewHexMap() *HexMap {
 	}
 
 	// Генерация жил энергии
-	hm.generateEnergyVeins()
+	// hm.generateEnergyVeins() // Этот вызов будет удален
 
 	// Процедурная генерация и пост-обработка
 	exclusion := hm.getExclusionZones(3)
@@ -94,129 +81,7 @@ func NewHexMap() *HexMap {
 	return hm
 }
 
-func (hm *HexMap) generateEnergyVeins() {
-	rand.Seed(time.Now().UnixNano())
-
-	// Все возможные гексы
-	allHexes := make([]Hex, 0, len(hm.Tiles))
-	for hex := range hm.Tiles {
-		allHexes = append(allHexes, hex)
-	}
-
-	// Получаем гексы на границе (в радиусе 3 от края)
-	borderHexes := hm.getBorderHexes(3)
-
-	// Центр карты
-	centerHex := Hex{Q: 0, R: 0}
-
-	// Проверка валидности центра жилы
-	isValidCenter := func(hex Hex) bool {
-		if hex == hm.Entry || hex == hm.Exit || hm.isCheckpoint(hex) {
-			return false
-		}
-		if hm.Entry.Distance(hex) < 2 || hm.Exit.Distance(hex) < 2 {
-			return false
-		}
-		for _, cp := range hm.Checkpoints {
-			if cp.Distance(hex) < 1 {
-				return false
-			}
-		}
-		if _, isBorder := borderHexes[hex]; isBorder {
-			return false
-		}
-		if centerHex.Distance(hex) < 3 {
-			return false
-		}
-		return true
-	}
-
-	// Выбор двух центров
-	var centers []Hex
-	for len(centers) < 2 {
-		candidate := allHexes[rand.Intn(len(allHexes))]
-		if isValidCenter(candidate) {
-			if len(centers) == 0 || centers[0].Distance(candidate) >= 6 {
-				centers = append(centers, candidate)
-			}
-		}
-	}
-
-	// Генерация областей жил
-	veinAreas := make([][]Hex, 2)
-	for i, center := range centers {
-		veinAreas[i] = hm.GetHexesInRange(center, 2)
-	}
-
-	// Генерация кружков для каждой жилы
-	for _, area := range veinAreas {
-		totalPower := 100.0 + float64(rand.Intn(21)) // 100-120%
-		circles := generateEnergyCircles(area, totalPower, config.HexSize)
-		hm.EnergyCircles = append(hm.EnergyCircles, circles...)
-
-		// Привязка энергии к гексам, исключая чекпоинты
-		for _, circle := range circles {
-			hexesInCircle := hm.getHexesInCircle(circle.CenterX, circle.CenterY, circle.Radius)
-			for _, hex := range hexesInCircle {
-				if hm.isCheckpoint(hex) {
-					continue // Пропускаем чекпоинты
-				}
-				if _, exists := hm.EnergyVeins[hex]; !exists {
-					hm.EnergyVeins[hex] = 0
-				}
-				hm.EnergyVeins[hex] += circle.Power
-			}
-		}
-	}
-}
-
-func generateEnergyCircles(area []Hex, totalPower float64, hexSize float64) []EnergyCircle {
-	var circles []EnergyCircle
-	remainingPower := totalPower
-
-	for remainingPower > 0 {
-		hex := area[rand.Intn(len(area))]
-		cx, cy := hex.ToPixel(hexSize)
-		cx += float64(config.ScreenWidth)/2 + (rand.Float64()*2-1)*hexSize/2
-		cy += float64(config.ScreenHeight)/2 + (rand.Float64()*2-1)*hexSize/2
-
-		// Ограничиваем энергию до 5-20% для большего количества кружков
-		power := float64((rand.Intn(4) + 1) * 5) // 5, 10, 15, 20%
-		if power > remainingPower {
-			power = remainingPower
-		}
-		remainingPower -= power
-
-		// Увеличиваем радиус в 2 раза (было 0.1, стало 0.2)
-		radius := hexSize * 0.2 * (power / 5.0)
-
-		circles = append(circles, EnergyCircle{
-			CenterX: cx,
-			CenterY: cy,
-			Radius:  radius,
-			Power:   power / 100.0,
-		})
-	}
-
-	return circles
-}
-
-func (hm *HexMap) getHexesInCircle(cx, cy, radius float64) []Hex {
-	var hexes []Hex
-	for hex := range hm.Tiles {
-		hx, hy := hex.ToPixel(config.HexSize)
-		hx += float64(config.ScreenWidth) / 2
-		hy += float64(config.ScreenHeight) / 2
-		dx := hx - cx
-		dy := hy - cy
-		if math.Sqrt(dx*dx+dy*dy) < radius+config.HexSize {
-			hexes = append(hexes, hex)
-		}
-	}
-	return hexes
-}
-
-func (hm *HexMap) getBorderHexes(borderRadius int) map[Hex]struct{} {
+func (hm *HexMap) GetBorderHexes(borderRadius int) map[Hex]struct{} {
 	border := make(map[Hex]struct{})
 	for hex := range hm.Tiles {
 		if hex.Q <= -hm.Radius+borderRadius || hex.Q >= hm.Radius-borderRadius ||
@@ -228,8 +93,8 @@ func (hm *HexMap) getBorderHexes(borderRadius int) map[Hex]struct{} {
 	return border
 }
 
-// Остальные функции остаются без изменений
-func (hm *HexMap) isCheckpoint(hex Hex) bool {
+// Остальные функции остаются ��ез изменений
+func (hm *HexMap) IsCheckpoint(hex Hex) bool {
 	for _, cp := range hm.Checkpoints {
 		if cp == hex {
 			return true
@@ -453,4 +318,9 @@ func (hm *HexMap) GetHexesInRange(center Hex, radius int) []Hex {
 func (hm *HexMap) Contains(hex Hex) bool {
 	_, exists := hm.Tiles[hex]
 	return exists
+}
+
+// GetNeighbors returns all valid, existing neighbors for a given hex.
+func (hm *HexMap) GetNeighbors(h Hex) []Hex {
+	return h.Neighbors(hm)
 }

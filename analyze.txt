@@ -9,6 +9,7 @@
 │   ├── app
 │   │   ├── energy_network.go
 │   │   ├── game.go
+│   │   ├── ore_generation.go
 │   │   └── tower_management.go
 │   ├── component
 │   │   ├── combat.go
@@ -73,4 +74,5 @@
 ├── profile
 ├── reset_env.ps1
 ├── stp_td что сделанно.txt
+├── stp_td что сделать.txt
 └── информация.txt

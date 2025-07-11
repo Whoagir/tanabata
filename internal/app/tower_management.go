@@ -21,15 +21,21 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 
 	tile := g.HexMap.Tiles[hex]
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
-	g.towersBuilt++
+
+	// Only increment tower count and check for wave start in normal mode
+	if g.DebugTowerType == config.TowerTypeNone {
+		g.towersBuilt++
+		if g.towersBuilt >= config.MaxTowersInBuildPhase {
+			g.StateSystem.SwitchToWaveState()
+		}
+	} else {
+		// Reset debug mode after placing the tower
+		g.DebugTowerType = config.TowerTypeNone
+	}
 
 	g.addTowerToEnergyNetwork(id)
-
 	g.EventDispatcher.Dispatch(event.Event{Type: event.TowerPlaced, Data: hex})
 
-	if g.towersBuilt >= config.MaxTowersInBuildPhase {
-		g.StateSystem.SwitchToWaveState()
-	}
 	return true
 }
 
@@ -40,22 +46,29 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 	}
 
 	var towerIDToRemove types.EntityID
+	var towerToRemove *component.Tower
 	for id, tower := range g.ECS.Towers {
 		if tower.Hex == hex {
 			towerIDToRemove = id
+			towerToRemove = tower
 			break
 		}
 	}
 
 	if towerIDToRemove != 0 {
+		// Get neighbors before deleting the entity
+		neighbors := g.findPotentialNeighbors(towerToRemove.Hex, towerToRemove.Type)
+
+		// Delete the entity and its direct connections
 		g.deleteTowerEntity(towerIDToRemove)
+
+		// Now, handle the network update for the neighbors
+		g.handleTowerRemoval(neighbors)
 
 		if tile, exists := g.HexMap.Tiles[hex]; exists {
 			tile.Passable = true
 			g.HexMap.Tiles[hex] = tile
 		}
-
-		g.handleTowerRemoval(towerIDToRemove)
 
 		g.EventDispatcher.Dispatch(event.Event{Type: event.TowerRemoved, Data: hex})
 		return true
@@ -136,7 +149,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex) types.EntityID {
 			Range:        config.TowerRange,
 			ShotCost:     config.TowerShotCost,
 		}
-		_ = g.ECS.Combats[id].ShotCost // Эта строка заставит IDE "увидеть" поле
+		_ = g.ECS.Combats[id].ShotCost
 	}
 
 	var c color.RGBA
@@ -172,6 +185,15 @@ func (g *Game) deleteTowerEntity(id types.EntityID) {
 }
 
 func (g *Game) determineTowerType() int {
+	// Debug mode takes priority
+	if g.DebugTowerType != config.TowerTypeNone {
+		if g.DebugTowerType == config.TowerTypeRed { // Assuming TowerTypeRed is a stand-in for "random attacker"
+			return rand.Intn(4) // Return a random attacker type (0-3)
+		}
+		return g.DebugTowerType
+	}
+
+	// Standard tower placement logic
 	if g.towersBuilt == 0 {
 		return rand.Intn(4)
 	}
@@ -179,4 +201,64 @@ func (g *Game) determineTowerType() int {
 		return config.TowerTypeMiner
 	}
 	return config.TowerTypeWall
+}
+
+// createPermanentWall creates a wall entity without affecting game state like tower counts.
+// It's used for placing initial, non-removable structures.
+func (g *Game) createPermanentWall(hex hexmap.Hex) {
+	id := g.ECS.NewEntity()
+	px, py := hex.ToPixel(config.HexSize)
+	px += float64(config.ScreenWidth) / 2
+	py += float64(config.ScreenHeight) / 2
+	g.ECS.Positions[id] = &component.Position{X: px, Y: py}
+
+	towerType := config.TowerTypeWall
+
+	g.ECS.Towers[id] = &component.Tower{
+		Type:     towerType,
+		Hex:      hex,
+		IsActive: false, // Walls are never active in the energy network
+	}
+
+	var c color.RGBA
+	if towerType >= 0 && towerType < len(config.TowerColors)-1 {
+		c = config.TowerColors[towerType]
+	} else {
+		c = config.TowerColors[len(config.TowerColors)-1]
+	}
+
+	g.ECS.Renderables[id] = &component.Renderable{
+		Color:     c,
+		Radius:    float32(config.HexSize * config.TowerRadiusFactor),
+		HasStroke: true,
+	}
+
+	// Mark the tile as occupied
+	if tile, exists := g.HexMap.Tiles[hex]; exists {
+		tile.Passable = false
+		g.HexMap.Tiles[hex] = tile
+	}
+}
+
+// canPlaceWall checks if a wall can be placed at a given hex.
+// It checks for map boundaries, existing entities, and path blockages.
+func (g *Game) canPlaceWall(hex hexmap.Hex) bool {
+	tile, exists := g.HexMap.Tiles[hex]
+	if !exists || !tile.Passable || !tile.CanPlaceTower {
+		return false
+	}
+
+	// Check if any other entity is already there
+	for _, tower := range g.ECS.Towers {
+		if tower.Hex == hex {
+			return false
+		}
+	}
+
+	// Most importantly, check if it blocks the path for creeps
+	if g.isPathBlockedBy(hex) {
+		return false
+	}
+
+	return true
 }
