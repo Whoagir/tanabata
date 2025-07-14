@@ -41,7 +41,7 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// Проверка ��аличия ресурсов
+		// Проверка наличия ресурсов
 		powerSources := s.powerSourceFinder(id)
 		if len(powerSources) == 0 {
 			continue // Нет источников энергии, башня не стреляет
@@ -81,12 +81,15 @@ func (s *CombatSystem) Update(deltaTime float64) {
 				if chosenOre, ok := s.ecs.Ores[chosenSourceID]; ok {
 					// 3. Списываем стоимость
 					cost := combat.ShotCost
+					// reserveBefore := chosenOre.CurrentReserve
 					if chosenOre.CurrentReserve >= cost {
 						chosenOre.CurrentReserve -= cost
 					} else {
 						// Если вдруг не хватает (маловероятно из-за общей проверки), тратим что есть
 						chosenOre.CurrentReserve = 0
 					}
+					// log.Printf("[Log] CombatSystem: Shot fired. Ore %d reserve: %.2f -> %.2f (Cost: %.2f)\n",
+					// chosenSourceID, reserveBefore, chosenOre.CurrentReserve, cost)
 				}
 			}
 		}

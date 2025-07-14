@@ -50,9 +50,9 @@ func (s *OreSystem) Update() {
 			continue // Пропускаем руду без запаса
 		}
 
-		// Если запас иссяк, сообщаем об этом и помечаем на удаление
-		if ore.CurrentReserve <= 0 {
-			fmt.Printf("[Log] OreSystem: Ore %d depleted. Dispatching event.\n", id)
+		// Если запас иссяк (или почти иссяк), сообщаем об этом и помечаем на удаление
+		if ore.CurrentReserve < 0.1 {
+			// log.Printf("[Log] OreSystem: Ore %d depleted (Reserve: %.2f). Dispatching event.\n", id, ore.CurrentReserve)
 			s.eventDispatcher.Dispatch(event.Event{Type: event.OreDepleted, Data: id})
 			idsToRemove = append(idsToRemove, id)
 			continue

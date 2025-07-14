@@ -2,7 +2,6 @@
 package app
 
 import (
-	"fmt"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/entity"
@@ -59,8 +58,8 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	}
 	const fontSize = 11
 	face, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    fontSize,
-		DPI:     72,
+		Size:	fontSize,
+		DPI:	72,
 		Hinting: font.HintingFull,
 	})
 	if err != nil {
@@ -70,18 +69,18 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	ecs := entity.NewECS()
 	eventDispatcher := event.NewDispatcher()
 	g := &Game{
-		HexMap:          hexMap,
-		Wave:            1,
-		BaseHealth:      config.BaseHealth,
-		ECS:             ecs,
-		MovementSystem:  system.NewMovementSystem(ecs),
-		WaveSystem:      system.NewWaveSystem(ecs, hexMap, eventDispatcher),
-		OreSystem:       system.NewOreSystem(ecs, eventDispatcher),
-		EventDispatcher: eventDispatcher,
-		FontFace:        face,
-		towersBuilt:     0,
-		gameTime:        0.0,
-		DebugTowerType:  config.TowerTypeNone,
+		HexMap:			hexMap,
+		Wave:			1,
+		BaseHealth:		config.BaseHealth,
+		ECS:			ecs,
+		MovementSystem:	system.NewMovementSystem(ecs),
+		WaveSystem:		system.NewWaveSystem(ecs, hexMap, eventDispatcher),
+		OreSystem:		system.NewOreSystem(ecs, eventDispatcher),
+		EventDispatcher:	eventDispatcher,
+		FontFace:		face,
+		towersBuilt:	0,
+		gameTime:		0.0,
+		DebugTowerType:	config.TowerTypeNone,
 	}
 	g.RenderSystem = system.NewRenderSystem(ecs, g.FontFace)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower)
@@ -109,9 +108,9 @@ type GameEventListener struct {
 // OnEvent реализует интерфейс event.Listener.
 func (l *GameEventListener) OnEvent(e event.Event) {
 	if e.Type == event.OreDepleted {
-		fmt.Printf("[Log] Game: Received OreDepleted event for ore %d. Rebuilding network.\n", e.Data.(types.EntityID))
+		log.Printf("[Log] Game: Received OreDepleted event for ore %d. Rebuilding network.\n", e.Data.(types.EntityID))
 		// Когда руда истощается, необходимо перестроить всю энергосеть,
-		// чтобы деактивировать башни, потерявшие источник питания.
+		// ч��обы деактивировать башни, потерявшие источник питания.
 		l.game.rebuildEnergyNetwork()
 	}
 }
@@ -165,10 +164,6 @@ func (g *Game) Update(deltaTime float64) {
 	// на основе самых актуальных данных за этот кадр.
 	g.OreSystem.Update()
 }
-
-// ... (остальной код без изменений)
-// Я добавлю остальной код из файла, который я прочитал ранее.
-// ...
 
 // StartWave begins the enemy wave.
 func (g *Game) StartWave() {
