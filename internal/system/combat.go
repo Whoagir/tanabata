@@ -15,19 +15,56 @@ import (
 type CombatSystem struct {
 	ecs               *entity.ECS
 	powerSourceFinder func(towerID types.EntityID) []types.EntityID
-	lastLogTime       float64
+	pathFinder        func(towerID types.EntityID) []types.EntityID
 }
 
-func NewCombatSystem(ecs *entity.ECS, finder func(towerID types.EntityID) []types.EntityID) *CombatSystem {
-	rand.Seed(time.Now().UnixNano()) // Инициализация генератора случайных чисел
+func NewCombatSystem(ecs *entity.ECS,
+	finder func(towerID types.EntityID) []types.EntityID,
+	pathFinder func(towerID types.EntityID) []types.EntityID) *CombatSystem {
+	rand.Seed(time.Now().UnixNano())
 	return &CombatSystem{
 		ecs:               ecs,
 		powerSourceFinder: finder,
-		lastLogTime:       0.0,
+		pathFinder:        pathFinder,
 	}
 }
 
-const logInterval = 1.0 // Логируем не чаще, чем раз в секунду
+// calculateOreBoostMultiplier рассчитывает множитель урона на основе запаса руды.
+func calculateOreBoostMultiplier(currentReserve float64) float64 {
+	lowT := config.OreBonusLowThreshold
+	highT := config.OreBonusHighThreshold
+	maxM := config.OreBonusMaxMultiplier
+	minM := config.OreBonusMinMultiplier
+
+	if currentReserve <= lowT {
+		return maxM
+	}
+	if currentReserve >= highT {
+		return minM
+	}
+	multiplier := (currentReserve-lowT)*(minM-maxM)/(highT-lowT) + maxM
+	return multiplier
+}
+
+// calculateLineDegradationMultiplier рассчитывает штраф к урону от длины цепи.
+func (s *CombatSystem) calculateLineDegradationMultiplier(path []types.EntityID) float64 {
+	if path == nil {
+		return 1.0 // Нет пути - нет штрафа
+	}
+
+	attackerCount := 0
+	for _, towerID := range path {
+		if tower, ok := s.ecs.Towers[towerID]; ok {
+			// Считаем все башни, которые не являются добытчиками или стенами
+			if tower.Type != config.TowerTypeMiner && tower.Type != config.TowerTypeWall {
+				attackerCount++
+			}
+		}
+	}
+
+	// Формула: Урон * (Factor ^ n), где n - ко��-во атакующих башен
+	return math.Pow(config.LineDegradationFactor, float64(attackerCount))
+}
 
 func (s *CombatSystem) Update(deltaTime float64) {
 	for id, combat := range s.ecs.Combats {
@@ -41,10 +78,9 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// Проверка наличия ресурсов
 		powerSources := s.powerSourceFinder(id)
 		if len(powerSources) == 0 {
-			continue // Нет источников энергии, башня не стреляет
+			continue
 		}
 
 		var totalReserve float64
@@ -55,41 +91,43 @@ func (s *CombatSystem) Update(deltaTime float64) {
 		}
 
 		if totalReserve < combat.ShotCost {
-			continue // Недостаточно ресурсов для выстрела
+			continue
 		}
 
 		enemyID := s.findNearestEnemyInRange(id, tower.Hex, combat.Range)
 		if enemyID != 0 {
-			// Ресурсы есть, враг в зоне досягаемости, производим выстрел
-			s.createProjectile(id, enemyID, tower.Type)
-			combat.FireCooldown = 1.0 / combat.FireRate
-
-			// Списываем стоимость выстрела со случайного источника
-			// 1. Собираем все источники, у которых достаточно руды
 			availableSources := []types.EntityID{}
 			for _, sourceID := range powerSources {
-				if ore, ok := s.ecs.Ores[sourceID]; ok {
-					if ore.CurrentReserve > 0 {
-						availableSources = append(availableSources, sourceID)
-					}
+				if ore, ok := s.ecs.Ores[sourceID]; ok && ore.CurrentReserve > 0 {
+					availableSources = append(availableSources, sourceID)
 				}
 			}
 
-			// 2. Если есть доступные источники, выбираем случайный
 			if len(availableSources) > 0 {
 				chosenSourceID := availableSources[rand.Intn(len(availableSources))]
-				if chosenOre, ok := s.ecs.Ores[chosenSourceID]; ok {
-					// 3. Списываем стоимость
-					cost := combat.ShotCost
-					// reserveBefore := chosenOre.CurrentReserve
-					if chosenOre.CurrentReserve >= cost {
-						chosenOre.CurrentReserve -= cost
-					} else {
-						// Если вдруг не хватает (маловероятно из-за общей проверки), тратим что есть
-						chosenOre.CurrentReserve = 0
-					}
-					// log.Printf("[Log] CombatSystem: Shot fired. Ore %d reserve: %.2f -> %.2f (Cost: %.2f)\n",
-					// chosenSourceID, reserveBefore, chosenOre.CurrentReserve, cost)
+				chosenOre := s.ecs.Ores[chosenSourceID]
+
+				// --- Расчет финального урона ---
+				// 1. Бонус от бедной руды
+				boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
+
+				// 2. Штраф от длины цепи
+				pathToSource := s.pathFinder(id)
+				degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
+
+				// 3. Итоговый урон
+				baseDamage := float64(config.TowerDamage[tower.Type])
+				finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
+				// --- Конец расчета ---
+
+				s.createProjectile(id, enemyID, tower.Type, finalDamage)
+				combat.FireCooldown = 1.0 / combat.FireRate
+
+				cost := combat.ShotCost
+				if chosenOre.CurrentReserve >= cost {
+					chosenOre.CurrentReserve -= cost
+				} else {
+					chosenOre.CurrentReserve = 0
 				}
 			}
 		}
@@ -104,7 +142,7 @@ func (s *CombatSystem) findNearestEnemyInRange(towerID types.EntityID, towerHex 
 			continue
 		}
 		if _, isEnemy := s.ecs.Enemies[enemyID]; !isEnemy {
-			continue // Пропускаем, если это не враг
+			continue
 		}
 		enemyHex := hexmap.PixelToHex(enemyPos.X, enemyPos.Y, config.HexSize)
 		distance := float64(towerHex.Distance(enemyHex))
@@ -113,36 +151,23 @@ func (s *CombatSystem) findNearestEnemyInRange(towerID types.EntityID, towerHex 
 			nearestEnemy = enemyID
 		}
 	}
-	if nearestEnemy == 0 {
-		// log.Printf("Баш��я %d не нашла врагов в радиусе %d", towerID, rangeRadius)
-	} else {
-		// log.Printf("Башня %d нашла врага %d на расстоянии %.2f", towerID, nearestEnemy, minDistance)
-	}
 	return nearestEnemy
 }
 
-func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerType int) {
+func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerType int, damage int) {
 	projID := s.ecs.NewEntity()
 	towerPos := s.ecs.Positions[towerID]
 	enemyPos := s.ecs.Positions[enemyID]
 	enemyVel := s.ecs.Velocities[enemyID]
 
-	// Логируем момент создания снаряда
-	// log.Printf("Башня %d (%.2f, %.2f) выпустила снаряд по врагу %d (%.2f, %.2f)",
-	// towerID, towerPos.X, towerPos.Y, enemyID, enemyPos.X, enemyPos.Y)
-
-	// Вычисляем предсказанную позицию врага
 	predictedPos := predictEnemyPosition(s.ecs, enemyID, towerPos, enemyPos, enemyVel, config.ProjectileSpeed)
-
-	// Вычисляем направление к предсказанной позиции
 	direction := calculateDirection(towerPos, &predictedPos)
 
-	// Создаём снаряд
 	s.ecs.Positions[projID] = &component.Position{X: towerPos.X, Y: towerPos.Y}
 	s.ecs.Projectiles[projID] = &component.Projectile{
 		TargetID:  enemyID,
 		Speed:     config.ProjectileSpeed,
-		Damage:    config.TowerDamage[towerType],
+		Damage:    damage, // Используем переданный урон
 		Color:     config.TowerColors[towerType],
 		Direction: direction,
 	}

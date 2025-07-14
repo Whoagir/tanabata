@@ -51,7 +51,7 @@ func (s *OreSystem) Update() {
 		}
 
 		// Если запас иссяк (или почти иссяк), сообщаем об этом и помечаем на удаление
-		if ore.CurrentReserve < 0.1 {
+		if ore.CurrentReserve < config.OreDepletionThreshold {
 			// log.Printf("[Log] OreSystem: Ore %d depleted (Reserve: %.2f). Dispatching event.\n", id, ore.CurrentReserve)
 			s.eventDispatcher.Dispatch(event.Event{Type: event.OreDepleted, Data: id})
 			idsToRemove = append(idsToRemove, id)
@@ -72,7 +72,7 @@ func (s *OreSystem) Update() {
 		textValue := fmt.Sprintf("%.0f%%", displayPercentage)
 		textColor := color.RGBA{R: 50, G: 50, B: 50, A: 255}
 
-		// Рассчитывае�� смещение для центрирования текста
+		// Рассчитываем смещение для центрирования текста
 		textWidth := float64(len(textValue)) * config.TextCharWidth
 		textX := ore.Position.X - textWidth/2
 		textY := ore.Position.Y + config.TextOffsetY // Смещение по Y для вертикального центрирования
@@ -282,4 +282,15 @@ func (s *OreSystem) CreateEntities(ecs *entity.ECS) {
 			IsUI:     true,
 		}
 	}
+}
+
+// GetOreAtHex возвращает ID руды на указанном гексе, если она там есть.
+func (s *OreSystem) GetOreAtHex(hex hexmap.Hex) (types.EntityID, bool) {
+	for id, ore := range s.ecs.Ores {
+		oreHex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, config.HexSize)
+		if oreHex == hex {
+			return id, true
+		}
+	}
+	return 0, false
 }

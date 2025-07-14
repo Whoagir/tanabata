@@ -31,7 +31,7 @@ func NewGameState(sm *StateMachine) *GameState {
 	gameLogic := game.NewGame(hexMap)
 	// Передаем актуальные данные о руде в рендерер
 	renderer := render.NewHexRenderer(hexMap, gameLogic.GetOreHexes(), config.HexSize, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace)
-	renderer.RenderMapImage(gameLogic.GetAllTowerHexes()) // <-- Явный вызов отрисовки карты
+	renderer.RenderMapImage(gameLogic.GetAllTowerHexes()) // <-- Явный вызов отрисовки к��рты
 	indicator := ui.NewStateIndicator(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
 		float32(config.IndicatorOffsetX),
@@ -60,10 +60,16 @@ func (g *GameState) Update(deltaTime float64) {
 		return
 	}
 
+	// --- Новая логика для режима перетаскивания ---
+	if g.game.ECS.GameState == component.BuildState && inpututil.IsKeyJustPressed(ebiten.KeyU) {
+		g.game.ToggleLineDragMode()
+	}
+	// --- Конец новой логики ---
+
 	// Handle debug tower selection
 	if g.game.ECS.GameState == component.BuildState {
 		if inpututil.IsKeyJustPressed(ebiten.Key1) {
-			g.game.DebugTowerType = config.TowerTypeRed // Special value for random attacker
+			g.game.DebugTowerType = config.TowerTypeRed
 		}
 		if inpututil.IsKeyJustPressed(ebiten.Key2) {
 			g.game.DebugTowerType = config.TowerTypeMiner
@@ -127,29 +133,36 @@ func (g *GameState) handlePauseClick() {
 }
 
 func (g *GameState) handleClick(x, y int, button ebiten.MouseButton) {
-	indicatorX := float64(g.indicator.X)
-	indicatorY := float64(g.indicator.Y)
-	indicatorR := float64(g.indicator.Radius)
-
-	dx := float64(x) - indicatorX
-	dy := float64(y) - indicatorY
-	distanceSquared := dx*dx + dy*dy
-	radiusSquared := indicatorR * indicatorR
-
-	if distanceSquared <= radiusSquared {
-		// Клики по индикатору (только левой кнопкой)
+	// --- Логика для UI элементов ---
+	indicatorX, indicatorY, indicatorR := float64(g.indicator.X), float64(g.indicator.Y), float64(g.indicator.Radius)
+	if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
 		if button == ebiten.MouseButtonLeft && time.Since(g.indicator.LastClickTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
 			g.game.HandleIndicatorClick()
 			g.indicator.LastClickTime = time.Now()
 		}
-	} else if g.game.ECS.GameState == component.BuildState {
-		hex := hexmap.PixelToHex(float64(x), float64(y), config.HexSize)
-		if g.hexMap.Contains(hex) {
-			if button == ebiten.MouseButtonLeft {
-				g.game.PlaceTower(hex)
-			} else if button == ebiten.MouseButtonRight {
-				g.game.RemoveTower(hex)
-			}
+		return // Клик был по UI, выходим
+	}
+
+	// --- Основная игровая логика клика ---
+	hex := hexmap.PixelToHex(float64(x), float64(y), config.HexSize)
+	if !g.hexMap.Contains(hex) {
+		return // Клик вне карты
+	}
+
+	// Если мы в режиме перетаскивания линии
+	if g.game.IsInLineDragMode() {
+		if button == ebiten.MouseButtonLeft {
+			g.game.HandleLineDragClick(hex, x, y)
+		}
+		return
+	}
+
+	// Стандартная логика для фазы строительства
+	if g.game.ECS.GameState == component.BuildState {
+		if button == ebiten.MouseButtonLeft {
+			g.game.PlaceTower(hex)
+		} else if button == ebiten.MouseButtonRight {
+			g.game.RemoveTower(hex)
 		}
 	}
 }
@@ -157,7 +170,7 @@ func (g *GameState) handleClick(x, y int, button ebiten.MouseButton) {
 func (g *GameState) Draw(screen *ebiten.Image) {
 	screen.Fill(config.BackgroundColor)
 	wallHexes, typeAHexes, typeBHexes := g.game.GetTowerHexesByType()
-	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, g.game.RenderSystem, g.game.GetGameTime())
+	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState, g.game.CancelLineDrag)
 	var stateColor color.Color
 	switch g.game.ECS.GameState {
 	case component.BuildState:

@@ -12,10 +12,19 @@ import (
 	"go-tower-defense/pkg/hexmap"
 	"io/ioutil"
 	"log"
+	"math"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
 )
+
+// LineDragDebugInfo holds information for on-screen debugging.
+type LineDragDebugInfo struct {
+	ClickedHex    hexmap.Hex
+	DirectionName string
+	NeighborHex   hexmap.Hex
+	FoundNeighbor bool
+}
 
 // Game holds the main game state and logic.
 type Game struct {
@@ -40,6 +49,13 @@ type Game struct {
 	PauseButton               *ui.PauseButton
 	gameTime                  float64
 	DebugTowerType            int
+
+	// Состояние для перетаскивания линий
+	isLineDragging       bool
+	dragSourceTowerID    types.EntityID
+	dragOriginalParentID types.EntityID
+	hiddenLineID         types.EntityID // ID линии, скрытой на время перетаскивания
+	DebugInfo            *LineDragDebugInfo
 }
 
 // NewGame initializes a new game instance.
@@ -82,8 +98,8 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		gameTime:		0.0,
 		DebugTowerType:	config.TowerTypeNone,
 	}
-	g.RenderSystem = system.NewRenderSystem(ecs, g.FontFace)
-	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower)
+	g.RenderSystem = system.NewRenderSystem(ecs, tt)
+	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
 	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
 	g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)
@@ -100,6 +116,63 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	return g
 }
 
+// FindPathToPowerSource находит кратчайший путь от атакующей башни до ближайшего
+// источника энергии (башни-добытчика на активной руде).
+// Возвращает срез ID башен, составляющих путь.
+func (g *Game) FindPathToPowerSource(startNode types.EntityID) []types.EntityID {
+	if _, exists := g.ECS.Towers[startNode]; !exists {
+		return nil
+	}
+
+	adj := g.buildAdjacencyList()
+	queue := []types.EntityID{startNode}
+	visited := map[types.EntityID]bool{startNode: true}
+	parent := make(map[types.EntityID]types.EntityID)
+
+	var pathEnd types.EntityID
+
+	// BFS для поиска ближайшего источника
+	head := 0
+	for head < len(queue) {
+		currentID := queue[head]
+		head++
+
+		tower := g.ECS.Towers[currentID]
+		if tower.Type == config.TowerTypeMiner && g.isOnOre(tower.Hex) {
+			pathEnd = currentID
+			break // Найден ближайший источник, выходим
+		}
+
+		if neighbors, ok := adj[currentID]; ok {
+			for _, neighborID := range neighbors {
+				if !visited[neighborID] {
+					visited[neighborID] = true
+					parent[neighborID] = currentID
+					queue = append(queue, neighborID)
+				}
+			}
+		}
+	}
+
+	// Если источник не найден, возвращаем nil
+	if pathEnd == 0 {
+		return nil
+	}
+
+	// Восстанавливаем путь от источника до атакующей башни
+	path := []types.EntityID{}
+	for curr := pathEnd; curr != 0; curr = parent[curr] {
+		path = append(path, curr)
+	}
+
+	// Разворачиваем путь, чтобы он шел от атакующей башни к источнику
+	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+		path[i], path[j] = path[j], path[i]
+	}
+
+	return path
+}
+
 // GameEventListener обрабатывает события, важные для основного игрового цикла.
 type GameEventListener struct {
 	game *Game
@@ -108,10 +181,25 @@ type GameEventListener struct {
 // OnEvent реализует интерфейс event.Listener.
 func (l *GameEventListener) OnEvent(e event.Event) {
 	if e.Type == event.OreDepleted {
-		log.Printf("[Log] Game: Received OreDepleted event for ore %d. Rebuilding network.\n", e.Data.(types.EntityID))
-		// Когда руда истощается, необходимо перестроить всю энергосеть,
-		// ч��обы деактивировать башни, потерявшие источник питания.
-		l.game.rebuildEnergyNetwork()
+		// log.Printf("[Log] Game: Received OreDepleted event for ore %d. Re-evaluating power grid.\n", e.Data.(types.EntityID))
+
+		// 1. Определить новый набор запитанных башен от оставшихся источников руды.
+		poweredSet := l.game.findPoweredTowers()
+
+		// 2. Обновить статус IsActive для всех башен.
+		for id, tower := range l.game.ECS.Towers {
+			if _, isPowered := poweredSet[id]; isPowered {
+				tower.IsActive = true
+			} else {
+				tower.IsActive = false
+			}
+		}
+
+		// 3. Удалить линии, которые теперь подключены к неактивным башням.
+		l.game.cleanupOrphanedLines()
+
+		// 4. Обновить визуальное представление всех башен (цвет).
+		l.game.updateAllTowerAppearances()
 	}
 }
 
@@ -310,4 +398,279 @@ func (g *Game) GetOreHexes() map[hexmap.Hex]float64 {
 		oreHexes[hex] = ore.Power
 	}
 	return oreHexes
+}
+
+// --- Функции для режима перетаскивания линий ---
+
+// IsInLineDragMode возвращает true, если игра в режиме перетаскивания линий.
+func (g *Game) IsInLineDragMode() bool {
+	return g.isLineDragging
+}
+
+// ToggleLineDragMode переключает режим перетаскивания линий.
+func (g *Game) ToggleLineDragMode() {
+	g.isLineDragging = !g.isLineDragging
+
+	// Если выключаем режим, сбрасываем все
+	if !g.isLineDragging {
+		g.CancelLineDrag() // Используем уже существующую логику сброса
+	}
+}
+
+// HandleLineDragClick обрабатывает клик в режиме перетаскивания.
+func (g *Game) HandleLineDragClick(hex hexmap.Hex, x, y int) {
+	// Если мы еще не начали тащить линию
+	if g.dragSourceTowerID == 0 {
+		g.startLineDrag(hex, x, y)
+		return
+	}
+
+	// Если мы уже тащим линию и кликнули на цель
+	g.finishLineDrag(hex)
+}
+
+// finishLineDrag завершает процесс перетаскивания линии на целевой гекс.
+func (g *Game) finishLineDrag(targetHex hexmap.Hex) {
+	defer g.CancelLineDrag() // В любом случае выходим из режима перетаскивания
+
+	targetID, ok := g.getTowerAt(targetHex)
+	if !ok {
+		return // Цели нет
+	}
+
+	if targetID == g.dragSourceTowerID || targetID == g.dragOriginalParentID {
+		return // Нельзя подключиться к самому себе или к своему бывшему родителю
+	}
+
+	if g.isValidNewConnection(g.dragSourceTowerID, targetID, g.dragOriginalParentID) {
+		g.reconnectTower(g.dragSourceTowerID, targetID, g.dragOriginalParentID)
+	}
+}
+
+// isValidNewConnection проверяет, можно ли создать новую связь.
+func (g *Game) isValidNewConnection(sourceID, targetID, originalParentID types.EntityID) bool {
+	sourceTower := g.ECS.Towers[sourceID]
+	targetTower := g.ECS.Towers[targetID]
+
+	// 1. Проверка на расстояние и тип
+	if !g.isValidConnection(sourceTower, targetTower) {
+		return false
+	}
+
+	// --- Создаем временный граф, отсоединив перетаскиваемую башню ---
+	adj := g.buildAdjacencyList()
+	adj[sourceID] = removeElement(adj[sourceID], originalParentID)
+	adj[originalParentID] = removeElement(adj[originalParentID], sourceID)
+
+	// 2. Проверка на циклы: можно ли из новой цели достичь источника ДО создания новой связи?
+	queue := []types.EntityID{targetID}
+	visited := map[types.EntityID]bool{targetID: true}
+	head := 0
+	for head < len(queue) {
+		current := queue[head]
+		head++
+
+		if current == sourceID {
+			return false // Цикл найден!
+		}
+
+		for _, neighbor := range adj[current] {
+			if !visited[neighbor] {
+				visited[neighbor] = true
+				queue = append(queue, neighbor)
+			}
+		}
+	}
+
+	// 3. Проверка на "выключение" графа: добавляем новую связь и проверяем питание
+	adj[sourceID] = append(adj[sourceID], targetID)
+	adj[targetID] = append(adj[targetID], sourceID)
+
+	poweredSet := g.findPoweredTowersWithAdj(adj)
+	if _, isPowered := poweredSet[sourceID]; !isPowered {
+		return false // Башня теряет питание, подключение невалидно
+	}
+
+	return true
+}
+
+// findPoweredTowersWithAdj находит все запитанные башни, используя предоставленный список смежности.
+func (g *Game) findPoweredTowersWithAdj(adj map[types.EntityID][]types.EntityID) map[types.EntityID]struct{} {
+	poweredSet := make(map[types.EntityID]struct{})
+	queue := []types.EntityID{}
+
+	// Начинаем с корневых башен (добытчики на руде)
+	for id, tower := range g.ECS.Towers {
+		if tower.Type == config.TowerTypeMiner && g.isOnOre(tower.Hex) {
+			queue = append(queue, id)
+			poweredSet[id] = struct{}{}
+		}
+	}
+
+	// BFS для поиска всех достижимых (запитанных) башен
+	head := 0
+	for head < len(queue) {
+		currentID := queue[head]
+		head++
+
+		if neighbors, ok := adj[currentID]; ok {
+			for _, neighborID := range neighbors {
+				if _, visited := poweredSet[neighborID]; !visited {
+					poweredSet[neighborID] = struct{}{}
+					queue = append(queue, neighborID)
+				}
+			}
+		}
+	}
+
+	return poweredSet
+}
+
+// reconnectTower выполняет фактическое переподключение башни.
+func (g *Game) reconnectTower(sourceID, targetID, originalParentID types.EntityID) {
+	// 1. Удалить старую (скрытую) линию
+	if g.hiddenLineID != 0 {
+		delete(g.ECS.LineRenders, g.hiddenLineID)
+	}
+
+	// 2. Создать новую линию
+	sourceTower := g.ECS.Towers[sourceID]
+	targetTower := g.ECS.Towers[targetID]
+	g.createLine(energyEdge{
+		Tower1ID: sourceID,
+		Tower2ID: targetID,
+		Type1:    sourceTower.Type,
+		Type2:    targetTower.Type,
+		Distance: float64(sourceTower.Hex.Distance(targetTower.Hex)),
+	})
+
+	// 3. Обновить состояние (на всякий случай)
+	g.cleanupOrphanedLines()
+	g.updateAllTowerAppearances()
+}
+
+// removeElement удаляет элемент из среза.
+func removeElement(slice []types.EntityID, element types.EntityID) []types.EntityID {
+	result := []types.EntityID{}
+	for _, item := range slice {
+		if item != element {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+
+// startLineDrag начинает процесс перетаскивания линии от башни на указанном гексе.
+func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
+	g.DebugInfo = nil // Сбрасываем отладку при каждом клике
+
+	sourceID, ok := g.getTowerAt(hex)
+	if !ok {
+		return // На гексе нет башни
+	}
+
+	// Нельзя перетаскивать от корневых добытчиков
+	tower := g.ECS.Towers[sourceID]
+	isRootMiner := tower.Type == config.TowerTypeMiner && g.isOnOre(tower.Hex)
+	if isRootMiner {
+		return
+	}
+
+	// Получаем все существующие соединения для этой башни
+	adj := g.buildAdjacencyList()
+	connections, ok := adj[sourceID]
+	if !ok || len(connections) == 0 {
+		return // Нет линий для перетаскивания
+	}
+
+	// Находим позицию центра исходной башни
+	sourcePos, ok := g.ECS.Positions[sourceID]
+	if !ok {
+		return // У башни нет позиции (не должно случиться)
+	}
+
+	// Вычисляем угол клика относительно центра башни
+	clickAngle := math.Atan2(float64(y)-sourcePos.Y, float64(x)-sourcePos.X)
+
+	var bestMatchID types.EntityID
+	minAngleDiff := math.Pi // Максимально возможная разница в углах
+
+	// Ищем линию, угол которой наиболее близок к углу клика
+	for _, neighborID := range connections {
+		neighborPos, ok := g.ECS.Positions[neighborID]
+		if !ok {
+			continue
+		}
+
+		// Угол от исходной башни до соседа
+		lineAngle := math.Atan2(neighborPos.Y-sourcePos.Y, neighborPos.X-sourcePos.X)
+
+		// Вычисляем абсолютную разницу углов, учитывая "переход" через 2*Pi
+		angleDiff := math.Abs(clickAngle - lineAngle)
+		if angleDiff > math.Pi {
+			angleDiff = 2*math.Pi - angleDiff
+		}
+
+		if angleDiff < minAngleDiff {
+			minAngleDiff = angleDiff
+			bestMatchID = neighborID
+		}
+	}
+
+	// Проверяем, что клик был достаточно близок к направлению одной из линий
+	// (Pi / 3.5 ~ 51.4 градуса, чуть меньше 60-градусного сектора для надежности)
+	if bestMatchID != 0 && minAngleDiff < math.Pi/3.5 {
+		targetID := bestMatchID
+		lineID, isConnected := g.getLineBetweenTowers(sourceID, targetID)
+		if !isConnected {
+			return // Не должно произойти, но на всякий случай
+		}
+
+		// Начинаем перетаскивание
+		g.dragSourceTowerID = sourceID
+		g.dragOriginalParentID = targetID
+		g.hiddenLineID = lineID
+	}
+}
+
+// getLineBetweenTowers ищет линию, соединяющую две башни, и возвращает ее ID.
+func (g *Game) getLineBetweenTowers(tower1ID, tower2ID types.EntityID) (types.EntityID, bool) {
+	for id, line := range g.ECS.LineRenders {
+		if (line.Tower1ID == tower1ID && line.Tower2ID == tower2ID) ||
+			(line.Tower1ID == tower2ID && line.Tower2ID == tower1ID) {
+			return id, true
+		}
+	}
+	return 0, false
+}
+
+// getTowerAt возвращает ID башни на указанном гексе.
+func (g *Game) getTowerAt(hex hexmap.Hex) (types.EntityID, bool) {
+	for id, tower := range g.ECS.Towers {
+		if tower.Hex == hex {
+			return id, true
+		}
+	}
+	return 0, false
+}
+
+func (g *Game) GetDragSourceTowerID() types.EntityID {
+	return g.dragSourceTowerID
+}
+
+func (g *Game) GetHiddenLineID() types.EntityID {
+	return g.hiddenLineID
+}
+
+func (g *Game) GetDebugInfo() *LineDragDebugInfo {
+	return g.DebugInfo
+}
+
+func (g *Game) CancelLineDrag() {
+	g.isLineDragging = false
+	g.dragSourceTowerID = 0
+	g.dragOriginalParentID = 0
+	g.hiddenLineID = 0 // "Показываем" линию обратно
+	g.DebugInfo = nil
 }

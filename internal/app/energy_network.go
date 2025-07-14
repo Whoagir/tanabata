@@ -519,7 +519,8 @@ func (g *Game) isOnOre(hex hexmap.Hex) bool {
 		// Руда считается источником энергии, только если она существует на этом гексе
 		// И если у неё есть оставшийся запас.
 		if oreHex == hex {
-			return ore.CurrentReserve > 0
+			// Порог 0.1 соответствует порогу удаления в system/ore.go
+			return ore.CurrentReserve >= config.OreDepletionThreshold
 		}
 	}
 	return false

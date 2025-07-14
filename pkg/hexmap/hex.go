@@ -11,14 +11,21 @@ type Hex struct {
 	Q, R int
 }
 
+// NeighborDirections defines the 6 possible directions from a hex, starting from East and going counter-clockwise.
+// This order is crucial for angle-to-direction calculations.
+var NeighborDirections = []Hex{
+	{Q: 1, R: 0}, {Q: 0, R: -1}, {Q: -1, R: 0},
+	{Q: -1, R: 1}, {Q: 0, R: 1}, {Q: 1, R: -1},
+}
+
 // ToPixel конвертирует гекс в пиксельные координаты (pointy top ориентация)
 func (h Hex) ToPixel(hexSize float64) (x, y float64) {
-	x = hexSize * (Sqrt3*float64(h.Q) + (Sqrt3 / 2 * float64(h.R)))
+	x = hexSize * (Sqrt3*float64(h.Q) + Sqrt3/2*float64(h.R))
 	y = hexSize * (3.0 / 2.0 * float64(h.R))
 	return
 }
 
-// PixelToHex конвертирует пиксельные координаты в гекс
+// PixelToHex конвертирует ��иксельные координаты в гекс
 func PixelToHex(x, y, hexSize float64) Hex {
 	x -= float64(config.ScreenWidth) / 2
 	y -= float64(config.ScreenHeight) / 2
@@ -26,6 +33,8 @@ func PixelToHex(x, y, hexSize float64) Hex {
 	r := (2.0 / 3 * y) / hexSize
 	return axialRound(q, r)
 }
+
+
 
 // Neighbors возвращает существующих соседей гекса
 func (h Hex) Neighbors(hm *HexMap) []Hex {
@@ -76,11 +85,11 @@ func (h Hex) Distance(to Hex) int {
 
 // Lerp выполняет линейную интерполяцию между двумя гексами
 func (a Hex) Lerp(b Hex, t float64) Hex {
-	return Hex{
-		Q: int(float64(a.Q)*(1-t) + float64(b.Q)*t),
-		R: int(float64(a.R)*(1-t) + float64(b.R)*t),
-	}
+	q := float64(a.Q)*(1-t) + float64(b.Q)*t
+	r := float64(a.R)*(1-t) + float64(b.R)*t
+	return axialRound(q, r)
 }
+
 
 // LineTo возвращает гексы на прямой между двумя точками
 func (start Hex) LineTo(end Hex) []Hex {

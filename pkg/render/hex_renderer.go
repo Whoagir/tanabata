@@ -3,12 +3,13 @@ package render
 
 import (
 	"fmt"
-	"image/color"
-	"math"
-
+	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/system"
+	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
+	"image/color"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
@@ -31,7 +32,7 @@ type HexRenderer struct {
 	fontFace      font.Face
 	mapImage      *ebiten.Image
 	checkpointMap map[hexmap.Hex]int
-	EnergyVeins   map[hexmap.Hex]float64 // <-- Добавлено
+	EnergyVeins   map[hexmap.Hex]float64
 }
 
 func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, hexSize float64, screenWidth, screenHeight int, fontFace font.Face) *HexRenderer {
@@ -61,14 +62,12 @@ func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, h
 		fontFace:      fontFace,
 		mapImage:      ebiten.NewImage(screenWidth, screenHeight),
 		checkpointMap: make(map[hexmap.Hex]int),
-		EnergyVeins:   energyVeins, // <-- Добавлено
+		EnergyVeins:   energyVeins,
 	}
 
 	for i, cp := range hexMap.Checkpoints {
 		renderer.checkpointMap[cp] = i + 1
 	}
-
-	// renderer.RenderMapImage() // <-- Этот вызов будет удален отсюда
 
 	return renderer
 }
@@ -90,7 +89,7 @@ func (r *HexRenderer) RenderMapImage(towerHexes []hexmap.Hex) {
 	}
 }
 
-func (r *HexRenderer) Draw(screen *ebiten.Image, wallHexes, typeAHexes, typeBHexes []hexmap.Hex, renderSystem *system.RenderSystem, gameTime float64) {
+func (r *HexRenderer) Draw(screen *ebiten.Image, wallHexes, typeAHexes, typeBHexes []hexmap.Hex, renderSystem *system.RenderSystem, gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GameState, cancelDrag func()) {
 	screen.DrawImage(r.mapImage, nil)
 
 	// Отрисовка обводки с учетом приоритета: Белый < Красный < Желтый
@@ -107,7 +106,7 @@ func (r *HexRenderer) Draw(screen *ebiten.Image, wallHexes, typeAHexes, typeBHex
 		r.drawTowerOutline(screen, hex, config.TowerBStrokeColor)
 	}
 
-	renderSystem.Draw(screen, gameTime)
+	renderSystem.Draw(screen, gameTime, isDragging, sourceTowerID, hiddenLineID, gameState, cancelDrag)
 }
 
 func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex, towerHexSet map[hexmap.Hex]struct{}) {
@@ -315,4 +314,8 @@ func min(a, b int) int {
 
 func (r *HexRenderer) GetHexAt(x, y int) hexmap.Hex {
 	return hexmap.PixelToHex(float64(x-r.screenWidth/2), float64(y-r.screenHeight/2), r.hexSize)
+}
+
+func (r *HexRenderer) GetMapImage() *ebiten.Image {
+	return r.mapImage
 }

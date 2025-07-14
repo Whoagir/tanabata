@@ -50,6 +50,14 @@ const (
 	LineDamagePerSecond     = 10.0 // Урон от линии в секунду
 	LineDamageTicksPerSecond = 8.0  // Количество тиков урона от линии в секунду
 	DamageFlashDuration     = 0.2  // Длительность "вспышки" урона в секундах
+	OreDepletionThreshold   = 0.1  // Порог, при котором руда считается истощенной
+
+	// Бонусы к урону от руды
+	OreBonusLowThreshold  = 10.0 // Нижний порог запаса руды для макс бонуса
+	OreBonusHighThreshold = 75.0 // Верхний порог запаса руды для мин бонуса
+	OreBonusMaxMultiplier = 1.5  // Максимальный множитель урона
+	OreBonusMinMultiplier = 0.5  // Минимальный множитель урона
+	LineDegradationFactor = 0.6  // Коэффициент снижения урона за каждую башню типа А в цепи
 )
 
 const (
