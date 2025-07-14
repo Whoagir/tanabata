@@ -73,34 +73,44 @@ func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, h
 	return renderer
 }
 
-func (r *HexRenderer) RenderMapImage() {
+func (r *HexRenderer) RenderMapImage(towerHexes []hexmap.Hex) {
 	r.mapImage.Clear()
 
-	for _, hex := range r.sortedHexes {
-		r.drawHexFill(r.mapImage, hex)
+	towerHexSet := make(map[hexmap.Hex]struct{})
+	for _, hex := range towerHexes {
+		towerHexSet[hex] = struct{}{}
 	}
 
 	for _, hex := range r.sortedHexes {
-		r.drawHexOutline(r.mapImage, hex, nil)
+		r.drawHexFill(r.mapImage, hex, towerHexSet)
+	}
+
+	for _, hex := range r.sortedHexes {
+		r.drawHexOutline(r.mapImage, hex, towerHexSet)
 	}
 }
 
-func (r *HexRenderer) Draw(screen *ebiten.Image, towerHexes []hexmap.Hex, renderSystem *system.RenderSystem, gameTime float64) {
+func (r *HexRenderer) Draw(screen *ebiten.Image, wallHexes, typeAHexes, typeBHexes []hexmap.Hex, renderSystem *system.RenderSystem, gameTime float64) {
 	screen.DrawImage(r.mapImage, nil)
 
-	// towerHexSet := make(map[hexmap.Hex]struct{})
-	// for _, hex := range towerHexes {
-	// 	towerHexSet[hex] = struct{}{}
-	// }
-
-	// for _, hex := range towerHexes {
-	// 	r.drawHexOutline(screen, hex, towerHexSet)
-	// }
+	// Отрисовка обводки с учетом приоритета: Белый < Красный < Желтый
+	// 1. Стены (белый)
+	for _, hex := range wallHexes {
+		r.drawTowerOutline(screen, hex, config.TowerStrokeColor)
+	}
+	// 2. Башни типа A (красный)
+	for _, hex := range typeAHexes {
+		r.drawTowerOutline(screen, hex, config.TowerAStrokeColor)
+	}
+	// 3. Башни типа B (желтый)
+	for _, hex := range typeBHexes {
+		r.drawTowerOutline(screen, hex, config.TowerBStrokeColor)
+	}
 
 	renderSystem.Draw(screen, gameTime)
 }
 
-func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
+func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex, towerHexSet map[hexmap.Hex]struct{}) {
 	x, y := hex.ToPixel(r.hexSize)
 	x += float64(r.screenWidth) / 2
 	y += float64(r.screenHeight) / 2
@@ -127,6 +137,7 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 	if _, isCheckpoint := r.checkpointMap[hex]; isCheckpoint {
 		isCurrentHexCheckpoint = true
 	}
+	_, isTower := towerHexSet[hex]
 
 	if hex == r.hexMap.Entry {
 		fillColor = config.EntryColor
@@ -147,7 +158,7 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex) {
 			B: config.TextLightColor.B / 2,
 			A: config.TextLightColor.A,
 		}
-	} else if tile.Passable {
+	} else if tile.Passable || isTower { // Treat tower hexes as passable for coloring
 		fillColor = config.PassableColor
 		if (fillColor.R+fillColor.G+fillColor.B)/3 > 128 {
 			coordsTextColor = config.TextDarkColor
@@ -228,8 +239,9 @@ func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, tower
 	path.Close()
 
 	tile := r.hexMap.Tiles[hex]
+	_, isTower := towerHexSet[hex]
 	var fillColor color.RGBA
-	if tile.Passable {
+	if tile.Passable || isTower {
 		fillColor = config.PassableColor
 	} else {
 		fillColor = config.ImpassableColor
@@ -251,6 +263,42 @@ func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, tower
 		r.strokeVs[i].ColorG = float32(strokeColor.G) / 255
 		r.strokeVs[i].ColorB = float32(strokeColor.B) / 255
 		r.strokeVs[i].ColorA = float32(strokeColor.A) / 255
+	}
+	target.DrawTriangles(r.strokeVs, r.strokeIs, r.strokeImg, &ebiten.DrawTrianglesOptions{
+		AntiAlias: true,
+	})
+}
+
+// drawTowerOutline рисует обводку для гекса башни заданным цветом
+func (r *HexRenderer) drawTowerOutline(target *ebiten.Image, hex hexmap.Hex, strokeColor color.Color) {
+	x, y := hex.ToPixel(r.hexSize)
+	x += float64(r.screenWidth) / 2
+	y += float64(r.screenHeight) / 2
+
+	path := vector.Path{}
+	for i := 0; i < 6; i++ {
+		angle := math.Pi/3*float64(i) + math.Pi/6
+		px := x + r.hexSize*math.Cos(angle)
+		py := y + r.hexSize*math.Sin(angle)
+		if i == 0 {
+			path.MoveTo(float32(px), float32(py))
+		} else {
+			path.LineTo(float32(px), float32(py))
+		}
+	}
+	path.Close()
+
+	r.strokeVs, r.strokeIs = path.AppendVerticesAndIndicesForStroke(r.strokeVs[:0], r.strokeIs[:0], &vector.StrokeOptions{
+		Width: float32(config.StrokeWidth),
+	})
+
+	// Применяем переданный цвет
+	cr, cg, cb, ca := strokeColor.RGBA()
+	for i := range r.strokeVs {
+		r.strokeVs[i].ColorR = float32(cr) / 0xffff
+		r.strokeVs[i].ColorG = float32(cg) / 0xffff
+		r.strokeVs[i].ColorB = float32(cb) / 0xffff
+		r.strokeVs[i].ColorA = float32(ca) / 0xffff
 	}
 	target.DrawTriangles(r.strokeVs, r.strokeIs, r.strokeImg, &ebiten.DrawTrianglesOptions{
 		AntiAlias: true,

@@ -2,8 +2,11 @@
 package system
 
 import (
+	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/entity"
+	"go-tower-defense/internal/types"
+	"image/color"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -23,7 +26,13 @@ func NewRenderSystem(ecs *entity.ECS, fontFace font.Face) *RenderSystem {
 }
 
 func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64) {
-	// Сначала отрисовка руды с пульсацией
+	s.drawPulsingOres(screen, gameTime)
+	s.drawEntities(screen, gameTime)
+	s.drawLines(screen)
+	s.drawText(screen)
+}
+
+func (s *RenderSystem) drawPulsingOres(screen *ebiten.Image, gameTime float64) {
 	for id, ore := range s.ecs.Ores {
 		if pos, hasPos := s.ecs.Positions[id]; hasPos {
 			pulseRadius := ore.Radius * float32(1+0.1*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
@@ -33,30 +42,44 @@ func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64) {
 			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), pulseRadius, oreColor, true)
 		}
 	}
+}
 
-	// Затем отрисовка сущностей с Renderable
-	for id, render := range s.ecs.Renderables {
-		if pos, hasPos := s.ecs.Positions[id]; hasPos {
-			if render.HasStroke {
-				strokeRadius := render.Radius + 2
-				vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), strokeRadius, config.TowerStrokeColor, true)
-			}
-			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), render.Radius, render.Color, true)
+func (s *RenderSystem) drawEntities(screen *ebiten.Image, gameTime float64) {
+	for id, renderable := range s.ecs.Renderables {
+		if pos, ok := s.ecs.Positions[id]; ok {
+			s.drawEntity(screen, id, renderable, pos, gameTime)
 		}
 	}
+}
 
-	// Отрисовка линий
+func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, renderable *component.Renderable, pos *component.Position, gameTime float64) {
+	finalColor := renderable.Color
+
+	// Проверяем, есть ли у сущности активная вспышка урона
+	if _, ok := s.ecs.DamageFlashes[id]; ok {
+		finalColor = config.EnemyDamageColor
+	}
+
+	if renderable.HasStroke {
+		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true)
+		vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true)
+	} else {
+		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true)
+	}
+}
+
+func (s *RenderSystem) drawLines(screen *ebiten.Image) {
 	for _, line := range s.ecs.LineRenders {
-		vector.StrokeLine(screen, float32(line.StartX), float32(line.StartY), float32(line.EndX), float32(line.EndY), 2.0, line.Color, true)
-	}
-
-	// Отрисовка текста поверх всего
-	for _, txt := range s.ecs.Texts {
-		if txt.IsUI {
-			bounds := text.BoundString(s.fontFace, txt.Value)
-			x := int(txt.Position.X) - bounds.Min.X - bounds.Dx()/2
-			y := int(txt.Position.Y) - bounds.Min.Y - bounds.Dy()/2
-			text.Draw(screen, txt.Value, s.fontFace, x, y, txt.Color)
+		startPos := s.ecs.Positions[line.Tower1ID]
+		endPos := s.ecs.Positions[line.Tower2ID]
+		if startPos != nil && endPos != nil {
+			vector.StrokeLine(screen, float32(startPos.X), float32(startPos.Y), float32(endPos.X), float32(endPos.Y), float32(config.StrokeWidth), line.Color, true)
 		}
+	}
+}
+
+func (s *RenderSystem) drawText(screen *ebiten.Image) {
+	for _, txt := range s.ecs.Texts {
+		text.Draw(screen, txt.Value, s.fontFace, int(txt.Position.X), int(txt.Position.Y), txt.Color)
 	}
 }

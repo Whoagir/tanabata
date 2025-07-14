@@ -21,6 +21,7 @@ type ECS struct {
 	Enemies     map[types.EntityID]*component.Enemy // Новое поле для врагов
 	LineRenders map[types.EntityID]*component.LineRender
 	Texts       map[types.EntityID]*component.Text // <-- Добавлено
+	DamageFlashes map[types.EntityID]*component.DamageFlash // Для анимации урона
 	Wave        *component.Wave
 	GameState   component.GameState
 }
@@ -40,6 +41,7 @@ func NewECS() *ECS {
 		Enemies:     make(map[types.EntityID]*component.Enemy), // Инициализация нового поля
 		LineRenders: make(map[types.EntityID]*component.LineRender),
 		Texts:       make(map[types.EntityID]*component.Text), // <-- Добавлено
+		DamageFlashes: make(map[types.EntityID]*component.DamageFlash),
 		Wave:        nil,
 		GameState:   component.BuildState,
 	}

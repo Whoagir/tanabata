@@ -22,6 +22,7 @@
 │   │   ├── render.go
 │   │   ├── text.go
 │   │   ├── tower.go
+│   │   ├── visual.go
 │   │   └── wave.go
 │   ├── config
 │   │   └── config.go
@@ -39,11 +40,14 @@
 │   │   └── state.go
 │   ├── system
 │   │   ├── combat.go
+│   │   ├── environmental_damage.go
 │   │   ├── movement.go
 │   │   ├── ore.go
 │   │   ├── projectile.go
 │   │   ├── render.go
 │   │   ├── state.go
+│   │   ├── utils.go
+│   │   ├── visual_effect.go
 │   │   └── wave.go
 │   ├── types
 │   │   └── types.go
@@ -75,4 +79,5 @@
 ├── reset_env.ps1
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
+├── енерация руды.txt
 └── информация.txt

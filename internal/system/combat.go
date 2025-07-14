@@ -7,6 +7,8 @@ import (
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
 	"math"
+	"math/rand"
+	"time"
 )
 
 // CombatSystem управляет атакой башен
@@ -17,6 +19,7 @@ type CombatSystem struct {
 }
 
 func NewCombatSystem(ecs *entity.ECS, finder func(towerID types.EntityID) []types.EntityID) *CombatSystem {
+	rand.Seed(time.Now().UnixNano()) // Инициализация генератора случайных чисел
 	return &CombatSystem{
 		ecs:               ecs,
 		powerSourceFinder: finder,
@@ -38,7 +41,7 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// Проверка наличия ресурсов
+		// Проверка ��аличия ресурсов
 		powerSources := s.powerSourceFinder(id)
 		if len(powerSources) == 0 {
 			continue // Нет источников энергии, башня не стреляет
@@ -61,16 +64,28 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			s.createProjectile(id, enemyID, tower.Type)
 			combat.FireCooldown = 1.0 / combat.FireRate
 
-			// Списываем стоимость выстрела
-			remainingCost := combat.ShotCost
+			// Списываем стоимость выстрела со случайного источника
+			// 1. Собираем все источники, у которых достаточно руды
+			availableSources := []types.EntityID{}
 			for _, sourceID := range powerSources {
 				if ore, ok := s.ecs.Ores[sourceID]; ok {
-					if ore.CurrentReserve >= remainingCost {
-						ore.CurrentReserve -= remainingCost
-						break
+					if ore.CurrentReserve > 0 {
+						availableSources = append(availableSources, sourceID)
+					}
+				}
+			}
+
+			// 2. Если есть доступные источники, выбираем случайный
+			if len(availableSources) > 0 {
+				chosenSourceID := availableSources[rand.Intn(len(availableSources))]
+				if chosenOre, ok := s.ecs.Ores[chosenSourceID]; ok {
+					// 3. Списываем стоимость
+					cost := combat.ShotCost
+					if chosenOre.CurrentReserve >= cost {
+						chosenOre.CurrentReserve -= cost
 					} else {
-						remainingCost -= ore.CurrentReserve
-						ore.CurrentReserve = 0
+						// Если вдруг не хватает (маловероятно из-за общей проверки), тратим что есть
+						chosenOre.CurrentReserve = 0
 					}
 				}
 			}
@@ -204,18 +219,7 @@ func calculateDirection(from, to *component.Position) float64 {
 	return math.Atan2(dy, dx)
 }
 
-// ApplyDamage наносит урон сущности
+// ApplyDamage вызывает общую функцию для нанесения урона.
 func (s *CombatSystem) ApplyDamage(entityID types.EntityID, damage int) {
-	if health, ok := s.ecs.Healths[entityID]; ok {
-		health.Value -= damage
-		if health.Value <= 0 {
-			// Сущность уничтожена
-			delete(s.ecs.Positions, entityID)
-			delete(s.ecs.Velocities, entityID)
-			delete(s.ecs.Paths, entityID)
-			delete(s.ecs.Healths, entityID)
-			delete(s.ecs.Renderables, entityID)
-			delete(s.ecs.Enemies, entityID)
-		}
-	}
+	ApplyDamage(s.ecs, entityID, damage)
 }

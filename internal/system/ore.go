@@ -6,6 +6,8 @@ import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/entity"
+	"go-tower-defense/internal/event"
+	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
 	"image/color"
 	"math"
@@ -23,50 +25,79 @@ type EnergyCircle struct {
 
 // OreSystem manages the state of ore veins, like visual depletion.
 type OreSystem struct {
-	ecs           *entity.ECS
-	EnergyVeins   map[hexmap.Hex]float64
-	EnergyCircles []EnergyCircle
+	ecs             *entity.ECS
+	eventDispatcher *event.Dispatcher
+	EnergyVeins     map[hexmap.Hex]float64
+	EnergyCircles   []EnergyCircle
 }
 
 // NewOreSystem creates a new OreSystem.
-func NewOreSystem(ecs *entity.ECS) *OreSystem {
+func NewOreSystem(ecs *entity.ECS, dispatcher *event.Dispatcher) *OreSystem {
 	return &OreSystem{
-		ecs:           ecs,
-		EnergyVeins:   make(map[hexmap.Hex]float64),
-		EnergyCircles: nil,
+		ecs:             ecs,
+		eventDispatcher: dispatcher,
+		EnergyVeins:     make(map[hexmap.Hex]float64),
+		EnergyCircles:   nil,
 	}
 }
 
 // Update is called every frame to update the state of ore components.
 func (s *OreSystem) Update() {
+	// Сначала обновим визуал и соберем ID для удаления
+	idsToRemove := make([]types.EntityID, 0)
 	for id, ore := range s.ecs.Ores {
-		if ore.MaxReserve > 0 {
-			// The displayed percentage is now simply the current reserve.
-			displayPercentage := ore.CurrentReserve
+		if ore.MaxReserve <= 0 {
+			continue // Пропускаем руду без запаса
+		}
 
-			// The radius shrinks as the reserve is depleted.
-			// The variable part of the radius is scaled by the percentage of the remaining reserve.
-			baseRadius := config.HexSize * 0.2
-			variableRadius := ore.Power * config.HexSize
-			reservePercentage := ore.CurrentReserve / ore.MaxReserve
-			ore.Radius = float32(baseRadius + (variableRadius * reservePercentage))
+		// Если запас иссяк, сообщаем об этом и помечаем на удаление
+		if ore.CurrentReserve <= 0 {
+			fmt.Printf("[Log] OreSystem: Ore %d depleted. Dispatching event.\n", id)
+			s.eventDispatcher.Dispatch(event.Event{Type: event.OreDepleted, Data: id})
+			idsToRemove = append(idsToRemove, id)
+			continue
+		}
 
-			// Update or create text component
-			textValue := fmt.Sprintf("%.0f%%", displayPercentage)
-			textColor := color.RGBA{R: 50, G: 50, B: 50, A: 255}
+		// The displayed percentage is now simply the current reserve.
+		displayPercentage := ore.CurrentReserve
 
-			if textComp, exists := s.ecs.Texts[id]; exists {
-				textComp.Value = textValue
-			} else {
-				// This part is a fallback, should be created in game.go
-				s.ecs.Texts[id] = &component.Text{
-					Value:    textValue,
-					Position: ore.Position,
-					Color:    textColor,
-					IsUI:     true,
-				}
+		// The radius shrinks as the reserve is depleted.
+		// The variable part of the radius is scaled by the percentage of the remaining reserve.
+		baseRadius := config.HexSize * 0.2
+		variableRadius := ore.Power * config.HexSize
+		reservePercentage := ore.CurrentReserve / ore.MaxReserve
+		ore.Radius = float32(baseRadius + (variableRadius * reservePercentage))
+
+		// Update or create text component
+		textValue := fmt.Sprintf("%.0f%%", displayPercentage)
+		textColor := color.RGBA{R: 50, G: 50, B: 50, A: 255}
+
+		// Рассчитывае�� смещение для центрирования текста
+		textWidth := float64(len(textValue)) * config.TextCharWidth
+		textX := ore.Position.X - textWidth/2
+		textY := ore.Position.Y + config.TextOffsetY // Смещение по Y для вертикального центрирования
+
+		if textComp, exists := s.ecs.Texts[id]; exists {
+			textComp.Value = textValue
+			textComp.Position.X = textX
+			textComp.Position.Y = textY
+		} else {
+			// This part is a fallback, should be created in game.go
+			s.ecs.Texts[id] = &component.Text{
+				Value:    textValue,
+				Position: component.Position{X: textX, Y: textY},
+				Color:    textColor,
+				IsUI:     true,
 			}
 		}
+	}
+
+	// Теперь удаляем помеченные сущности
+	for _, id := range idsToRemove {
+		delete(s.ecs.Ores, id)
+		delete(s.ecs.Positions, id)
+		delete(s.ecs.Texts, id)
+		// Примечание: Renderable для руды не используется, поэтому его не удаляем.
 	}
 }
 
@@ -237,9 +268,16 @@ func (s *OreSystem) CreateEntities(ecs *entity.ECS) {
 			Color:          color.RGBA{0, 0, 255, 128},
 			PulseRate:      2.0,
 		}
+
+		// Рассчитываем смещение для центрирования текста
+		textValue := fmt.Sprintf("%.0f%%", power*100)
+		textWidth := float64(len(textValue)) * config.TextCharWidth
+		textX := px - textWidth/2
+		textY := py + config.TextOffsetY // Смещение по Y для вертикального центрирования
+
 		ecs.Texts[id] = &component.Text{
-			Value:    fmt.Sprintf("%.0f%%", power*100),
-			Position: component.Position{X: px, Y: py},
+			Value:    textValue,
+			Position: component.Position{X: textX, Y: textY},
 			Color:    color.RGBA{R: 50, G: 50, B: 50, A: 255},
 			IsUI:     true,
 		}

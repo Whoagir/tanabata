@@ -516,8 +516,10 @@ func (g *Game) clearAllLines() {
 func (g *Game) isOnOre(hex hexmap.Hex) bool {
 	for _, ore := range g.ECS.Ores {
 		oreHex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, config.HexSize)
+		// Руда считается источником энергии, только если она существует на этом гексе
+		// И если у неё есть оставшийся запас.
 		if oreHex == hex {
-			return true
+			return ore.CurrentReserve > 0
 		}
 	}
 	return false

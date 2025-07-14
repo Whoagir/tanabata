@@ -31,7 +31,7 @@ func NewGameState(sm *StateMachine) *GameState {
 	gameLogic := game.NewGame(hexMap)
 	// Передаем актуальные данные о руде в рендерер
 	renderer := render.NewHexRenderer(hexMap, gameLogic.GetOreHexes(), config.HexSize, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace)
-	renderer.RenderMapImage() // <-- Явный вызов отрисовки карты
+	renderer.RenderMapImage(gameLogic.GetAllTowerHexes()) // <-- Явный вызов отрисовки карты
 	indicator := ui.NewStateIndicator(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
 		float32(config.IndicatorOffsetX),
@@ -156,8 +156,8 @@ func (g *GameState) handleClick(x, y int, button ebiten.MouseButton) {
 
 func (g *GameState) Draw(screen *ebiten.Image) {
 	screen.Fill(config.BackgroundColor)
-	towerHexes := g.game.GetTowerHexes()
-	g.renderer.Draw(screen, towerHexes, g.game.RenderSystem, g.game.GetGameTime())
+	wallHexes, typeAHexes, typeBHexes := g.game.GetTowerHexesByType()
+	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, g.game.RenderSystem, g.game.GetGameTime())
 	var stateColor color.Color
 	switch g.game.ECS.GameState {
 	case component.BuildState:

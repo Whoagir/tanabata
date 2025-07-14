@@ -147,7 +147,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex) types.EntityID {
 			FireRate:     config.TowerFireRate[towerType],
 			FireCooldown: 0,
 			Range:        config.TowerRange,
-			ShotCost:     config.TowerShotCost,
+			ShotCost:     config.TowerShotCosts[towerType], // Используем стоимость по типу
 		}
 		_ = g.ECS.Combats[id].ShotCost
 	}
