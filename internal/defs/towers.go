@@ -1,0 +1,45 @@
+// internal/defs/towers.go
+package defs
+
+import "image/color"
+
+// TowerType defines the category of a tower.
+type TowerType string
+
+const (
+	TowerTypeAttack TowerType = "ATTACK"
+	TowerTypeMiner  TowerType = "MINER"
+	TowerTypeWall   TowerType = "WALL"
+)
+
+// TowerDefinition holds all the static data for a specific type of tower.
+type TowerDefinition struct {
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Type        TowerType   `json:"type"`
+	Combat      *CombatStats `json:"combat,omitempty"`
+	Energy      *EnergyStats `json:"energy,omitempty"`
+	Visuals     Visuals     `json:"visuals"`
+}
+
+// CombatStats contains parameters related to a tower's combat abilities.
+type CombatStats struct {
+	Damage       int        `json:"damage"`
+	FireRate     float64    `json:"fire_rate"` // Shots per second
+	Range        int        `json:"range"`
+	ShotCost     float64    `json:"shot_cost"`
+	AttackType   AttackType `json:"attack_type"`
+}
+
+// EnergyStats contains parameters related to the energy network.
+type EnergyStats struct {
+	TransferRadius      int     `json:"transfer_radius"`
+	LineDegradationFactor float64 `json:"line_degradation_factor"`
+}
+
+// Visuals contains parameters for rendering a tower.
+type Visuals struct {
+	Color       color.RGBA `json:"color"`
+	RadiusFactor float64    `json:"radius_factor"`
+	StrokeWidth  float64    `json:"stroke_width"`
+}

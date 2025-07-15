@@ -7,5 +7,5 @@ import "image/color"
 type Renderable struct {
 	Color     color.RGBA
 	Radius    float32
-	HasStroke bool // Новое поле: нужно ли рисовать обводку
+	HasStroke bool
 }

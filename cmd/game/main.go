@@ -3,6 +3,7 @@ package main
 
 import (
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/state"
 	"log"
 	"math/rand"
@@ -43,6 +44,15 @@ func main() {
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
+
+	// Load all game definitions
+	if err := defs.LoadTowerDefinitions("assets/data/towers.json"); err != nil {
+		log.Fatalf("Failed to load tower definitions: %v", err)
+	}
+	if err := defs.LoadEnemyDefinitions("assets/data/enemies.json"); err != nil {
+		log.Fatalf("Failed to load enemy definitions: %v", err)
+	}
+
 	rand.Seed(time.Now().UnixNano())
 	sm := state.NewStateMachine() // Создаём машину состояний
 	if startFromGame {

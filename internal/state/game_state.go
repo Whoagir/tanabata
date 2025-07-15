@@ -2,6 +2,7 @@
 package state
 
 import (
+	"fmt"
 	game "go-tower-defense/internal/app"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
@@ -181,6 +183,9 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 	g.indicator.Draw(screen, stateColor)
 	g.game.SpeedButton.Draw(screen)
 	g.game.PauseButton.Draw(screen)
+
+	// Debug text
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("Wave: %d", g.game.Wave))
 }
 
 func (g *GameState) Exit() {

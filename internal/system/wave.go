@@ -4,6 +4,7 @@ package system
 import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/pkg/hexmap"
@@ -59,14 +60,29 @@ func (s *WaveSystem) ResetActiveEnemies() {
 }
 
 func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
+	def, ok := defs.EnemyLibrary["DEFAULT_ENEMY"]
+	if !ok {
+		log.Println("Error: Default enemy definition not found!")
+		return
+	}
+
 	id := s.ecs.NewEntity()
 	x, y := s.hexMap.Entry.ToPixel(config.HexSize)
 	s.ecs.Positions[id] = &component.Position{X: x + float64(config.ScreenWidth)/2, Y: y + float64(config.ScreenHeight)/2}
-	s.ecs.Velocities[id] = &component.Velocity{Speed: config.EnemySpeed}
+	s.ecs.Velocities[id] = &component.Velocity{Speed: def.Speed}
 	s.ecs.Paths[id] = &component.Path{Hexes: wave.CurrentPath, CurrentIndex: 0}
-	s.ecs.Healths[id] = &component.Health{Value: config.EnemyHealth}
-	s.ecs.Renderables[id] = &component.Renderable{Color: config.EnemyColor, Radius: float32(config.EnemyRadius), HasStroke: false}
-	s.ecs.Enemies[id] = &component.Enemy{OreDamageCooldown: 0, LineDamageCooldown: 0}
+	s.ecs.Healths[id] = &component.Health{Value: def.Health}
+	s.ecs.Renderables[id] = &component.Renderable{
+		Color:     def.Visuals.Color,
+		Radius:    float32(config.HexSize * def.Visuals.RadiusFactor),
+		HasStroke: def.Visuals.StrokeWidth > 0,
+	}
+	s.ecs.Enemies[id] = &component.Enemy{
+		OreDamageCooldown:  0,
+		LineDamageCooldown: 0,
+		PhysicalArmor:      def.PhysicalArmor,
+		MagicalArmor:       def.MagicalArmor,
+	}
 	s.activeEnemies++
 }
 

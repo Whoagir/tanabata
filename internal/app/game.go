@@ -43,7 +43,7 @@ type Game struct {
 	VisualEffectSystem        *system.VisualEffectSystem // Новая система
 	EventDispatcher           *event.Dispatcher
 	FontFace                  font.Face
-	towersBuilt               int
+	towersBuilt               int // Счетчик для текущей фазы строительства
 	SpeedButton               *ui.SpeedButton
 	SpeedMultiplier           float64
 	PauseButton               *ui.PauseButton

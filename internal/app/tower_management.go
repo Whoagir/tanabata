@@ -4,10 +4,11 @@ package app
 import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
-	"image/color"
+	"log"
 	"math/rand"
 )
 
@@ -17,7 +18,13 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 		return false
 	}
 
-	id := g.createTowerEntity(hex)
+	towerID := g.determineTowerID()
+	if towerID == "" {
+		log.Println("Could not determine tower type to place.")
+		return false
+	}
+
+	id := g.createTowerEntity(hex, towerID)
 
 	tile := g.HexMap.Tiles[hex]
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
@@ -126,42 +133,42 @@ func (g *Game) isPathBlockedBy(hex hexmap.Hex) bool {
 	return false
 }
 
-func (g *Game) createTowerEntity(hex hexmap.Hex) types.EntityID {
+func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.EntityID {
+	def, ok := defs.TowerLibrary[towerDefID]
+	if !ok {
+		log.Printf("Error: Tower definition not found for ID: %s", towerDefID)
+		return 0
+	}
+
 	id := g.ECS.NewEntity()
 	px, py := hex.ToPixel(config.HexSize)
 	px += float64(config.ScreenWidth) / 2
 	py += float64(config.ScreenHeight) / 2
 	g.ECS.Positions[id] = &component.Position{X: px, Y: py}
 
-	towerType := g.determineTowerType()
+	// The old numeric type is now a string ID, but we still need the numeric one for some legacy logic.
+	// We'll need to refactor this away later. For now, we map it.
+	numericType := g.mapTowerIDToNumericType(def.ID)
 
 	g.ECS.Towers[id] = &component.Tower{
-		Type:     towerType,
-		Range:    config.TowerRange,
+		Type:     numericType, // TODO: Refactor to use string ID or defs.TowerType
 		Hex:      hex,
 		IsActive: false,
 	}
 
-	if towerType >= 0 && towerType < config.TowerTypeMiner {
+	if def.Type == defs.TowerTypeAttack {
 		g.ECS.Combats[id] = &component.Combat{
-			FireRate:     config.TowerFireRate[towerType],
+			FireRate:     def.Combat.FireRate,
 			FireCooldown: 0,
-			Range:        config.TowerRange,
-			ShotCost:     config.TowerShotCosts[towerType], // Используем стоимость по типу
+			Range:        def.Combat.Range,
+			ShotCost:     def.Combat.ShotCost,
+			AttackType:   def.Combat.AttackType,
 		}
-		_ = g.ECS.Combats[id].ShotCost
-	}
-
-	var c color.RGBA
-	if towerType >= 0 && towerType < len(config.TowerColors)-1 {
-		c = config.TowerColors[towerType]
-	} else {
-		c = config.TowerColors[len(config.TowerColors)-1]
 	}
 
 	g.ECS.Renderables[id] = &component.Renderable{
-		Color:     c,
-		Radius:    float32(config.HexSize * config.TowerRadiusFactor),
+		Color:     def.Visuals.Color,
+		Radius:    float32(config.HexSize * def.Visuals.RadiusFactor),
 		HasStroke: true,
 	}
 	return id
@@ -184,55 +191,53 @@ func (g *Game) deleteTowerEntity(id types.EntityID) {
 	}
 }
 
-func (g *Game) determineTowerType() int {
-	// Debug mode takes priority
+func (g *Game) determineTowerID() string {
+	// Handle debug tower placement
 	if g.DebugTowerType != config.TowerTypeNone {
-		if g.DebugTowerType == config.TowerTypeRed { // Assuming TowerTypeRed is a stand-in for "random attacker"
-			return rand.Intn(4) // Return a random attacker type (0-3)
+		switch g.DebugTowerType {
+		case config.TowerTypeRed: // Represents any random attacker for debug
+			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_PURPLE"}
+			return attackerIDs[rand.Intn(len(attackerIDs))]
+		case config.TowerTypeMiner:
+			return "TOWER_MINER"
+		case config.TowerTypeWall:
+			return "TOWER_WALL"
 		}
-		return g.DebugTowerType
 	}
 
-	// Standard tower placement logic
-	if g.towersBuilt == 0 {
-		return rand.Intn(4)
+	// Standard tower placement logic based on the current wave number
+	waveMod10 := (g.Wave - 1) % 10
+	positionInBlock := g.towersBuilt
+
+	// Waves 1-4, 11-14, etc.
+	if waveMod10 < 4 {
+		// Pattern: A, B, D, D, D
+		switch positionInBlock {
+		case 0: // Attacker
+			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_PURPLE"}
+			return attackerIDs[rand.Intn(len(attackerIDs))]
+		case 1: // Miner
+			return "TOWER_MINER"
+		default: // Wall (positions 2, 3, 4)
+			return "TOWER_WALL"
+		}
+	} else {
+		// Pattern for waves 5-10, 15-20, etc.: A, A, D, D, D
+		switch positionInBlock {
+		case 0, 1: // Attacker
+			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_PURPLE"}
+			return attackerIDs[rand.Intn(len(attackerIDs))]
+		default: // Wall (positions 2, 3, 4)
+			return "TOWER_WALL"
+		}
 	}
-	if g.towersBuilt == 1 {
-		return config.TowerTypeMiner
-	}
-	return config.TowerTypeWall
 }
 
-// createPermanentWall creates a wall entity without affecting game state like tower counts.
-// It's used for placing initial, non-removable structures.
 func (g *Game) createPermanentWall(hex hexmap.Hex) {
-	id := g.ECS.NewEntity()
-	px, py := hex.ToPixel(config.HexSize)
-	px += float64(config.ScreenWidth) / 2
-	py += float64(config.ScreenHeight) / 2
-	g.ECS.Positions[id] = &component.Position{X: px, Y: py}
-
-	towerType := config.TowerTypeWall
-
-	g.ECS.Towers[id] = &component.Tower{
-		Type:     towerType,
-		Hex:      hex,
-		IsActive: false, // Walls are never active in the energy network
+	id := g.createTowerEntity(hex, "TOWER_WALL")
+	if id == 0 {
+		return // Failed to create wall
 	}
-
-	var c color.RGBA
-	if towerType >= 0 && towerType < len(config.TowerColors)-1 {
-		c = config.TowerColors[towerType]
-	} else {
-		c = config.TowerColors[len(config.TowerColors)-1]
-	}
-
-	g.ECS.Renderables[id] = &component.Renderable{
-		Color:     c,
-		Radius:    float32(config.HexSize * config.TowerRadiusFactor),
-		HasStroke: true,
-	}
-
 	// Mark the tile as occupied
 	if tile, exists := g.HexMap.Tiles[hex]; exists {
 		tile.Passable = false
@@ -241,7 +246,6 @@ func (g *Game) createPermanentWall(hex hexmap.Hex) {
 }
 
 // canPlaceWall checks if a wall can be placed at a given hex.
-// It checks for map boundaries, existing entities, and path blockages.
 func (g *Game) canPlaceWall(hex hexmap.Hex) bool {
 	tile, exists := g.HexMap.Tiles[hex]
 	if !exists || !tile.Passable || !tile.CanPlaceTower {
@@ -261,4 +265,25 @@ func (g *Game) canPlaceWall(hex hexmap.Hex) bool {
 	}
 
 	return true
+}
+
+// mapTowerIDToNumericType is a temporary helper to bridge the old system with the new.
+// TODO: This should be removed once all systems use string IDs or defs.TowerType.
+func (g *Game) mapTowerIDToNumericType(id string) int {
+	switch id {
+	case "TOWER_RED":
+		return config.TowerTypeRed
+	case "TOWER_GREEN":
+		return config.TowerTypeGreen
+	case "TOWER_BLUE":
+		return config.TowerTypeBlue
+	case "TOWER_PURPLE":
+		return config.TowerTypePurple
+	case "TOWER_MINER":
+		return config.TowerTypeMiner
+	case "TOWER_WALL":
+		return config.TowerTypeWall
+	default:
+		return config.TowerTypeNone
+	}
 }

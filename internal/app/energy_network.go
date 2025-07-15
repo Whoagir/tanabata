@@ -4,11 +4,11 @@ package app
 import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
 	pkgRender "go-tower-defense/pkg/render"
 	"go-tower-defense/pkg/utils"
-	"image/color"
 	"sort"
 )
 
@@ -323,20 +323,26 @@ func (g *Game) formsTriangle(id1, id2 types.EntityID, adj map[types.EntityID][]t
 
 // updateTowerAppearance updates the color of a single tower based on its state.
 func (g *Game) updateTowerAppearance(id types.EntityID) {
-	tower := g.ECS.Towers[id]
-	if render, exists := g.ECS.Renderables[id]; exists {
-		var c color.RGBA
-		if tower.Type >= 0 && tower.Type < len(config.TowerColors)-1 {
-			c = config.TowerColors[tower.Type]
-		} else {
-			c = config.TowerColors[len(config.TowerColors)-1]
-		}
-
-		if tower.Type != config.TowerTypeWall && !tower.IsActive {
-			c = pkgRender.DarkenColor(c)
-		}
-		render.Color = c
+	tower, ok := g.ECS.Towers[id]
+	if !ok {
+		return
 	}
+	render, ok := g.ECS.Renderables[id]
+	if !ok {
+		return
+	}
+
+	towerDefID := mapNumericTypeToTowerID(tower.Type)
+	def, ok := defs.TowerLibrary[towerDefID]
+	if !ok {
+		return // Definition not found, do nothing.
+	}
+
+	c := def.Visuals.Color
+	if tower.Type != config.TowerTypeWall && !tower.IsActive {
+		c = pkgRender.DarkenColor(c)
+	}
+	render.Color = c
 }
 
 // collectEdgesForNewTower finds all valid connections from a new tower to the existing ones.
@@ -879,4 +885,24 @@ func (g *Game) FindPowerSourcesForTower(startNode types.EntityID) []types.Entity
 		}
 	}
 	return sources
+}
+
+// mapNumericTypeToTowerID is a temporary helper function.
+func mapNumericTypeToTowerID(numericType int) string {
+	switch numericType {
+	case config.TowerTypeRed:
+		return "TOWER_RED"
+	case config.TowerTypeGreen:
+		return "TOWER_GREEN"
+	case config.TowerTypeBlue:
+		return "TOWER_BLUE"
+	case config.TowerTypePurple:
+		return "TOWER_PURPLE"
+	case config.TowerTypeMiner:
+		return "TOWER_MINER"
+	case config.TowerTypeWall:
+		return "TOWER_WALL"
+	default:
+		return ""
+	}
 }

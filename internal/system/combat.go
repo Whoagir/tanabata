@@ -3,9 +3,12 @@ package system
 import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
+	"image/color"
+	"log"
 	"math"
 	"math/rand"
 	"time"
@@ -73,6 +76,13 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
+		towerDefID := mapNumericTypeToTowerID(tower.Type)
+		towerDef, ok := defs.TowerLibrary[towerDefID]
+		if !ok {
+			log.Printf("CombatSystem: Could not find tower definition for ID %s (numeric: %d)", towerDefID, tower.Type)
+			continue
+		}
+
 		if combat.FireCooldown > 0 {
 			combat.FireCooldown -= deltaTime
 			continue
@@ -108,19 +118,14 @@ func (s *CombatSystem) Update(deltaTime float64) {
 				chosenOre := s.ecs.Ores[chosenSourceID]
 
 				// --- Расчет финального урона ---
-				// 1. Бонус от бедной руды
 				boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
-
-				// 2. Штраф от длины цепи
 				pathToSource := s.pathFinder(id)
 				degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
-
-				// 3. Итоговый урон
-				baseDamage := float64(config.TowerDamage[tower.Type])
+				baseDamage := float64(towerDef.Combat.Damage)
 				finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
 				// --- Конец расчета ---
 
-				s.createProjectile(id, enemyID, tower.Type, finalDamage)
+				s.createProjectile(id, enemyID, &towerDef, finalDamage, combat.AttackType)
 				combat.FireCooldown = 1.0 / combat.FireRate
 
 				cost := combat.ShotCost
@@ -154,7 +159,7 @@ func (s *CombatSystem) findNearestEnemyInRange(towerID types.EntityID, towerHex 
 	return nearestEnemy
 }
 
-func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerType int, damage int) {
+func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDef *defs.TowerDefinition, damage int, attackType defs.AttackType) {
 	projID := s.ecs.NewEntity()
 	towerPos := s.ecs.Positions[towerID]
 	enemyPos := s.ecs.Positions[enemyID]
@@ -163,18 +168,34 @@ func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerTy
 	predictedPos := predictEnemyPosition(s.ecs, enemyID, towerPos, enemyPos, enemyVel, config.ProjectileSpeed)
 	direction := calculateDirection(towerPos, &predictedPos)
 
+	projectileColor := getProjectileColorByAttackType(attackType)
+
 	s.ecs.Positions[projID] = &component.Position{X: towerPos.X, Y: towerPos.Y}
 	s.ecs.Projectiles[projID] = &component.Projectile{
 		TargetID:  enemyID,
 		Speed:     config.ProjectileSpeed,
-		Damage:    damage, // Используем переданный урон
-		Color:     config.TowerColors[towerType],
+		Damage:    damage,
+		Color:     projectileColor,
 		Direction: direction,
+		AttackType: attackType,
 	}
 	s.ecs.Renderables[projID] = &component.Renderable{
-		Color:     config.TowerColors[towerType],
+		Color:     projectileColor,
 		Radius:    config.ProjectileRadius,
 		HasStroke: false,
+	}
+}
+
+func getProjectileColorByAttackType(attackType defs.AttackType) color.RGBA {
+	switch attackType {
+	case defs.AttackPhysical:
+		return config.ColorYellow
+	case defs.AttackMagical:
+		return config.ColorRed
+	case defs.AttackPure:
+		return config.ColorWhite
+	default:
+		return config.ColorWhite // По умолчанию
 	}
 }
 
@@ -248,6 +269,26 @@ func calculateDirection(from, to *component.Position) float64 {
 }
 
 // ApplyDamage вызывает общую функцию для нанесения урона.
-func (s *CombatSystem) ApplyDamage(entityID types.EntityID, damage int) {
-	ApplyDamage(s.ecs, entityID, damage)
+func (s *CombatSystem) ApplyDamage(entityID types.EntityID, damage int, attackType defs.AttackType) {
+	ApplyDamage(s.ecs, entityID, damage, attackType)
+}
+
+// mapNumericTypeToTowerID is a temporary helper function.
+func mapNumericTypeToTowerID(numericType int) string {
+	switch numericType {
+	case config.TowerTypeRed:
+		return "TOWER_RED"
+	case config.TowerTypeGreen:
+		return "TOWER_GREEN"
+	case config.TowerTypeBlue:
+		return "TOWER_BLUE"
+	case config.TowerTypePurple:
+		return "TOWER_PURPLE"
+	case config.TowerTypeMiner:
+		return "TOWER_MINER"
+	case config.TowerTypeWall:
+		return "TOWER_WALL"
+	default:
+		return ""
+	}
 }

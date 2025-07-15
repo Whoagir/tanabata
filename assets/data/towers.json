@@ -1,0 +1,94 @@
+[
+  {
+    "id": "TOWER_RED",
+    "name": "Красная башня",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 10,
+      "fire_rate": 2.0,
+      "range": 3,
+      "shot_cost": 0.06,
+      "attack_type": "MAGICAL"
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 50, "b": 50, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_GREEN",
+    "name": "Зеленая башня",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 40,
+      "fire_rate": 0.5,
+      "range": 3,
+      "shot_cost": 0.05,
+      "attack_type": "PHYSICAL"
+    },
+    "visuals": {
+      "color": {"r": 50, "g": 255, "b": 50, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_BLUE",
+    "name": "Синяя башня",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 20,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.045,
+      "attack_type": "PURE"
+    },
+    "visuals": {
+      "color": {"r": 50, "g": 100, "b": 255, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_PURPLE",
+    "name": "Фиолетовая башня",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 30,
+      "fire_rate": 1.5,
+      "range": 3,
+      "shot_cost": 0.08,
+      "attack_type": "MAGICAL"
+    },
+    "visuals": {
+      "color": {"r": 180, "g": 50, "b": 230, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_MINER",
+    "name": "Башня-добытчик",
+    "type": "MINER",
+    "energy": {
+      "transfer_radius": 3,
+      "line_degradation_factor": 0.6
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 215, "b": 0, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_WALL",
+    "name": "Стена",
+    "type": "WALL",
+    "visuals": {
+      "color": {"r": 128, "g": 128, "b": 128, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  }
+]

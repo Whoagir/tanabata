@@ -24,10 +24,6 @@ const (
 	SpawnIntervalDecrement  = 20
 	EnemiesIncrementPerWave = 2
 
-	EnemySpeed  = 80.0
-	EnemyHealth = 100
-	EnemyRadius = 10.0
-
 	TowerRange        = 3
 	TowerRadiusFactor = 0.3
 	TowerStrokeWidth  = 2.0
@@ -89,20 +85,12 @@ var (
 	TowerBStrokeColor = color.RGBA{255, 255, 0, 255} // Желтый для типа B
 	LineColor         = color.RGBA{255, 255, 0, 128}
 	StrokeWidth       = 2.0
-	TowerColors       = []color.RGBA{
-		{255, 50, 50, 255},   // Red
-		{50, 255, 50, 255},   // Green
-		{50, 100, 255, 255},  // Blue
-		{180, 50, 230, 255},  // Purple
-		{255, 215, 0, 255},   // Gold (жёлтый) для добытчика
-		{128, 128, 128, 255}, // Серый цвет для стен
-	}
 	SpeedButtonColors = []color.Color{
 		color.RGBA{70, 130, 180, 220},  // Серый для скорости x1
 		color.RGBA{220, 60, 60, 220},   // Оранжевый для скорости x2
 		color.RGBA{194, 178, 128, 255}, // x4, песочно-жёлтый
 	}
-	TowerFireRate  = []float64{2.0, 0.5, 1.0, 1.5}     // Выстрелов в секунду для каждого типа
-	TowerDamage    = []int{10, 40, 20, 30}             // Урон для каждого типа
-	TowerShotCosts = []float64{0.12, 0.10, 0.09, 0.16} // Стоимость выстрела для Red, Green, Blue, Purple
+	ColorYellow = color.RGBA{255, 255, 0, 255}
+	ColorRed    = color.RGBA{255, 0, 0, 255}
+	ColorWhite  = color.RGBA{255, 255, 255, 255}
 )

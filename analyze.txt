@@ -1,5 +1,8 @@
 Структура проекта:
 ├── assets
+│   ├── data
+│   │   ├── enemies.json
+│   │   └── towers.json
 │   └── fonts
 │       └── arial.ttf
 ├── cmd
@@ -26,6 +29,11 @@
 │   │   └── wave.go
 │   ├── config
 │   │   └── config.go
+│   ├── defs
+│   │   ├── enemies.go
+│   │   ├── loader.go
+│   │   ├── towers.go
+│   │   └── types.go
 │   ├── entity
 │   │   └── ecs.go
 │   ├── event
@@ -71,7 +79,6 @@
 ├── .gitignore
 ├── analyze.txt
 ├── analyze_project.py
-├── commit_message.txt
 ├── game.exe
 ├── GEMINI.md
 ├── go.mod

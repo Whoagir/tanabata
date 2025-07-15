@@ -3,6 +3,7 @@ package system
 
 import (
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/pkg/hexmap"
 )
@@ -61,7 +62,7 @@ func (s *EnvironmentalDamageSystem) Update(deltaTime float64) {
 				if damage < 1 {
 					damage = 1 // Минимальный урон - 1
 				}
-				ApplyDamage(s.ecs, id, damage)
+				ApplyDamage(s.ecs, id, damage, defs.AttackPure)
 				enemy.OreDamageCooldown = 1.0 / config.OreDamageTicksPerSecond
 			}
 		}
@@ -79,7 +80,7 @@ func (s *EnvironmentalDamageSystem) Update(deltaTime float64) {
 				if damage < 1 {
 					damage = 1 // Минимальный урон
 				}
-				ApplyDamage(s.ecs, id, damage)
+				ApplyDamage(s.ecs, id, damage, defs.AttackPure)
 				enemy.LineDamageCooldown = 1.0 / config.LineDamageTicksPerSecond
 			}
 		}

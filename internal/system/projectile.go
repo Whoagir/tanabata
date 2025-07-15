@@ -2,7 +2,9 @@
 package system
 
 import (
+	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/internal/types"
@@ -51,7 +53,7 @@ func (s *ProjectileSystem) Update(deltaTime float64) {
 
 		// Увеличиваем радиус засчитывания до 15
 		if dist <= proj.Speed*deltaTime || dist < 15.0 {
-			s.hitTarget(id, proj.TargetID, proj.Damage)
+			s.hitTarget(id, proj)
 		} else {
 			pos.X += math.Cos(proj.Direction) * proj.Speed * deltaTime
 			pos.Y += math.Sin(proj.Direction) * proj.Speed * deltaTime
@@ -66,22 +68,29 @@ func (s *ProjectileSystem) removeProjectile(id types.EntityID) {
 	delete(s.ecs.Renderables, id)
 }
 
-func (s *ProjectileSystem) hitTarget(projectileID, enemyID types.EntityID, damage int) {
-	// Наносим урон через CombatSystem
-	s.combatSystem.ApplyDamage(enemyID, damage)
+func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *component.Projectile) {
+	// На��осим урон через CombatSystem, передавая тип атаки
+	s.combatSystem.ApplyDamage(proj.TargetID, proj.Damage, proj.AttackType)
 
 	// Удаляем снаряд
 	s.removeProjectile(projectileID)
 
 	// Проверяем, жив ли еще враг, чтобы обновить его радиус
-	if health, exists := s.ecs.Healths[enemyID]; exists {
+	if health, exists := s.ecs.Healths[proj.TargetID]; exists {
+		// TODO: Get enemy definition properly instead of hardcoding
+		def, ok := defs.EnemyLibrary["DEFAULT_ENEMY"]
+		if !ok {
+			return // or log error
+		}
+
 		healthf := float32(health.Value)
-		health_m := float32(config.EnemyHealth)
-		if renderable, ok := s.ecs.Renderables[enemyID]; ok {
-			renderable.Radius = (0.6 + 0.4*(healthf/health_m)) * config.EnemyRadius
+		health_m := float32(def.Health)
+		if renderable, ok := s.ecs.Renderables[proj.TargetID]; ok {
+			newRadius := (0.6 + 0.4*(healthf/health_m)) * float32(config.HexSize*def.Visuals.RadiusFactor)
+			renderable.Radius = newRadius
 		}
 	} else {
 		// Враг был уничтожен, отправляем событие
-		s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyDestroyed, Data: enemyID})
+		s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyDestroyed, Data: proj.TargetID})
 	}
 }

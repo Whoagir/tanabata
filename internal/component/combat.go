@@ -1,14 +1,17 @@
 package component
 
-// Health — компонент здоровья
+import "go-tower-defense/internal/defs"
+
+// Health представляет здоровье сущности.
 type Health struct {
 	Value int
 }
 
-// Combat — компонент для башен, управляющий атакой
+// Combat представляет боевые возможности сущности.
 type Combat struct {
-	FireRate     float64 // Скорострельность (выстрелов в секунду)
-	FireCooldown float64 // Оставшееся время до следующего выстрела
-	Range        int     // Радиус действия (в гексах)
+	FireRate     float64
+	FireCooldown float64
+	Range        int
 	ShotCost     float64 // Стоимость одного выстрела в единицах руды
+	AttackType   defs.AttackType
 }

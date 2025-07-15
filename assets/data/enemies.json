@@ -1,0 +1,41 @@
+[
+  {
+    "id": "DEFAULT_ENEMY",
+    "name": "Стандартный враг",
+    "health": 100,
+    "speed": 80.0,
+    "physical_armor": 5,
+    "magical_armor": 0,
+    "visuals": {
+      "color": {"r": 0, "g": 0, "b": 0, "a": 255},
+      "radius_factor": 0.53,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_MAGIC_RESIST",
+    "name": "Магический щит",
+    "health": 100,
+    "speed": 80.0,
+    "physical_armor": 0,
+    "magical_armor": 99,
+    "visuals": {
+      "color": {"r": 180, "g": 50, "b": 230, "a": 255},
+      "radius_factor": 0.53,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_PHYS_RESIST",
+    "name": "Физический щит",
+    "health": 100,
+    "speed": 80.0,
+    "physical_armor": 99,
+    "magical_armor": 0,
+    "visuals": {
+      "color": {"r": 200, "g": 200, "b": 200, "a": 255},
+      "radius_factor": 0.53,
+      "stroke_width": 0
+    }
+  }
+]

@@ -2,14 +2,17 @@
 package component
 
 import (
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/types"
 	"image/color"
 )
 
+// Projectile представляет летящий снаряд.
 type Projectile struct {
-	TargetID  types.EntityID // Теперь используем types.EntityID
-	Speed     float64
-	Damage    int
-	Color     color.RGBA
-	Direction float64 // Направление (в радианах)
+	TargetID   types.EntityID
+	Speed      float64
+	Damage     int
+	Color      color.RGBA
+	Direction  float64
+	AttackType defs.AttackType
 }
