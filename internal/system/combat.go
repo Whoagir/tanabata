@@ -62,7 +62,7 @@ func (s *CombatSystem) calculateLineDegradationMultiplier(path []types.EntityID)
 		}
 	}
 
-	// Формула: Урон * (Factor ^ n), где n - ко��-во атакующих башен
+	// Формула: Урон * (Factor ^ n), где n - кол-во атакующих башен
 	return math.Pow(config.LineDegradationFactor, float64(attackerCount))
 }
 

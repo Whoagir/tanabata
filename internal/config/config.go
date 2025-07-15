@@ -42,15 +42,15 @@ const (
 	SpeedButtonY       = 30   // Позиция по Y
 	SpeedButtonSize    = 18.0 // Размер кнопки (радиус или ширина, в зависимости от реализации ui.SpeedButton)
 
-	EnergyTransferRadius = 3
-	OrePerHexMin         = 15
-	OrePerHexMax         = 75
-	OreDamagePerSecond      = 10.0 // Базовый урон от руды в секунду
-	OreDamageTicksPerSecond = 8.0  // Количество тиков урона в секунду
-	LineDamagePerSecond     = 10.0 // Урон от линии в секунду
+	EnergyTransferRadius     = 3
+	OrePerHexMin             = 15
+	OrePerHexMax             = 75
+	OreDamagePerSecond       = 10.0 // Базовый урон от руды в секунду
+	OreDamageTicksPerSecond  = 8.0  // Количество тиков урона в секунду
+	LineDamagePerSecond      = 10.0 // Урон от линии в секунду
 	LineDamageTicksPerSecond = 8.0  // Количество тиков урона от линии в секунду
-	DamageFlashDuration     = 0.2  // Длительность "вспышки" урона в секундах
-	OreDepletionThreshold   = 0.1  // Порог, при котором руда считается истощенной
+	DamageFlashDuration      = 0.2  // Длительность "вспышки" урона в секундах
+	OreDepletionThreshold    = 0.1  // Порог, при котором руда считается истощенной
 
 	// Бонусы к урону от руды
 	OreBonusLowThreshold  = 10.0 // Нижний порог запаса руды для макс бонуса

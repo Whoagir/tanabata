@@ -110,7 +110,7 @@ func (s *OreSystem) GenerateOres(hexMap *hexmap.HexMap) {
 		allHexes = append(allHexes, hex)
 	}
 
-	// Получаем гексы на границе (в ��адиусе 3 от края)
+	// Получаем гексы на границе (в радиусе 3 от края)
 	borderHexes := hexMap.GetBorderHexes(3)
 
 	// Центр карты

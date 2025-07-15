@@ -77,7 +77,7 @@ func (s *RenderSystem) drawDragModeIndicator(screen *ebiten.Image, isDragging bo
 	// 1. Draw outline for the text
 	outlineOffsets := []struct{ dx, dy int }{
 		{-2, -2}, {0, -2}, {2, -2},
-		{-2, 0},          {2, 0},
+		{-2, 0}, {2, 0},
 		{-2, 2}, {0, 2}, {2, 2},
 	}
 	for _, offset := range outlineOffsets {
@@ -94,7 +94,6 @@ func (s *RenderSystem) drawDragModeIndicator(screen *ebiten.Image, isDragging bo
 		text.Draw(screen, char, s.uiFontFace, x+offset.dx, y+offset.dy, mainColor)
 	}
 
-
 	if !isDragging {
 		// 3. Draw a horizontal line through the "U"
 		bounds := text.BoundString(s.uiFontFace, char)
@@ -108,7 +107,6 @@ func (s *RenderSystem) drawDragModeIndicator(screen *ebiten.Image, isDragging bo
 		vector.StrokeLine(screen, startX, lineY, endX, lineY, 4, mainColor, true)
 	}
 }
-
 
 func (s *RenderSystem) drawPulsingOres(screen *ebiten.Image, gameTime float64) {
 	for id, ore := range s.ecs.Ores {

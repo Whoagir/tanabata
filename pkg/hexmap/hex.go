@@ -25,7 +25,7 @@ func (h Hex) ToPixel(hexSize float64) (x, y float64) {
 	return
 }
 
-// PixelToHex конвертирует ��иксельные координаты в гекс
+// PixelToHex конвертирует пиксельные координаты в гекс
 func PixelToHex(x, y, hexSize float64) Hex {
 	x -= float64(config.ScreenWidth) / 2
 	y -= float64(config.ScreenHeight) / 2
@@ -33,8 +33,6 @@ func PixelToHex(x, y, hexSize float64) Hex {
 	r := (2.0 / 3 * y) / hexSize
 	return axialRound(q, r)
 }
-
-
 
 // Neighbors возвращает существующих соседей гекса
 func (h Hex) Neighbors(hm *HexMap) []Hex {
@@ -89,7 +87,6 @@ func (a Hex) Lerp(b Hex, t float64) Hex {
 	r := float64(a.R)*(1-t) + float64(b.R)*t
 	return axialRound(q, r)
 }
-
 
 // LineTo возвращает гексы на прямой между двумя точками
 func (start Hex) LineTo(end Hex) []Hex {

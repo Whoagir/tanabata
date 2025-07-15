@@ -6,5 +6,5 @@ const (
 	TowerPlaced    EventType = "TowerPlaced"    // Башня построена
 	EnemyDestroyed EventType = "EnemyDestroyed" // Враг уничтожен
 	TowerRemoved   EventType = "TowerRemoved"
-	OreDepleted    EventType = "OreDepleted"    // Руда истощена
+	OreDepleted    EventType = "OreDepleted" // Руда истощена
 )

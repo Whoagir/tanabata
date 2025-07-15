@@ -7,43 +7,43 @@ import (
 )
 
 type ECS struct {
-	GameTime    float64
-	NextID      types.EntityID
-	Positions   map[types.EntityID]*component.Position
-	Velocities  map[types.EntityID]*component.Velocity
-	Paths       map[types.EntityID]*component.Path
-	Healths     map[types.EntityID]*component.Health
-	Renderables map[types.EntityID]*component.Renderable
-	Towers      map[types.EntityID]*component.Tower
-	Projectiles map[types.EntityID]*component.Projectile
-	Combats     map[types.EntityID]*component.Combat
-	Ores        map[types.EntityID]*component.Ore
-	Enemies     map[types.EntityID]*component.Enemy // Новое поле для врагов
-	LineRenders map[types.EntityID]*component.LineRender
-	Texts       map[types.EntityID]*component.Text // <-- Добавлено
-	DamageFlashes map[types.EntityID]*component.DamageFlash // Для анимации урона
-	Wave        *component.Wave
-	GameState   component.GameState
+	GameTime      float64
+	NextID        types.EntityID
+	Positions     map[types.EntityID]*component.Position
+	Velocities    map[types.EntityID]*component.Velocity
+	Paths         map[types.EntityID]*component.Path
+	Healths       map[types.EntityID]*component.Health
+	Renderables   map[types.EntityID]*component.Renderable
+	Towers        map[types.EntityID]*component.Tower
+	Projectiles   map[types.EntityID]*component.Projectile
+	Combats       map[types.EntityID]*component.Combat
+	Ores          map[types.EntityID]*component.Ore
+	Enemies       map[types.EntityID]*component.Enemy
+	LineRenders   map[types.EntityID]*component.LineRender
+	Texts         map[types.EntityID]*component.Text
+	DamageFlashes map[types.EntityID]*component.DamageFlash
+	Wave          *component.Wave
+	GameState     component.GameState
 }
 
 func NewECS() *ECS {
 	return &ECS{
-		NextID:      1,
-		Positions:   make(map[types.EntityID]*component.Position),
-		Velocities:  make(map[types.EntityID]*component.Velocity),
-		Paths:       make(map[types.EntityID]*component.Path),
-		Healths:     make(map[types.EntityID]*component.Health),
-		Renderables: make(map[types.EntityID]*component.Renderable),
-		Towers:      make(map[types.EntityID]*component.Tower),
-		Projectiles: make(map[types.EntityID]*component.Projectile),
-		Combats:     make(map[types.EntityID]*component.Combat),
-		Ores:        make(map[types.EntityID]*component.Ore),
-		Enemies:     make(map[types.EntityID]*component.Enemy), // Инициализация нового поля
-		LineRenders: make(map[types.EntityID]*component.LineRender),
-		Texts:       make(map[types.EntityID]*component.Text), // <-- Добавлено
+		NextID:        1,
+		Positions:     make(map[types.EntityID]*component.Position),
+		Velocities:    make(map[types.EntityID]*component.Velocity),
+		Paths:         make(map[types.EntityID]*component.Path),
+		Healths:       make(map[types.EntityID]*component.Health),
+		Renderables:   make(map[types.EntityID]*component.Renderable),
+		Towers:        make(map[types.EntityID]*component.Tower),
+		Projectiles:   make(map[types.EntityID]*component.Projectile),
+		Combats:       make(map[types.EntityID]*component.Combat),
+		Ores:          make(map[types.EntityID]*component.Ore),
+		Enemies:       make(map[types.EntityID]*component.Enemy),
+		LineRenders:   make(map[types.EntityID]*component.LineRender),
+		Texts:         make(map[types.EntityID]*component.Text),
 		DamageFlashes: make(map[types.EntityID]*component.DamageFlash),
-		Wave:        nil,
-		GameState:   component.BuildState,
+		Wave:          nil,
+		GameState:     component.BuildState,
 	}
 }
 

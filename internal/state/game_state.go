@@ -31,7 +31,7 @@ func NewGameState(sm *StateMachine) *GameState {
 	gameLogic := game.NewGame(hexMap)
 	// Передаем актуальные данные о руде в рендерер
 	renderer := render.NewHexRenderer(hexMap, gameLogic.GetOreHexes(), config.HexSize, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace)
-	renderer.RenderMapImage(gameLogic.GetAllTowerHexes()) // <-- Явный вызов отрисовки к��рты
+	renderer.RenderMapImage(gameLogic.GetAllTowerHexes()) // <-- Явный вызов отрисовки карты
 	indicator := ui.NewStateIndicator(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
 		float32(config.IndicatorOffsetX),

@@ -718,8 +718,6 @@ func (g *Game) mergeActiveNetworks() {
 	}
 }
 
-
-
 // isValidConnection checks if two towers can be connected according to game rules.
 func (g *Game) isValidConnection(tower1, tower2 *component.Tower) bool {
 	// Стены не могут быть частью энергосети

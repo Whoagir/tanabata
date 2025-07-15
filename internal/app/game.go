@@ -74,8 +74,8 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	}
 	const fontSize = 11
 	face, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:	fontSize,
-		DPI:	72,
+		Size:    fontSize,
+		DPI:     72,
 		Hinting: font.HintingFull,
 	})
 	if err != nil {
@@ -85,18 +85,18 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	ecs := entity.NewECS()
 	eventDispatcher := event.NewDispatcher()
 	g := &Game{
-		HexMap:			hexMap,
-		Wave:			1,
-		BaseHealth:		config.BaseHealth,
-		ECS:			ecs,
-		MovementSystem:	system.NewMovementSystem(ecs),
-		WaveSystem:		system.NewWaveSystem(ecs, hexMap, eventDispatcher),
-		OreSystem:		system.NewOreSystem(ecs, eventDispatcher),
-		EventDispatcher:	eventDispatcher,
-		FontFace:		face,
-		towersBuilt:	0,
-		gameTime:		0.0,
-		DebugTowerType:	config.TowerTypeNone,
+		HexMap:          hexMap,
+		Wave:            1,
+		BaseHealth:      config.BaseHealth,
+		ECS:             ecs,
+		MovementSystem:  system.NewMovementSystem(ecs),
+		WaveSystem:      system.NewWaveSystem(ecs, hexMap, eventDispatcher),
+		OreSystem:       system.NewOreSystem(ecs, eventDispatcher),
+		EventDispatcher: eventDispatcher,
+		FontFace:        face,
+		towersBuilt:     0,
+		gameTime:        0.0,
+		DebugTowerType:  config.TowerTypeNone,
 	}
 	g.RenderSystem = system.NewRenderSystem(ecs, tt)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
@@ -559,7 +559,6 @@ func removeElement(slice []types.EntityID, element types.EntityID) []types.Entit
 	}
 	return result
 }
-
 
 // startLineDrag начинает процесс перетаскивания линии от башни на указанном гексе.
 func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
