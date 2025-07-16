@@ -51,18 +51,39 @@
     }
   },
   {
-    "id": "TOWER_PURPLE",
-    "name": "Фиолетовая башня",
+    "id": "TOWER_AURA_ATTACK_SPEED",
+    "name": "Башня ауры",
     "type": "ATTACK",
     "combat": {
-      "damage": 30,
-      "fire_rate": 1.5,
-      "range": 3,
-      "shot_cost": 0.08,
-      "attack_type": "MAGICAL"
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.2,
+      "attack_type": "INTERNAL"
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 2.0
     },
     "visuals": {
       "color": {"r": 180, "g": 50, "b": 230, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_SLOW",
+    "name": "Башня замедления",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 5,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.08,
+      "attack_type": "PHYSICAL"
+    },
+    "visuals": {
+      "color": {"r": 173, "g": 216, "b": 230, "a": 255},
       "radius_factor": 0.3,
       "stroke_width": 2.0
     }

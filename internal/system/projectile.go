@@ -69,7 +69,15 @@ func (s *ProjectileSystem) removeProjectile(id types.EntityID) {
 }
 
 func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *component.Projectile) {
-	// На��осим урон через CombatSystem, передавая тип атаки
+	// Применяем эффект замедления, если он есть
+	if proj.SlowsTarget {
+		s.ecs.SlowEffects[proj.TargetID] = &component.SlowEffect{
+			Timer:      proj.SlowDuration,
+			SlowFactor: proj.SlowFactor,
+		}
+	}
+
+	// Наносим урон через CombatSystem, передавая тип атаки
 	s.combatSystem.ApplyDamage(proj.TargetID, proj.Damage, proj.AttackType)
 
 	// Удаляем снаряд

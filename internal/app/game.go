@@ -39,6 +39,8 @@ type Game struct {
 	ProjectileSystem          *system.ProjectileSystem
 	StateSystem               *system.StateSystem
 	OreSystem                 *system.OreSystem
+	AuraSystem                *system.AuraSystem
+	StatusEffectSystem        *system.StatusEffectSystem
 	EnvironmentalDamageSystem *system.EnvironmentalDamageSystem
 	VisualEffectSystem        *system.VisualEffectSystem // Новая система
 	EventDispatcher           *event.Dispatcher
@@ -102,6 +104,8 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
 	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
+	g.AuraSystem = system.NewAuraSystem(ecs)
+	g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)
 	g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)
 	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs) // Инициализация
 	g.generateOre()
@@ -239,6 +243,7 @@ func (g *Game) Update(deltaTime float64) {
 	g.VisualEffectSystem.Update(dt) // Обновление новой системы
 
 	if g.ECS.GameState == component.WaveState {
+		g.StatusEffectSystem.Update(dt)
 		g.CombatSystem.Update(dt)
 		g.ProjectileSystem.Update(dt)
 		g.WaveSystem.Update(dt, g.ECS.Wave)

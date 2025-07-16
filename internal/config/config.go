@@ -61,6 +61,7 @@ const (
 	TowerTypeGreen
 	TowerTypeBlue
 	TowerTypePurple
+	TowerTypeCyan
 	TowerTypeMiner // Новый тип для добытчика
 	TowerTypeWall  = -1
 	TowerTypeNone  = -2 // Для отладки, когда не выбран специальный тип
@@ -93,4 +94,5 @@ var (
 	ColorYellow = color.RGBA{255, 255, 0, 255}
 	ColorRed    = color.RGBA{255, 0, 0, 255}
 	ColorWhite  = color.RGBA{255, 255, 255, 255}
+	ColorBlue   = color.RGBA{0, 0, 255, 255}
 )

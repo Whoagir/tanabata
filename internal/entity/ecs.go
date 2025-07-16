@@ -22,6 +22,9 @@ type ECS struct {
 	LineRenders   map[types.EntityID]*component.LineRender
 	Texts         map[types.EntityID]*component.Text
 	DamageFlashes map[types.EntityID]*component.DamageFlash
+	Auras         map[types.EntityID]*component.Aura
+	AuraEffects   map[types.EntityID]*component.AuraEffect
+	SlowEffects   map[types.EntityID]*component.SlowEffect
 	Wave          *component.Wave
 	GameState     component.GameState
 }
@@ -42,6 +45,9 @@ func NewECS() *ECS {
 		LineRenders:   make(map[types.EntityID]*component.LineRender),
 		Texts:         make(map[types.EntityID]*component.Text),
 		DamageFlashes: make(map[types.EntityID]*component.DamageFlash),
+		Auras:         make(map[types.EntityID]*component.Aura),
+		AuraEffects:   make(map[types.EntityID]*component.AuraEffect),
+		SlowEffects:   make(map[types.EntityID]*component.SlowEffect),
 		Wave:          nil,
 		GameState:     component.BuildState,
 	}

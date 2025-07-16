@@ -41,6 +41,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	}
 
 	g.addTowerToEnergyNetwork(id)
+	g.AuraSystem.RecalculateAuras()
 	g.EventDispatcher.Dispatch(event.Event{Type: event.TowerPlaced, Data: hex})
 
 	return true
@@ -71,6 +72,7 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 
 		// Now, handle the network update for the neighbors
 		g.handleTowerRemoval(neighbors)
+		g.AuraSystem.RecalculateAuras()
 
 		if tile, exists := g.HexMap.Tiles[hex]; exists {
 			tile.Passable = true
@@ -166,6 +168,13 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 		}
 	}
 
+	if def.Aura != nil {
+		g.ECS.Auras[id] = &component.Aura{
+			Radius:          def.Aura.Radius,
+			SpeedMultiplier: def.Aura.SpeedMultiplier,
+		}
+	}
+
 	g.ECS.Renderables[id] = &component.Renderable{
 		Color:     def.Visuals.Color,
 		Radius:    float32(config.HexSize * def.Visuals.RadiusFactor),
@@ -196,7 +205,7 @@ func (g *Game) determineTowerID() string {
 	if g.DebugTowerType != config.TowerTypeNone {
 		switch g.DebugTowerType {
 		case config.TowerTypeRed: // Represents any random attacker for debug
-			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_PURPLE"}
+			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}
 			return attackerIDs[rand.Intn(len(attackerIDs))]
 		case config.TowerTypeMiner:
 			return "TOWER_MINER"
@@ -214,7 +223,7 @@ func (g *Game) determineTowerID() string {
 		// Pattern: A, B, D, D, D
 		switch positionInBlock {
 		case 0: // Attacker
-			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_PURPLE"}
+			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}
 			return attackerIDs[rand.Intn(len(attackerIDs))]
 		case 1: // Miner
 			return "TOWER_MINER"
@@ -225,7 +234,7 @@ func (g *Game) determineTowerID() string {
 		// Pattern for waves 5-10, 15-20, etc.: A, A, D, D, D
 		switch positionInBlock {
 		case 0, 1: // Attacker
-			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_PURPLE"}
+			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}
 			return attackerIDs[rand.Intn(len(attackerIDs))]
 		default: // Wall (positions 2, 3, 4)
 			return "TOWER_WALL"
@@ -277,8 +286,10 @@ func (g *Game) mapTowerIDToNumericType(id string) int {
 		return config.TowerTypeGreen
 	case "TOWER_BLUE":
 		return config.TowerTypeBlue
-	case "TOWER_PURPLE":
+	case "TOWER_AURA_ATTACK_SPEED":
 		return config.TowerTypePurple
+	case "TOWER_SLOW":
+		return config.TowerTypeCyan
 	case "TOWER_MINER":
 		return config.TowerTypeMiner
 	case "TOWER_WALL":

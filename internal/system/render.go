@@ -131,8 +131,11 @@ func (s *RenderSystem) drawEntities(screen *ebiten.Image, gameTime float64) {
 func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, renderable *component.Renderable, pos *component.Position, gameTime float64) {
 	finalColor := renderable.Color
 
+	// Приоритет 1: Урон (красный)
 	if _, ok := s.ecs.DamageFlashes[id]; ok {
 		finalColor = config.EnemyDamageColor
+	} else if _, ok := s.ecs.SlowEffects[id]; ok { // Приоритет 2: Замедление (белый)
+		finalColor = config.ColorWhite
 	}
 
 	if renderable.HasStroke {

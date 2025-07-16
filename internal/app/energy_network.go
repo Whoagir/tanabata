@@ -897,7 +897,9 @@ func mapNumericTypeToTowerID(numericType int) string {
 	case config.TowerTypeBlue:
 		return "TOWER_BLUE"
 	case config.TowerTypePurple:
-		return "TOWER_PURPLE"
+		return "TOWER_AURA_ATTACK_SPEED"
+	case config.TowerTypeCyan:
+		return "TOWER_SLOW"
 	case config.TowerTypeMiner:
 		return "TOWER_MINER"
 	case config.TowerTypeWall:

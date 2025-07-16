@@ -14,12 +14,19 @@ const (
 
 // TowerDefinition holds all the static data for a specific type of tower.
 type TowerDefinition struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Type        TowerType   `json:"type"`
-	Combat      *CombatStats `json:"combat,omitempty"`
-	Energy      *EnergyStats `json:"energy,omitempty"`
-	Visuals     Visuals     `json:"visuals"`
+	ID      string       `json:"id"`
+	Name    string       `json:"name"`
+	Type    TowerType    `json:"type"`
+	Combat  *CombatStats `json:"combat,omitempty"`
+	Aura    *AuraDef     `json:"aura,omitempty"`
+	Energy  *EnergyStats `json:"energy,omitempty"`
+	Visuals Visuals      `json:"visuals"`
+}
+
+// AuraDef defines the properties of an aura tower.
+type AuraDef struct {
+	Radius          int     `json:"radius"`
+	SpeedMultiplier float64 `json:"speed_multiplier"`
 }
 
 // CombatStats contains parameters related to a tower's combat abilities.

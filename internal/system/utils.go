@@ -11,6 +11,11 @@ import (
 
 // ApplyDamage наносит урон сущности, учитывая типы атаки и брони.
 func ApplyDamage(ecs *entity.ECS, entityID types.EntityID, damage int, attackType defs.AttackType) {
+	// Атаки типа INTERNAL - служебные и никогда не наносят урон.
+	if attackType == defs.AttackInternal {
+		return
+	}
+
 	health, hasHealth := ecs.Healths[entityID]
 	enemy, isEnemy := ecs.Enemies[entityID]
 	if !hasHealth {

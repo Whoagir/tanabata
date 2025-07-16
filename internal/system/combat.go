@@ -104,8 +104,16 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		enemyID := s.findNearestEnemyInRange(id, tower.Hex, combat.Range)
-		if enemyID != 0 {
+		// Для башен с типом INTERNAL цель не нужна, они просто "стреляют" для списания ресурсов.
+		// Для остальных - ищем ближайшего врага.
+		targetFound := combat.AttackType == defs.AttackInternal
+		var enemyID types.EntityID
+		if !targetFound {
+			enemyID = s.findNearestEnemyInRange(id, tower.Hex, combat.Range)
+			targetFound = enemyID != 0
+		}
+
+		if targetFound {
 			availableSources := []types.EntityID{}
 			for _, sourceID := range powerSources {
 				if ore, ok := s.ecs.Ores[sourceID]; ok && ore.CurrentReserve > 0 {
@@ -117,16 +125,24 @@ func (s *CombatSystem) Update(deltaTime float64) {
 				chosenSourceID := availableSources[rand.Intn(len(availableSources))]
 				chosenOre := s.ecs.Ores[chosenSourceID]
 
-				// --- Расчет финального урона ---
-				boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
-				pathToSource := s.pathFinder(id)
-				degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
-				baseDamage := float64(towerDef.Combat.Damage)
-				finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
-				// --- Конец расчета ---
+				// Только для "настоящих" атак создаем снаряд
+				if combat.AttackType != defs.AttackInternal {
+					// --- Расчет финального урона ---
+					boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
+					pathToSource := s.pathFinder(id)
+					degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
+					baseDamage := float64(towerDef.Combat.Damage)
+					finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
+					// --- Конец расчета ---
+					s.createProjectile(id, enemyID, &towerDef, finalDamage)
+				}
 
-				s.createProjectile(id, enemyID, &towerDef, finalDamage, combat.AttackType)
-				combat.FireCooldown = 1.0 / combat.FireRate
+				// Применяем эффект ауры к скорости атаки
+				fireRate := combat.FireRate
+				if auraEffect, ok := s.ecs.AuraEffects[id]; ok {
+					fireRate *= auraEffect.SpeedMultiplier
+				}
+				combat.FireCooldown = 1.0 / fireRate
 
 				cost := combat.ShotCost
 				if chosenOre.CurrentReserve >= cost {
@@ -159,7 +175,7 @@ func (s *CombatSystem) findNearestEnemyInRange(towerID types.EntityID, towerHex 
 	return nearestEnemy
 }
 
-func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDef *defs.TowerDefinition, damage int, attackType defs.AttackType) {
+func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDef *defs.TowerDefinition, damage int) {
 	projID := s.ecs.NewEntity()
 	towerPos := s.ecs.Positions[towerID]
 	enemyPos := s.ecs.Positions[enemyID]
@@ -168,19 +184,30 @@ func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDe
 	predictedPos := predictEnemyPosition(s.ecs, enemyID, towerPos, enemyPos, enemyVel, config.ProjectileSpeed)
 	direction := calculateDirection(towerPos, &predictedPos)
 
-	projectileColor := getProjectileColorByAttackType(attackType)
+	projectileColor := getProjectileColorByAttackType(towerDef.Combat.AttackType)
+
+	// Настраиваем снаряд
+	proj := &component.Projectile{
+		TargetID:   enemyID,
+		Speed:      config.ProjectileSpeed,
+		Damage:     damage,
+		Color:      projectileColor,
+		Direction:  direction,
+		AttackType: towerDef.Combat.AttackType,
+	}
+
+	// Если это башня замедления, добавляем эффект
+	if towerDef.ID == "TOWER_SLOW" {
+		proj.SlowsTarget = true
+		proj.SlowDuration = 2.0 // Как и договаривались, 2 секунды
+		proj.SlowFactor = 0.5   // Замедление на 50%
+		proj.Color = config.ColorBlue // Синий цвет для снаряда
+	}
 
 	s.ecs.Positions[projID] = &component.Position{X: towerPos.X, Y: towerPos.Y}
-	s.ecs.Projectiles[projID] = &component.Projectile{
-		TargetID:  enemyID,
-		Speed:     config.ProjectileSpeed,
-		Damage:    damage,
-		Color:     projectileColor,
-		Direction: direction,
-		AttackType: attackType,
-	}
+	s.ecs.Projectiles[projID] = proj
 	s.ecs.Renderables[projID] = &component.Renderable{
-		Color:     projectileColor,
+		Color:     proj.Color,
 		Radius:    config.ProjectileRadius,
 		HasStroke: false,
 	}
@@ -283,7 +310,9 @@ func mapNumericTypeToTowerID(numericType int) string {
 	case config.TowerTypeBlue:
 		return "TOWER_BLUE"
 	case config.TowerTypePurple:
-		return "TOWER_PURPLE"
+		return "TOWER_AURA_ATTACK_SPEED"
+	case config.TowerTypeCyan:
+		return "TOWER_SLOW"
 	case config.TowerTypeMiner:
 		return "TOWER_MINER"
 	case config.TowerTypeWall:

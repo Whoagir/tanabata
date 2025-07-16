@@ -32,7 +32,13 @@ func (s *MovementSystem) Update(deltaTime float64) {
 				dx := tx - pos.X
 				dy := ty - pos.Y
 				dist := math.Sqrt(dx*dx + dy*dy)
-				moveDistance := vel.Speed * deltaTime
+
+				// Проверяем наличие эффекта замедления
+				currentSpeed := vel.Speed
+				if slowEffect, isSlowed := s.ecs.SlowEffects[id]; isSlowed {
+					currentSpeed *= slowEffect.SlowFactor
+				}
+				moveDistance := currentSpeed * deltaTime
 
 				if dist <= moveDistance {
 					pos.X = tx

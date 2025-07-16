@@ -8,4 +8,5 @@ const (
 	AttackPhysical AttackType = "PHYSICAL"
 	AttackMagical  AttackType = "MAGICAL"
 	AttackPure     AttackType = "PURE"
+	AttackInternal AttackType = "INTERNAL" // Служебный тип для внутренних механик, не наносит урон
 )
