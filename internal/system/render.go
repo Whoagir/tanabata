@@ -128,23 +128,25 @@ func (s *RenderSystem) drawEntities(screen *ebiten.Image, gameTime float64) {
 	}
 }
 
-func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, renderable *component.Renderable, pos *component.Position, gameTime float64) {
-	finalColor := renderable.Color
+func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, renderable *component.Renderable, pos *component.Position, gameTime float64) { //+
+	finalColor := renderable.Color //+
 
-	// Приоритет 1: Урон (красный)
-	if _, ok := s.ecs.DamageFlashes[id]; ok {
-		finalColor = config.EnemyDamageColor
-	} else if _, ok := s.ecs.SlowEffects[id]; ok { // Приоритет 2: Замедление (белый)
-		finalColor = config.ColorWhite
-	}
+	// Приоритет 1: Урон (красный) //-
+	if _, ok := s.ecs.DamageFlashes[id]; ok { //+
+		finalColor = config.EnemyDamageColor //+
+	} else if _, ok := s.ecs.PoisonEffects[id]; ok { // Приоритет 2: Отравление (зеленый)
+		finalColor = config.ProjectileColorPoison
+	} else if _, ok := s.ecs.SlowEffects[id]; ok { // Приоритет 3: Замедление (белый)
+		finalColor = config.ProjectileColorSlow //+
+	} //+
 
-	if renderable.HasStroke {
-		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true)
-		vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true)
-	} else {
-		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true)
-	}
-}
+	if renderable.HasStroke { //+
+		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
+		vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true)  //+
+	} else { //+
+		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
+	} //+
+} //+
 
 func (s *RenderSystem) drawLines(screen *ebiten.Image, hiddenLineID types.EntityID) {
 	for id, line := range s.ecs.LineRenders {

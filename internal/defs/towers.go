@@ -1,7 +1,10 @@
 // internal/defs/towers.go
 package defs
 
-import "image/color"
+import (
+	"encoding/json"
+	"image/color"
+)
 
 // TowerType defines the category of a tower.
 type TowerType string
@@ -29,13 +32,20 @@ type AuraDef struct {
 	SpeedMultiplier float64 `json:"speed_multiplier"`
 }
 
+// AttackDef describes how a tower attacks.
+type AttackDef struct {
+	Type       AttackBehaviorType `json:"type"`
+	DamageType AttackDamageType   `json:"damage_type"`
+	Params     json.RawMessage    `json:"params,omitempty"` // Flexible parameters for different attack types
+}
+
 // CombatStats contains parameters related to a tower's combat abilities.
 type CombatStats struct {
-	Damage       int        `json:"damage"`
-	FireRate     float64    `json:"fire_rate"` // Shots per second
-	Range        int        `json:"range"`
-	ShotCost     float64    `json:"shot_cost"`
-	AttackType   AttackType `json:"attack_type"`
+	Damage   int       `json:"damage"`
+	FireRate float64   `json:"fire_rate"` // Shots per second
+	Range    int       `json:"range"`
+	ShotCost float64   `json:"shot_cost"`
+	Attack   AttackDef `json:"attack"`
 }
 
 // EnergyStats contains parameters related to the energy network.
@@ -46,7 +56,12 @@ type EnergyStats struct {
 
 // Visuals contains parameters for rendering a tower.
 type Visuals struct {
-	Color       color.RGBA `json:"color"`
+	Color        color.RGBA `json:"color"`
 	RadiusFactor float64    `json:"radius_factor"`
 	StrokeWidth  float64    `json:"stroke_width"`
+}
+
+// ProjectileAttackParams defines parameters for a projectile-based attack.
+type ProjectileAttackParams struct {
+	SplitCount int `json:"split_count"`
 }

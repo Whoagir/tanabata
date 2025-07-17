@@ -21,4 +21,20 @@ func (s *StatusEffectSystem) Update(deltaTime float64) {
 			delete(s.ecs.SlowEffects, id)
 		}
 	}
+
+	// Обновление эффектов отравления
+	for id, effect := range s.ecs.PoisonEffects {
+		effect.Timer -= deltaTime
+		if effect.Timer <= 0 {
+			delete(s.ecs.PoisonEffects, id)
+			continue
+		}
+
+		effect.TickTimer -= deltaTime
+		if effect.TickTimer <= 0 {
+			// Наносим урон от яда (чистый урон)
+			ApplyDamage(s.ecs, id, effect.DamagePerSec, "PURE")
+			effect.TickTimer = 1.0 // Сбрасываем таймер тика
+		}
+	}
 }

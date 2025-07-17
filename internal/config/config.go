@@ -57,14 +57,18 @@ const (
 )
 
 const (
-	TowerTypeRed = iota
-	TowerTypeGreen
-	TowerTypeBlue
-	TowerTypePurple
-	TowerTypeCyan
-	TowerTypeMiner // Новый тип для добытчика
-	TowerTypeWall  = -1
-	TowerTypeNone  = -2 // Для отладки, когда не выбран специальный тип
+	TowerTypePhysical = iota
+	TowerTypeMagical
+	TowerTypePure
+	TowerTypeAura
+	TowerTypeSlow
+	TowerTypeSplitPure
+	TowerTypeSplitPhysical
+	TowerTypeSplitMagical
+	TowerTypePoison
+	TowerTypeMiner
+	TowerTypeWall = -1
+	TowerTypeNone = -2
 )
 
 var (
@@ -84,15 +88,17 @@ var (
 	TowerStrokeColor  = color.RGBA{255, 255, 255, 255}
 	TowerAStrokeColor = color.RGBA{255, 80, 80, 255} // Ярко-красный для типа A
 	TowerBStrokeColor = color.RGBA{255, 255, 0, 255} // Желтый для типа B
-	LineColor         = color.RGBA{255, 255, 0, 128}
+	LineColor         = color.RGBA{255, 195, 0, 150}   // Насыщенный золотой для сети
 	StrokeWidth       = 2.0
 	SpeedButtonColors = []color.Color{
-		color.RGBA{70, 130, 180, 220},  // Серый для скорости x1
-		color.RGBA{220, 60, 60, 220},   // Оранжевый для скорости x2
-		color.RGBA{194, 178, 128, 255}, // x4, песочно-жёлтый
+		color.RGBA{70, 130, 180, 220},
+		color.RGBA{220, 60, 60, 220},
+		color.RGBA{194, 178, 128, 255},
 	}
-	ColorYellow = color.RGBA{255, 255, 0, 255}
-	ColorRed    = color.RGBA{255, 0, 0, 255}
-	ColorWhite  = color.RGBA{255, 255, 255, 255}
-	ColorBlue   = color.RGBA{0, 0, 255, 255}
+	// Новая палитра для снарядов
+	ProjectileColorPhysical = color.RGBA{255, 100, 0, 255}   // Яркий оранжевый
+	ProjectileColorMagical  = color.RGBA{220, 50, 220, 255}   // Яркий пурпурный
+	ProjectileColorPure     = color.RGBA{180, 240, 255, 255} // Светло-голубой
+	ProjectileColorSlow     = color.RGBA{173, 216, 230, 255} // Ледяной синий
+	ProjectileColorPoison   = color.RGBA{124, 252, 0, 255}   // Ядовито-салатовый
 )

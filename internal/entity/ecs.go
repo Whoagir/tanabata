@@ -25,6 +25,7 @@ type ECS struct {
 	Auras         map[types.EntityID]*component.Aura
 	AuraEffects   map[types.EntityID]*component.AuraEffect
 	SlowEffects   map[types.EntityID]*component.SlowEffect
+	PoisonEffects map[types.EntityID]*component.PoisonEffect
 	Wave          *component.Wave
 	GameState     component.GameState
 }
@@ -48,6 +49,7 @@ func NewECS() *ECS {
 		Auras:         make(map[types.EntityID]*component.Aura),
 		AuraEffects:   make(map[types.EntityID]*component.AuraEffect),
 		SlowEffects:   make(map[types.EntityID]*component.SlowEffect),
+		PoisonEffects: make(map[types.EntityID]*component.PoisonEffect),
 		Wave:          nil,
 		GameState:     component.BuildState,
 	}

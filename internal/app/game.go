@@ -102,7 +102,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	}
 	g.RenderSystem = system.NewRenderSystem(ecs, tt)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
-	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)
+	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem) // Передаем CombatSystem
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
 	g.AuraSystem = system.NewAuraSystem(ecs)
 	g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)

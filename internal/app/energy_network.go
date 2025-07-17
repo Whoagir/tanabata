@@ -340,7 +340,7 @@ func (g *Game) updateTowerAppearance(id types.EntityID) {
 
 	c := def.Visuals.Color
 	if tower.Type != config.TowerTypeWall && !tower.IsActive {
-		c = pkgRender.DarkenColor(c)
+		c = pkgRender.DarkenColor(config.LineColor) // Используем затемненный цвет сети
 	}
 	render.Color = c
 }
@@ -507,7 +507,7 @@ func (g *Game) createLine(edge energyEdge) {
 		StartY:   posA.Y,
 		EndX:     posB.X,
 		EndY:     posB.Y,
-		Color:    config.LineColor,
+		Color:    config.LineColor, // Используем цвет из конфига
 		Tower1ID: edge.Tower1ID,
 		Tower2ID: edge.Tower2ID,
 	}
@@ -890,16 +890,24 @@ func (g *Game) FindPowerSourcesForTower(startNode types.EntityID) []types.Entity
 // mapNumericTypeToTowerID is a temporary helper function.
 func mapNumericTypeToTowerID(numericType int) string {
 	switch numericType {
-	case config.TowerTypeRed:
-		return "TOWER_RED"
-	case config.TowerTypeGreen:
-		return "TOWER_GREEN"
-	case config.TowerTypeBlue:
-		return "TOWER_BLUE"
-	case config.TowerTypePurple:
+	case config.TowerTypePhysical:
+		return "TOWER_PHYSICAL_ATTACK"
+	case config.TowerTypeMagical:
+		return "TOWER_MAGICAL_ATTACK"
+	case config.TowerTypePure:
+		return "TOWER_PURE_ATTACK"
+	case config.TowerTypeAura:
 		return "TOWER_AURA_ATTACK_SPEED"
-	case config.TowerTypeCyan:
+	case config.TowerTypeSlow:
 		return "TOWER_SLOW"
+	case config.TowerTypeSplitPure:
+		return "TOWER_SPLIT_PURE"
+	case config.TowerTypeSplitPhysical:
+		return "TOWER_SPLIT_PHYSICAL"
+	case config.TowerTypeSplitMagical:
+		return "TOWER_SPLIT_MAGICAL"
+	case config.TowerTypePoison:
+		return "TOWER_POISON"
 	case config.TowerTypeMiner:
 		return "TOWER_MINER"
 	case config.TowerTypeWall:

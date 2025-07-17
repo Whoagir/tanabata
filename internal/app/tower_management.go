@@ -164,7 +164,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 			FireCooldown: 0,
 			Range:        def.Combat.Range,
 			ShotCost:     def.Combat.ShotCost,
-			AttackType:   def.Combat.AttackType,
+			Attack:       def.Combat.Attack,
 		}
 	}
 
@@ -203,40 +203,42 @@ func (g *Game) deleteTowerEntity(id types.EntityID) {
 func (g *Game) determineTowerID() string {
 	// Handle debug tower placement
 	if g.DebugTowerType != config.TowerTypeNone {
-		switch g.DebugTowerType {
-		case config.TowerTypeRed: // Represents any random attacker for debug
-			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}
+		// In debug mode, TowerTypePhysical represents any random attacker
+		if g.DebugTowerType == config.TowerTypePhysical {
+			attackerIDs := []string{
+				"TOWER_PHYSICAL_ATTACK", "TOWER_MAGICAL_ATTACK", "TOWER_PURE_ATTACK",
+				"TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW", "TOWER_POISON",
+				"TOWER_SPLIT_PURE", "TOWER_SPLIT_PHYSICAL", "TOWER_SPLIT_MAGICAL",
+			}
 			return attackerIDs[rand.Intn(len(attackerIDs))]
-		case config.TowerTypeMiner:
-			return "TOWER_MINER"
-		case config.TowerTypeWall:
-			return "TOWER_WALL"
 		}
+		// For other debug types, we find the corresponding ID
+		return mapNumericTypeToTowerID(g.DebugTowerType)
 	}
 
-	// Standard tower placement logic based on the current wave number
+	// Standard tower placement logic
+	attackerIDs := []string{
+		"TOWER_PHYSICAL_ATTACK", "TOWER_MAGICAL_ATTACK", "TOWER_PURE_ATTACK",
+		"TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW", "TOWER_POISON",
+		"TOWER_SPLIT_PURE", "TOWER_SPLIT_PHYSICAL", "TOWER_SPLIT_MAGICAL",
+	}
 	waveMod10 := (g.Wave - 1) % 10
 	positionInBlock := g.towersBuilt
 
-	// Waves 1-4, 11-14, etc.
-	if waveMod10 < 4 {
-		// Pattern: A, B, D, D, D
+	if waveMod10 < 4 { // Pattern: A, B, D, D, D
 		switch positionInBlock {
-		case 0: // Attacker
-			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}
+		case 0:
 			return attackerIDs[rand.Intn(len(attackerIDs))]
-		case 1: // Miner
+		case 1:
 			return "TOWER_MINER"
-		default: // Wall (positions 2, 3, 4)
+		default:
 			return "TOWER_WALL"
 		}
-	} else {
-		// Pattern for waves 5-10, 15-20, etc.: A, A, D, D, D
+	} else { // Pattern: A, A, D, D, D
 		switch positionInBlock {
-		case 0, 1: // Attacker
-			attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE", "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}
+		case 0, 1:
 			return attackerIDs[rand.Intn(len(attackerIDs))]
-		default: // Wall (positions 2, 3, 4)
+		default:
 			return "TOWER_WALL"
 		}
 	}
@@ -280,16 +282,24 @@ func (g *Game) canPlaceWall(hex hexmap.Hex) bool {
 // TODO: This should be removed once all systems use string IDs or defs.TowerType.
 func (g *Game) mapTowerIDToNumericType(id string) int {
 	switch id {
-	case "TOWER_RED":
-		return config.TowerTypeRed
-	case "TOWER_GREEN":
-		return config.TowerTypeGreen
-	case "TOWER_BLUE":
-		return config.TowerTypeBlue
+	case "TOWER_PHYSICAL_ATTACK":
+		return config.TowerTypePhysical
+	case "TOWER_MAGICAL_ATTACK":
+		return config.TowerTypeMagical
+	case "TOWER_PURE_ATTACK":
+		return config.TowerTypePure
 	case "TOWER_AURA_ATTACK_SPEED":
-		return config.TowerTypePurple
+		return config.TowerTypeAura
 	case "TOWER_SLOW":
-		return config.TowerTypeCyan
+		return config.TowerTypeSlow
+	case "TOWER_SPLIT_PURE":
+		return config.TowerTypeSplitPure
+	case "TOWER_SPLIT_PHYSICAL":
+		return config.TowerTypeSplitPhysical
+	case "TOWER_SPLIT_MAGICAL":
+		return config.TowerTypeSplitMagical
+	case "TOWER_POISON":
+		return config.TowerTypePoison
 	case "TOWER_MINER":
 		return config.TowerTypeMiner
 	case "TOWER_WALL":

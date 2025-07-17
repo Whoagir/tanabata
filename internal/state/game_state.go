@@ -71,7 +71,7 @@ func (g *GameState) Update(deltaTime float64) {
 	// Handle debug tower selection
 	if g.game.ECS.GameState == component.BuildState {
 		if inpututil.IsKeyJustPressed(ebiten.Key1) {
-			g.game.DebugTowerType = config.TowerTypeRed
+			g.game.DebugTowerType = config.TowerTypePhysical // Represents any random attacker
 		}
 		if inpututil.IsKeyJustPressed(ebiten.Key2) {
 			g.game.DebugTowerType = config.TowerTypeMiner

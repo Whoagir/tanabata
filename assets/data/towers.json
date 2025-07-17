@@ -1,86 +1,57 @@
 [
   {
-    "id": "TOWER_RED",
-    "name": "Красная башня",
+    "id": "TOWER_PHYSICAL_ATTACK",
+    "name": "Физ. башня (TA)",
     "type": "ATTACK",
     "combat": {
-      "damage": 10,
-      "fire_rate": 2.0,
-      "range": 3,
-      "shot_cost": 0.06,
-      "attack_type": "MAGICAL"
-    },
-    "visuals": {
-      "color": {"r": 255, "g": 50, "b": 50, "a": 255},
-      "radius_factor": 0.3,
-      "stroke_width": 2.0
-    }
-  },
-  {
-    "id": "TOWER_GREEN",
-    "name": "Зеленая башня",
-    "type": "ATTACK",
-    "combat": {
-      "damage": 40,
-      "fire_rate": 0.5,
+      "damage": 25,
+      "fire_rate": 1.0,
       "range": 3,
       "shot_cost": 0.05,
-      "attack_type": "PHYSICAL"
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
     },
     "visuals": {
-      "color": {"r": 50, "g": 255, "b": 50, "a": 255},
+      "color": {"r": 255, "g": 80, "b": 0, "a": 255},
       "radius_factor": 0.3,
       "stroke_width": 2.0
     }
   },
   {
-    "id": "TOWER_BLUE",
-    "name": "Синяя башня",
+    "id": "TOWER_MAGICAL_ATTACK",
+    "name": "Маг. башня (TE)",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 25,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.05,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {"r": 160, "g": 32, "b": 240, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_PURE_ATTACK",
+    "name": "Чист. башня (TO)",
     "type": "ATTACK",
     "combat": {
       "damage": 20,
       "fire_rate": 1.0,
       "range": 3,
       "shot_cost": 0.045,
-      "attack_type": "PURE"
-    },
-    "visuals": {
-      "color": {"r": 50, "g": 100, "b": 255, "a": 255},
-      "radius_factor": 0.3,
-      "stroke_width": 2.0
-    }
-  },
-  {
-    "id": "TOWER_AURA_ATTACK_SPEED",
-    "name": "Башня ауры",
-    "type": "ATTACK",
-    "combat": {
-      "damage": 0,
-      "fire_rate": 1.0,
-      "range": 1,
-      "shot_cost": 0.2,
-      "attack_type": "INTERNAL"
-    },
-    "aura": {
-      "radius": 2,
-      "speed_multiplier": 2.0
-    },
-    "visuals": {
-      "color": {"r": 180, "g": 50, "b": 230, "a": 255},
-      "radius_factor": 0.3,
-      "stroke_width": 2.0
-    }
-  },
-  {
-    "id": "TOWER_SLOW",
-    "name": "Башня замедления",
-    "type": "ATTACK",
-    "combat": {
-      "damage": 5,
-      "fire_rate": 1.67,
-      "range": 3,
-      "shot_cost": 0.08,
-      "attack_type": "PHYSICAL"
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
     },
     "visuals": {
       "color": {"r": 173, "g": 216, "b": 230, "a": 255},
@@ -89,8 +60,141 @@
     }
   },
   {
+    "id": "TOWER_SPLIT_PHYSICAL",
+    "name": "Сплит-физ. (PA)",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 18,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.09,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 140, "b": 0, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_SPLIT_MAGICAL",
+    "name": "Сплит-маг. (PE)",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 18,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.09,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 221, "g": 160, "b": 221, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+    {
+    "id": "TOWER_SPLIT_PURE",
+    "name": "Сплит-чист.",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 15,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.09,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 224, "g": 255, "b": 255, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_AURA_ATTACK_SPEED",
+    "name": "Аура (DE)",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.2,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 2.0
+    },
+    "visuals": {
+      "color": {"r": 50, "g": 205, "b": 50, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_SLOW",
+    "name": "Замедление (NI)",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 5,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.08,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW"
+      }
+    },
+    "visuals": {
+      "color": {"r": 0, "g": 191, "b": 255, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_POISON",
+    "name": "Яд (NU)",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 5,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.1,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON"
+      }
+    },
+    "visuals": {
+      "color": {"r": 127, "g": 255, "b": 0, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
     "id": "TOWER_MINER",
-    "name": "Башня-добытчик",
+    "name": "Шахтер",
     "type": "MINER",
     "energy": {
       "transfer_radius": 3,
@@ -107,9 +211,9 @@
     "name": "Стена",
     "type": "WALL",
     "visuals": {
-      "color": {"r": 128, "g": 128, "b": 128, "a": 255},
-      "radius_factor": 0.3,
-      "stroke_width": 2.0
+      "color": {"r": 105, "g": 105, "b": 105, "a": 255},
+      "radius_factor": 0.4,
+      "stroke_width": 0
     }
   }
 ]

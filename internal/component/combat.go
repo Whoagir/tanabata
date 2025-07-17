@@ -13,5 +13,5 @@ type Combat struct {
 	FireCooldown float64
 	Range        int
 	ShotCost     float64 // Стоимость одного выстрела в единицах руды
-	AttackType   defs.AttackType
+	Attack       defs.AttackDef
 }

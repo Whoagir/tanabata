@@ -1,704 +1,393 @@
-Так, давай добавим ещё одну вышку, вышку замедления, смотири она стреляет и в кого попадает тот замедляется
-  на 2 секунды, как тебе такой план? Давай напишем план как это реализовать и давай делать. По цвету думаю
-  сделать её светло синей, а выстрел просто синим, ну тратить она будет как все, условно за выстрел 0.08,
-  стрелять будет не часто, допустим 0.6 секунд кулдаун, давай делать?
+✦ Совершенно верно. Именно эта логика и ляжет в основу новой палитры.
 
-✦ Отличная идея! Башня замедления — это классика жанра, и она прекрасно дополнит существующие механики. Ваш
-  план по параметрам и цветам звучит отлично.
+  Приступаю к реализации.
 
 
-  Я полностью поддерживаю. Давайте разработаем детальный, пошаговый план, чтобы внедрить эту башню аккуратно
-   и с проверками на каждом этапе.
+  Этап 1: Обновление цветовых констант
 
 
-  План по внедрению Башни Замедления
-
-  Этап 1: Подготовка данных и структур
-
-
-   1. Добавить башню в JSON: В assets/data/towers.json мы добавим новый объект для TOWER_SLOW. Укажем в нем id,
-       name, type: "ATTACK", ваши параметры (damage: 5 для примера, fire_rate: 1.67, shot_cost: 0.08), а также
-      зададим светло-синий цвет.
-   2. Добавить в логику игры: В internal/app/tower_management.go добавим TOWER_SLOW в список случайных
-      атакующих башен, чтобы её можно было построить.
-
-
-   * Проверка на этом этапе: Игра запускается, новую башню можно построить (через отладку или случайно), и она
-      будет стрелять обычными снарядами, пока без эффекта.
-
-
-  Этап 2: Создание компонента для эффекта замедления
-
-
-   1. Создать компонент: В новом файле internal/component/status_effect.go мы создадим компонент SlowEffect. Он
-       будет хранить два поля: Timer (сколько еще секунд действует эффект) и SlowFactor (например, 0.5 для 50%
-      замедления).
-   2. Зарегистрировать компонент: В internal/entity/ecs.go мы добавим SlowEffects
-      map[types.EntityID]*component.SlowEffect в структуру ECS и в её конструктор. (Урок из прошлого раза
-      усвоен).
-
-
-   * Проверка на этом этапе: Код компилируется. Мы готовы отслеживать эффект замедления на сущностях.
-
-  Этап 3: Создание системы для управления эффектами
-
-
-   1. Создать систему: Мы создадим новый файл internal/system/status_effect.go и в нем StatusEffectSystem.
-   2. Реализовать логику таймеров: У этой системы будет метод Update(deltaTime). В нем она будет:
-       * Пробегаться по всем сущностям с компонентом SlowEffect.
-       * Уменьшать их Timer на deltaTime.
-       * Если Timer опустился до нуля или ниже, удалять компонент SlowEffect с сущности.
-   3. Интегрировать систему: В internal/app/game.go мы зарегистрируем StatusEffectSystem и будем вызывать её
-      Update в основном игровом цикле.
-
-
-   * Проверка на этом этапе: Система готова управлять жизненным циклом эффектов. Пока она ничего не замедляет,
-      но уже может корректно добавлять и удалять компоненты по таймеру.
-
-
-  Этап 4: Применение эффекта замедления
-
-
-   1. Модифицировать снаряд: В internal/component/projectile.go добавим в компонент Projectile новое поле,
-      например, IsSlowing bool.
-   2. Модифицировать боевую систему: В internal/system/combat.go при создании снаряда от TOWER_SLOW будем
-      устанавливать у снаряда IsSlowing = true.
-   3. Модифицировать систему снарядов: В internal/system/projectile.go, в месте, где снаряд попадает во врага,
-      добавим проверку: если projectile.IsSlowing равно true, то мы добавляем/обновляем на враге компонент
-      SlowEffect с таймером на 2 секунды.
-
-
-   * Проверка на этом этапе: Когда башня замедления попадает по врагу, у этого врага в ECS появляется
-     компонент SlowEffect с таймером. Через 2 секунды StatusEffectSystem его удаляет. Это можно проверить
-     через логи.
-
-  Этап 5: Реализация самого замедления
-
-
-   1. Модифицировать систему движения: В internal/system/movement.go в методе Update мы внесем последнее
-      изменение. Перед расчетом шага для каждого врага будем проверять, есть ли у него компонент SlowEffect.
-       * Если компонента нет, враг движется с обычной скоростью.
-       * Если компонент есть, умножаем его скорость на SlowFactor (например, speed * 0.5) только для этого
-         кадра.
-
-
-   * Финальная проверка: Полный цикл работает. Башня стреляет, враг замедляется на 2 секунды, а затем снова
-     ускоряется.
-
-> Да, давай сделаем первый шаг
-
-✦ Отлично. Приступаю к первому этапу.
-
-
-  Этап 1, Шаг 1: Добавление башни в `towers.json`
-
-
-  Сначала я прочитаю файл assets/data/towers.json, чтобы добавить в него новую башню, сохранив
-  форматирование.
- ╭──────────────────────────────────────╮
- │ ✔  ReadFile assets\data\towers.json  │
- ╰──────────────────────────────────────╯
-✦ Теперь я добавляю новую башню в JSON. Я размещу её после "Башни ауры".
+  Я заменю старую палитру в internal/config/config.go на новую, более яркую и логичную.
  ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit assets\data\towers.json:     "visuals": {... =>     "visuals": {...                       │
+ │ ✔  WriteFile Writing to assets\data\towers.json                                                   │
  │                                                                                                   │
- │    72       }                                                                                     │
- │    73     },                                                                                      │
- │    74     {                                                                                       │
- │    75   +   "id": "TOWER_SLOW",                                                                   │
- │    76   +   "name": "Башня замедления",                                                           │
- │    77   +   "type": "ATTACK",                                                                     │
- │    78   +   "combat": {                                                                           │
- │    79   +     "damage": 5,                                                                        │
- │    80   +     "fire_rate": 1.67,                                                                  │
- │    81   +     "range": 3,                                                                         │
- │    82   +     "shot_cost": 0.08,                                                                  │
- │    83   +     "attack_type": "PHYSICAL"                                                           │
- │    84   +   },                                                                                    │
- │    85   +   "visuals": {                                                                          │
- │    86   +     "color": {"r": 173, "g": 216, "b": 230, "a": 255},                                  │
- │    87   +     "radius_factor": 0.3,                                                               │
- │    88   +     "stroke_width": 2.0                                                                 │
- │    89   +   }                                                                                     │
- │    90   + },                                                                                      │
- │    91   + {                                                                                       │
- │    92       "id": "TOWER_MINER",                                                                  │
- │    93       "name": "Башня-добытчик",                                                             │
- │    94       "type": "MINER",                                                                      │
+ │    ... first 197 lines hidden ...                                                                 │
+ │    143  -       }                                                                                 │
+ │    48   +     "combat": { "damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.2, "attack":  │
+ │           { "type": "PROJECTILE", "damage_type": "INTERNAL" }},                                   │
+ │    49   +     "aura": { "radius": 2, "speed_multiplier": 2.0 },                                   │
+ │    50   +     "visuals": { "color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    51       },                                                                                    │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    145  -     "aura": {                                                                           │
+ │    146  -       "radius": 2,                                                                      │
+ │    147  -       "speed_multiplier": 2.0                                                           │
+ │    148  -     },                                                                                  │
+ │    149  -     "visuals": {                                                                        │
+ │    150  -       "color": {"r": 50, "g": 205, "b": 50, "a": 255},                                  │
+ │    151  -       "radius_factor": 0.3,                                                             │
+ │    152  -       "stroke_width": 2.0                                                               │
+ │    153  -     }                                                                                   │
+ │    154  -   },                                                                                    │
+ │    52       {                                                                                     │
+ │    53         "id": "TOWER_SLOW",                                                                 │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    157  -     "name": "Башня замедления (NI)",                                                    │
+ │    54   +     "name": "Замедление (NI)",                                                          │
+ │    55         "type": "ATTACK",                                                                   │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    159  -     "combat": {                                                                         │
+ │    160  -       "damage": 5,                                                                      │
+ │    161  -       "fire_rate": 1.67,                                                                │
+ │    162  -       "range": 3,                                                                       │
+ │    163  -       "shot_cost": 0.08,                                                                │
+ │    164  -       "attack": {                                                                       │
+ │    165  -         "type": "PROJECTILE",                                                           │
+ │    166  -         "damage_type": "SLOW"                                                           │
+ │    167  -       }                                                                                 │
+ │    56   +     "combat": { "damage": 5, "fire_rate": 1.67, "range": 3, "shot_cost": 0.08,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "SLOW" }},                             │
+ │    57   +     "visuals": { "color": {"r": 175, "g": 238, "b": 238, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    58       },                                                                                    │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    169  -     "visuals": {                                                                        │
+ │    170  -       "color": {"r": 154, "g": 206, "b": 235, "a": 255},                                │
+ │    171  -       "radius_factor": 0.3,                                                             │
+ │    172  -       "stroke_width": 2.0                                                               │
+ │    173  -     }                                                                                   │
+ │    174  -   },                                                                                    │
+ │    59       {                                                                                     │
+ │    60         "id": "TOWER_POISON",                                                               │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    177  -     "name": "Башня яда (NU)",                                                           │
+ │    61   +     "name": "Яд (NU)",                                                                  │
+ │    62         "type": "ATTACK",                                                                   │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    179  -     "combat": {                                                                         │
+ │    180  -       "damage": 5,                                                                      │
+ │    181  -       "fire_rate": 0.8,                                                                 │
+ │    182  -       "range": 3,                                                                       │
+ │    183  -       "shot_cost": 0.1,                                                                 │
+ │    184  -       "attack": {                                                                       │
+ │    185  -         "type": "PROJECTILE",                                                           │
+ │    186  -         "damage_type": "POISON"                                                         │
+ │    187  -       }                                                                                 │
+ │    63   +     "combat": { "damage": 5, "fire_rate": 0.8, "range": 3, "shot_cost": 0.1, "attack":  │
+ │           { "type": "PROJECTILE", "damage_type": "POISON" }},                                     │
+ │    64   +     "visuals": { "color": {"r": 124, "g": 252, "b": 0, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    65       },                                                                                    │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    189  -     "visuals": {                                                                        │
+ │    190  -       "color": {"r": 186, "g": 219, "b": 173, "a": 255},                                │
+ │    191  -       "radius_factor": 0.3,                                                             │
+ │    192  -       "stroke_width": 2.0                                                               │
+ │    193  -     }                                                                                   │
+ │    194  -   },                                                                                    │
+ │    66       {                                                                                     │
+ │    67         "id": "TOWER_MINER",                                                                │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    197  -     "name": "Башня-добытчик",                                                           │
+ │    68   +     "name": "Шахтер",                                                                   │
+ │    69         "type": "MINER",                                                                    │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    199  -     "energy": {                                                                         │
+ │    200  -       "transfer_radius": 3,                                                             │
+ │    201  -       "line_degradation_factor": 0.6                                                    │
+ │    70   +     "energy": { "transfer_radius": 3, "line_degradation_factor": 0.6 },                 │
+ │    71   +     "visuals": { "color": {"r": 255, "g": 215, "b": 0, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    72       },                                                                                    │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    203  -     "visuals": {                                                                        │
+ │    204  -       "color": {"r": 255, "g": 215, "b": 0, "a": 255},                                  │
+ │    205  -       "radius_factor": 0.3,                                                             │
+ │    206  -       "stroke_width": 2.0                                                               │
+ │    207  -     }                                                                                   │
+ │    208  -   },                                                                                    │
+ │    73       {                                                                                     │
+ │    74         "id": "TOWER_WALL",                                                                 │
+ │    75         "name": "Стена",                                                                    │
+ │    76         "type": "WALL",                                                                     │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    213  -     "visuals": {                                                                        │
+ │    214  -       "color": {"r": 100, "g": 100, "b": 100, "a": 255},                                │
+ │    215  -       "radius_factor": 0.4,                                                             │
+ │    216  -       "stroke_width": 0                                                                 │
+ │    77   +     "visuals": { "color": {"r": 105, "g": 105, "b": 105, "a": 255}, "radius_factor":    │
+ │           0.4, "stroke_width": 0 }                                                                │
+ │    78       }                                                                                     │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    218  -   }                                                                                     │
+ │    79     ]                                                                                       │
  ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ JSON обновлен.
-
-
-  Этап 1, Шаг 2: Добавление башни в логику игры
-
-
-  Теперь мне нужно добавить TOWER_SLOW в списки атакующих башен в internal/app/tower_management.go, чтобы её
-   можно было построить. Я добавлю её во все три списка случайных атакующих башен.
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\app\tower_management.go: attackerIDs := []string{"TOWER... => attackerIDs := []string{"TOW… │
- │                                                                                                              │
- │    205    if g.DebugTowerType != config.TowerTypeNone {                                                      │
- │    206        switch g.DebugTowerType {                                                                      │
- │    207        case config.TowerTypeRed: // Represents any random attacker for debug                          │
- │    208  -         attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE",                          │
- │           "TOWER_AURA_ATTACK_SPEED"}                                                                         │
- │    208  +         attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE",                          │
- │           "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}                                                           │
- │    209            return attackerIDs[rand.Intn(len(attackerIDs))]                                            │
- │    210        case config.TowerTypeMiner:                                                                    │
- │    211            return "TOWER_MINER"                                                                       │
- │    ═════════════════════════════════════════════════════════════════════════════════════════════             │
- │    223        // Pattern: A, B, D, D, D                                                                      │
- │    224        switch positionInBlock {                                                                       │
- │    225        case 0: // Attacker                                                                            │
- │    226  -         attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE",                          │
- │           "TOWER_AURA_ATTACK_SPEED"}                                                                         │
- │    226  +         attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE",                          │
- │           "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}                                                           │
- │    227            return attackerIDs[rand.Intn(len(attackerIDs))]                                            │
- │    228        case 1: // Miner                                                                               │
- │    229            return "TOWER_MINER"                                                                       │
- │    234        // Pattern for waves 5-10, 15-20, etc.: A, A, D, D, D                                          │
- │    235        switch positionInBlock {                                                                       │
- │    236        case 0, 1: // Attacker                                                                         │
- │    237  -         attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE",                          │
- │           "TOWER_AURA_ATTACK_SPEED"}                                                                         │
- │    237  +         attackerIDs := []string{"TOWER_RED", "TOWER_GREEN", "TOWER_BLUE",                          │
- │           "TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW"}                                                           │
- │    238            return attackerIDs[rand.Intn(len(attackerIDs))]                                            │
- │    239        default: // Wall (positions 2, 3, 4)                                                           │
- │    240            return "TOWER_WALL"                                                                        │
- ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Отлично. Теперь нужно добавить TOWER_SLOW в функцию mapTowerIDToNumericType, чтобы игра знала, какому
-  числовому типу она соответствует. Я назначу ей новый временный тип, например config.TowerTypeCyan, которого
-  еще нет.
-
-
-  Сначала я добавлю константу TowerTypeCyan в internal/config/config.go.
- ╭────────────────────────────────────────╮
- │ ✔  ReadFile internal\config\config.go  │
- ╰────────────────────────────────────────╯
-✦ Добавляю TowerTypeCyan.
  ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\config\config.go:   TowerTypeBlue... =>     TowerTypeBlue...                         │
+ │ ✔  WriteFile Writing to assets\data\towers.json                                                   │
  │                                                                                                   │
- │    61     TowerTypeGreen                                                                          │
- │    62     TowerTypeBlue                                                                           │
- │    63     TowerTypePurple                                                                         │
- │    64   + TowerTypeCyan                                                                           │
- │    65     TowerTypeMiner // Новый тип для добытчика                                               │
- │    66     TowerTypeWall  = -1                                                                     │
- │    67     TowerTypeNone  = -2 // Для отладки, когда не выбран специальный тип                     │
+ │    ... first 2 lines hidden ...                                                                   │
+ │    6          "combat": { "damage": 25, "fire_rate": 1.0, "range": 3, "shot_cost": 0.05,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "PHYSICAL" }},                         │
+ │    7    -     "visuals": { "color": {"r": 255, "g": 69, "b": 0, "a": 255}, "radius_factor": 0.3,  │
+ │           "stroke_width": 2.0 }                                                                   │
+ │    7    +     "visuals": { "color": {"r": 230, "g": 80, "b": 0, "a": 255}, "radius_factor": 0.3,  │
+ │           "stroke_width": 2.0 }                                                                   │
+ │    8        },                                                                                    │
+ │    9        {                                                                                     │
+ │    10         "id": "TOWER_MAGICAL_ATTACK",                                                       │
+ │    11         "name": "Маг. башня (TE)",                                                          │
+ │    12         "type": "ATTACK",                                                                   │
+ │    13         "combat": { "damage": 25, "fire_rate": 1.0, "range": 3, "shot_cost": 0.05,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "MAGICAL" }},                          │
+ │    14   -     "visuals": { "color": {"r": 148, "g": 0, "b": 211, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    14   +     "visuals": { "color": {"r": 140, "g": 0, "b": 220, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    15       },                                                                                    │
+ │    16       {                                                                                     │
+ │    17         "id": "TOWER_PURE_ATTACK",                                                          │
+ │    18         "name": "Чист. башня (TO)",                                                         │
+ │    19         "type": "ATTACK",                                                                   │
+ │    20         "combat": { "damage": 20, "fire_rate": 1.0, "range": 3, "shot_cost": 0.045,         │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "PURE" }},                             │
+ │    21   -     "visuals": { "color": {"r": 0, "g": 255, "b": 255, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    21   +     "visuals": { "color": {"r": 0, "g": 200, "b": 255, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    22       },                                                                                    │
+ │    23       {                                                                                     │
+ │    24         "id": "TOWER_SPLIT_PHYSICAL",                                                       │
+ │    25         "name": "Сплит-физ. (PA)",                                                          │
+ │    26         "type": "ATTACK",                                                                   │
+ │    27         "combat": { "damage": 18, "fire_rate": 1.0, "range": 3, "shot_cost": 0.09,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "PHYSICAL", "params": {                │
+ │           "split_count": 2 }}},                                                                   │
+ │    28   -     "visuals": { "color": {"r": 255, "g": 140, "b": 0, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    28   +     "visuals": { "color": {"r": 255, "g": 140, "b": 60, "a": 255}, "radius_factor":     │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    29       },                                                                                    │
+ │    30       {                                                                                     │
+ │    31         "id": "TOWER_SPLIT_MAGICAL",                                                        │
+ │    32         "name": "Сплит-маг. (PE)",                                                          │
+ │    33         "type": "ATTACK",                                                                   │
+ │    34         "combat": { "damage": 18, "fire_rate": 1.0, "range": 3, "shot_cost": 0.09,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "MAGICAL", "params": { "split_count":  │
+ │           2 }}},                                                                                  │
+ │    35   -     "visuals": { "color": {"r": 218, "g": 112, "b": 214, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    35   +     "visuals": { "color": {"r": 190, "g": 100, "b": 255, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    36       },                                                                                    │
+ │    37         {                                                                                   │
+ │    38         "id": "TOWER_SPLIT_PURE",                                                           │
+ │    39         "name": "Сплит-чист.",                                                              │
+ │    40         "type": "ATTACK",                                                                   │
+ │    41         "combat": { "damage": 15, "fire_rate": 1.0, "range": 3, "shot_cost": 0.09,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "PURE", "params": { "split_count": 2   │
+ │           }}},                                                                                    │
+ │    42   -     "visuals": { "color": {"r": 224, "g": 255, "b": 255, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    42   +     "visuals": { "color": {"r": 100, "g": 220, "b": 255, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    43       },                                                                                    │
+ │    44       {                                                                                     │
+ │    45         "id": "TOWER_AURA_ATTACK_SPEED",                                                    │
+ │    47         "type": "ATTACK",                                                                   │
+ │    48         "combat": { "damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.2, "attack":  │
+ │           { "type": "PROJECTILE", "damage_type": "INTERNAL" }},                                   │
+ │    49         "aura": { "radius": 2, "speed_multiplier": 2.0 },                                   │
+ │    50   -     "visuals": { "color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    50   +     "visuals": { "color": {"r": 0, "g": 255, "b": 120, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    51       },                                                                                    │
+ │    52       {                                                                                     │
+ │    53         "id": "TOWER_SLOW",                                                                 │
+ │    54         "name": "Замедление (NI)",                                                          │
+ │    55         "type": "ATTACK",                                                                   │
+ │    56         "combat": { "damage": 5, "fire_rate": 1.67, "range": 3, "shot_cost": 0.08,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "SLOW" }},                             │
+ │    57   -     "visuals": { "color": {"r": 175, "g": 238, "b": 238, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    57   +     "visuals": { "color": {"r": 100, "g": 180, "b": 255, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    58       },                                                                                    │
+ │    59       {                                                                                     │
+ │    60         "id": "TOWER_POISON",                                                               │
+ │    61         "name": "Яд (NU)",                                                                  │
+ │    62         "type": "ATTACK",                                                                   │
+ │    63         "combat": { "damage": 5, "fire_rate": 0.8, "range": 3, "shot_cost": 0.1, "attack":  │
+ │           { "type": "PROJECTILE", "damage_type": "POISON" }},                                     │
+ │    64   -     "visuals": { "color": {"r": 124, "g": 252, "b": 0, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    64   +     "visuals": { "color": {"r": 50, "g": 150, "b": 50, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    65       },                                                                                    │
+ │    66       {                                                                                     │
+ │    67         "id": "TOWER_MINER",                                                                │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    74         "id": "TOWER_WALL",                                                                 │
+ │    75         "name": "Стена",                                                                    │
+ │    76         "type": "WALL",                                                                     │
+ │    77   -     "visuals": { "color": {"r": 105, "g": 105, "b": 105, "a": 255}, "radius_factor":    │
+ │           0.4, "stroke_width": 0 }                                                                │
+ │    77   +     "visuals": { "color": {"r": 80, "g": 80, "b": 90, "a": 255}, "radius_factor": 0.4,  │
+ │           "stroke_width": 0 }                                                                     │
+ │    78       }                                                                                     │
+ │    79     ]                                                                                       │
  ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Теперь, когда константа есть, я могу обновить mapTowerIDToNumericType в tower_management.go.
- ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\app\tower_management.go:    case "TOWER_AURA_ATTACK_SPEED... =>     case "TOWER_AURA_ATTACK_…  │
- │                                                                                                            │
- │    288        return config.TowerTypeBlue                                                                  │
- │    289    case "TOWER_AURA_ATTACK_SPEED":                                                                  │
- │    290        return config.TowerTypePurple                                                                │
- │    291  + case "TOWER_SLOW":                                                                               │
- │    292  +     return config.TowerTypeCyan                                                                  │
- │    293    case "TOWER_MINER":                                                                              │
- │    294        return config.TowerTypeMiner                                                                 │
- │    295    case "TOWER_WALL":                                                                               │
- ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ И, наконец, нужно обновить обратную функцию mapNumericTypeToTowerID в energy_network.go и combat.go.
-
-
-  Сначала energy_network.go.
- ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\app\energy_network.go:      case config.TowerTypePurple:... =>      case config.TowerTypePurple:...│
- │                                                                                                             │
- │    898        return "TOWER_BLUE"                                                                           │
- │    899    case config.TowerTypePurple:                                                                      │
- │    900        return "TOWER_AURA_ATTACK_SPEED"                                                              │
- │    901  + case config.TowerTypeCyan:                                                                        │
- │    902  +     return "TOWER_SLOW"                                                                           │
- │    903    case config.TowerTypeMiner:                                                                       │
- │    904        return "TOWER_MINER"                                                                          │
- │    905    case config.TowerTypeWall:                                                                        │
- ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Теперь combat.go.
- ╭────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\system\combat.go:   case config.TowerTypePurple:... =>      case config.TowerTypePurple:...│
- │                                                                                                        │
- │    300        return "TOWER_BLUE"                                                                      │
- │    301    case config.TowerTypePurple:                                                                 │
- │    302        return "TOWER_AURA_ATTACK_SPEED"                                                         │
- │    303  + case config.TowerTypeCyan:                                                                   │
- │    304  +     return "TOWER_SLOW"                                                                      │
- │    305    case config.TowerTypeMiner:                                                                  │
- │    306        return "TOWER_MINER"                                                                     │
- │    307    case config.TowerTypeWall:                                                                   │
- ╰────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Первый этап завершен. Все необходимые данные и базовая логика для появления новой башни в игре добавлены.
-
-
-  Теперь я запущу игру, чтобы убедиться, что все изменения корректны и сборка не сломалась.
- ╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Shell go run cmd/game/main.go (Запускаю игру для проверки после добавления данных о новой башне.)  │
- │                                                                                                       │
- │    Loaded 7 tower definitions                                                                         │
- │    Loaded 3 enemy definitions                                                                         │
- │                                                                                                       │
- ╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Отлично, игра запустилась, загрузилось 7 определений башен. Это значит, что наша новая башня замедления
-  успешно распознана.
-
-
-  Первый этап полностью завершен. Мы готовы переходить ко второму этапу: созданию компонента для эффекта
-  замедления. Начать?
-
-> Да давай начнем
-
-✦ Отлично, приступаю ко второму этапу.
-
-
-  Этап 2, Шаг 1: Создание компонента `SlowEffect`
-
-
-  Я создам новый файл internal/component/status_effect.go и определю в нем компонент SlowEffect. Он будет
-  содержать таймер и множитель замедления.
-
-
-
-   1 // internal/component/status_effect.go
-   2 package component
-   3
-   4 // SlowEffect indicates that an entity is slowed.
-   5 type SlowEffect struct {
-   6    Timer     float64 // How much time is left for the effect.
-   7    SlowFactorfloat64 // Multiplier for speed (e.g., 0.5 for 50% slow).
-   8 }
-
-
-
-  Записываю этот файл.
  ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  WriteFile Writing to internal\component\status_effect.go                                       │
+ │ ✔  WriteFile Writing to assets\data\towers.json                                                   │
  │                                                                                                   │
- │    1 // internal/component/status_effect.go                                                       │
- │    2 package component                                                                            │
- │    3                                                                                              │
- │    4 // SlowEffect indicates that an entity is slowed.                                            │
- │    5 type SlowEffect struct {                                                                     │
- │    6         Timer     float64 // How much time is left for the effect.                                  │
- │    7         SlowFactorfloat64 // Multiplier for speed (e.g., 0.5 for 50% slow).                         │
- │    8 }                                                                                            │
+ │    ... first 162 lines hidden ...                                                                 │
+ │    133        "name": "Аура (DE)",                                                                │
+ │    134        "type": "ATTACK",                                                                   │
+ │    48   -     "combat": { "damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.2, "attack":  │
+ │           { "type": "PROJECTILE", "damage_type": "INTERNAL" }},                                   │
+ │    49   -     "aura": { "radius": 2, "speed_multiplier": 2.0 },                                   │
+ │    50   -     "visuals": { "color": {"r": 0, "g": 255, "b": 120, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    135  +     "combat": {                                                                         │
+ │    136  +       "damage": 0,                                                                      │
+ │    137  +       "fire_rate": 1.0,                                                                 │
+ │    138  +       "range": 1,                                                                       │
+ │    139  +       "shot_cost": 0.2,                                                                 │
+ │    140  +       "attack": {                                                                       │
+ │    141  +         "type": "PROJECTILE",                                                           │
+ │    142  +         "damage_type": "INTERNAL"                                                       │
+ │    143  +       }                                                                                 │
+ │    144        },                                                                                  │
+ │    145  +     "aura": {                                                                           │
+ │    146  +       "radius": 2,                                                                      │
+ │    147  +       "speed_multiplier": 2.0                                                           │
+ │    148  +     },                                                                                  │
+ │    149  +     "visuals": {                                                                        │
+ │    150  +       "color": {"r": 50, "g": 205, "b": 50, "a": 255},                                  │
+ │    151  +       "radius_factor": 0.3,                                                             │
+ │    152  +       "stroke_width": 2.0                                                               │
+ │    153  +     }                                                                                   │
+ │    154  +   },                                                                                    │
+ │    155      {                                                                                     │
+ │    156        "id": "TOWER_SLOW",                                                                 │
+ │    157        "name": "Замедление (NI)",                                                          │
+ │    158        "type": "ATTACK",                                                                   │
+ │    56   -     "combat": { "damage": 5, "fire_rate": 1.67, "range": 3, "shot_cost": 0.08,          │
+ │           "attack": { "type": "PROJECTILE", "damage_type": "SLOW" }},                             │
+ │    57   -     "visuals": { "color": {"r": 100, "g": 180, "b": 255, "a": 255}, "radius_factor":    │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    159  +     "combat": {                                                                         │
+ │    160  +       "damage": 5,                                                                      │
+ │    161  +       "fire_rate": 1.67,                                                                │
+ │    162  +       "range": 3,                                                                       │
+ │    163  +       "shot_cost": 0.08,                                                                │
+ │    164  +       "attack": {                                                                       │
+ │    165  +         "type": "PROJECTILE",                                                           │
+ │    166  +         "damage_type": "SLOW"                                                           │
+ │    167  +       }                                                                                 │
+ │    168        },                                                                                  │
+ │    169  +     "visuals": {                                                                        │
+ │    170  +       "color": {"r": 0, "g": 191, "b": 255, "a": 255},                                  │
+ │    171  +       "radius_factor": 0.3,                                                             │
+ │    172  +       "stroke_width": 2.0                                                               │
+ │    173  +     }                                                                                   │
+ │    174  +   },                                                                                    │
+ │    175      {                                                                                     │
+ │    176        "id": "TOWER_POISON",                                                               │
+ │    177        "name": "Яд (NU)",                                                                  │
+ │    178        "type": "ATTACK",                                                                   │
+ │    63   -     "combat": { "damage": 5, "fire_rate": 0.8, "range": 3, "shot_cost": 0.1, "attack":  │
+ │           { "type": "PROJECTILE", "damage_type": "POISON" }},                                     │
+ │    64   -     "visuals": { "color": {"r": 50, "g": 150, "b": 50, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    179  +     "combat": {                                                                         │
+ │    180  +       "damage": 5,                                                                      │
+ │    181  +       "fire_rate": 0.8,                                                                 │
+ │    182  +       "range": 3,                                                                       │
+ │    183  +       "shot_cost": 0.1,                                                                 │
+ │    184  +       "attack": {                                                                       │
+ │    185  +         "type": "PROJECTILE",                                                           │
+ │    186  +         "damage_type": "POISON"                                                         │
+ │    187  +       }                                                                                 │
+ │    188        },                                                                                  │
+ │    189  +     "visuals": {                                                                        │
+ │    190  +       "color": {"r": 127, "g": 255, "b": 0, "a": 255},                                  │
+ │    191  +       "radius_factor": 0.3,                                                             │
+ │    192  +       "stroke_width": 2.0                                                               │
+ │    193  +     }                                                                                   │
+ │    194  +   },                                                                                    │
+ │    195      {                                                                                     │
+ │    196        "id": "TOWER_MINER",                                                                │
+ │    197        "name": "Шахтер",                                                                   │
+ │    198        "type": "MINER",                                                                    │
+ │    70   -     "energy": { "transfer_radius": 3, "line_degradation_factor": 0.6 },                 │
+ │    71   -     "visuals": { "color": {"r": 255, "g": 215, "b": 0, "a": 255}, "radius_factor":      │
+ │           0.3, "stroke_width": 2.0 }                                                              │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    199  +     "energy": {                                                                         │
+ │    200  +       "transfer_radius": 3,                                                             │
+ │    201  +       "line_degradation_factor": 0.6                                                    │
+ │    202        },                                                                                  │
+ │    203  +     "visuals": {                                                                        │
+ │    204  +       "color": {"r": 255, "g": 215, "b": 0, "a": 255},                                  │
+ │    205  +       "radius_factor": 0.3,                                                             │
+ │    206  +       "stroke_width": 2.0                                                               │
+ │    207  +     }                                                                                   │
+ │    208  +   },                                                                                    │
+ │    209      {                                                                                     │
+ │    210        "id": "TOWER_WALL",                                                                 │
+ │    211        "name": "Стена",                                                                    │
+ │    212        "type": "WALL",                                                                     │
+ │    77   -     "visuals": { "color": {"r": 80, "g": 80, "b": 90, "a": 255}, "radius_factor": 0.4,  │
+ │           "stroke_width": 0 }                                                                     │
+ │    ═════════════════════════════════════════════════════════════════════════════════════════════  │
+ │    213  +     "visuals": {                                                                        │
+ │    214  +       "color": {"r": 105, "g": 105, "b": 105, "a": 255},                                │
+ │    215  +       "radius_factor": 0.4,                                                             │
+ │    216  +       "stroke_width": 0                                                                 │
+ │    217        }                                                                                   │
+ │    218  +   }                                                                                     │
+ │    219    ]                                                                                       │
  ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Файл создан.
-
-
-  Этап 2, Шаг 2: Регистрация компонента в ECS
-
-
-  Теперь я добавлю SlowEffects в структуру ECS в файле internal/entity/ecs.go и в её конструктор.
-
-
-  Сначала читаю файл.
- ╭─────────────────────────────────────╮
- │ ✔  ReadFile internal\entity\ecs.go  │
- ╰─────────────────────────────────────╯
-✦ Добавляю SlowEffects в структуру и конструктор.
- ╭───────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\entity\ecs.go:      Auras         map[types.Entit... =>     Auras         map[types.Entit...│
- │                                                                                                       │
- │    24         DamageFlashes map[types.EntityID]*component.DamageFlash                                 │
- │    25         Auras         map[types.EntityID]*component.Aura                                        │
- │    26         AuraEffects   map[types.EntityID]*component.AuraEffect                                  │
- │    27   +     SlowEffects   map[types.EntityID]*component.SlowEffect                                  │
- │    28         Wave          *component.Wave                                                           │
- │    29         GameState     component.GameState                                                       │
- │    30     }                                                                                           │
- │    ═════════════════════════════════════════════════════════════════════════════════════════════      │
- │    47             DamageFlashes: make(map[types.EntityID]*component.DamageFlash),                     │
- │    48             Auras:         make(map[types.EntityID]*component.Aura),                            │
- │    49             AuraEffects:   make(map[types.EntityID]*component.AuraEffect),                      │
- │    50   +         SlowEffects:   make(map[types.EntityID]*component.SlowEffect),                      │
- │    51             Wave:          nil,                                                                 │
- │    52             GameState:     component.BuildState,                                                │
- │    53         }                                                                                       │
- ╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Этап 2 завершен. Компонент создан и зарегистрирован в ECS.
-
-
-  Теперь я снова запущу игру, чтобы убедиться, что ничего не сломалось.
- ╭────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Shell go run cmd/game/main.go (Запускаю игру для проверки после добавления нового компонента.)  │
- │                                                                                                    │
- │    Loaded 7 tower definitions                                                                      │
- │    Loaded 3 enemy definitions                                                                      │
- │                                                                                                    │
- ╰────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Сборка прошла успешно.
-
-
-  Мы готовы к третьему этапу: созданию системы для управления эффектами. Начать?
-
-> Да, давай делать
-
-✦ Отлично, приступаю к третьему этапу.
-
-  Этап 3, Шаг 1: Создание системы `StatusEffectSystem`
-
-
-  Я создам новый файл internal/system/status_effect.go и реализую в нем логику для управления таймерами
-  эффектов замедления.
-
-
-
-    1 // internal/system/status_effect.go
-    2 package system
-    3
-    4 import "go-tower-defense/internal/entity"
-    5
-    6 // StatusEffectSystem управляет жизненным циклом эффектов, таких как замедление.
-    7 type StatusEffectSystem struct {
-    8   ecs *entity.ECS
-    9 }
-   10
-   11 func NewStatusEffectSystem(ecs *entity.ECS) *StatusEffectSystem {
-   12 return &StatusEffectSystem{ecs: ecs}
-   13 }
-   14
-   15 // Update обрабатывает все активные эффекты.
-   16 func (s *StatusEffectSystem) Update(deltaTime float64) {
-   17 // Обновление эффектов замедления
-   18 for id, effect := range s.ecs.SlowEffects {
-   19           effect.Timer -= deltaTime
-   20 if effect.Timer <= 0 {
-   21 delete(s.ecs.SlowEffects, id)
-   22           }
-   23   }
-   24 }
-
-
-
-  Записываю этот файл.
+ ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+ │ ✔  Edit internal\config\config.go: var (... => var (...                                           │
+ │                                                                                                   │
+ │    Error: Failed to edit, could not find the string to replace.                                   │
+ ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  WriteFile Writing to internal\system\status_effect.go                                                 │
+ │ ✔  Edit internal\config\config.go:   LineColor         = color.RGB... =>     LineColor         = color.RGB...│
  │                                                                                                          │
- ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  WriteFile Writing to internal\system\status_effect.go                                          │
- │                                                                                                   │
- │     1 // internal/system/status_effect.go                                                         │
- │     2 package system                                                                              │
- │     3                                                                                             │
- │     4 import "go-tower-defense/internal/entity"                                                   │
- │     5                                                                                             │
- │     6 // StatusEffectSystem управляет жизненным циклом эффектов, таких как замедление.            │
- │     7 type StatusEffectSystem struct {                                                            │
- │     8        ecs *entity.ECS                                                                            │
- │     9 }                                                                                           │
- │    10                                                                                             │
- │    11 func NewStatusEffectSystem(ecs *entity.ECS) *StatusEffectSystem {                           │
- │    12 return &StatusEffectSystem{ecs: ecs}                                                        │
- │    13 }                                                                                           │
- │    14                                                                                             │
- │    15 // Update обрабатывает все активные эффекты.                                                │
- │    16 func (s *StatusEffectSystem) Update(deltaTime float64) {                                    │
- │    17 // Обновление эффектов замедления                                                           │
- │    18 for id, effect := range s.ecs.SlowEffects {                                                 │
- │    19                effect.Time-= deltaTime                                                                   │
- │    20                if effect.Timer <= 0 {                                                                    │
- │    21 delete(s.ecs.SlowEffects, id)                                                               │
- │    22                }                                                                                         │
- │    23        }                                                                                          │
- │    24 }                                                                                           │
- ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  WriteFile Writing to internal\system\status_effect.go                                                 │
- │                                                                                                          │
-✦ Файл создан.
-
-
-  Этап 3, Шаг 2: Интеграция системы в игру
-
-
-  Теперь я добавлю StatusEffectSystem в internal/app/game.go, инициализирую её и буду вызывать её Update в
-  игровом цикле.
-
-
-  Сначала читаю internal/app/game.go.
- ╭───────────────────────────────────╮
- │ ✔  ReadFile internal\app\game.go  │
- ╰───────────────────────────────────╯
-✦ Добавляю StatusEffectSystem в структуру Game.
- ╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\app\game.go:        AuraSystem                *sy... =>     AuraSystem                *sy...│
- │                                                                                                     │
- │    40     StateSystem               *system.StateSystem                                             │
- │    41     OreSystem                 *system.OreSystem                                               │
- │    42     AuraSystem                *system.AuraSystem                                              │
- │    43   + StatusEffectSystem        *system.StatusEffectSystem                                      │
- │    44     EnvironmentalDamageSystem *system.EnvironmentalDamageSystem                               │
- │    45     VisualEffectSystem        *system.VisualEffectSystem // Новая система                     │
- │    46     EventDispatcher           *event.Dispatcher                                               │
- ╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Инициализирую систему в NewGame.
- ╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\app\game.go:        g.StateSystem = system.NewSta... =>     g.StateSystem = system.NewSta...│
- │                                                                                                     │
- │    105    g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)     │
- │    106    g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)                            │
- │    107    g.AuraSystem = system.NewAuraSystem(ecs)                                                  │
- │    108  + g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)                                  │
- │    109    g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)                    │
- │    110    g.VisualEffectSystem = system.NewVisualEffectSystem(ecs) // Инициализация                 │
- │    111    g.generateOre()                                                                           │
- ╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Вызываю Update системы в главном игровом цикле. Я размещу его рядом с другими системами, которые работают в
-  фазе волны.
- ╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\app\game.go:        if g.ECS.GameState == compone... =>     if g.ECS.GameState == compone...│
- │                                                                                                     │
- │    243    g.VisualEffectSystem.Update(dt) // Обновление новой системы                               │
- │    244                                                                                              │
- │    245    if g.ECS.GameState == component.WaveState {                                               │
- │    246  +     g.StatusEffectSystem.Update(dt)                                                       │
- │    247        g.CombatSystem.Update(dt)                                                             │
- │    248        g.ProjectileSystem.Update(dt)                                                         │
- │    249        g.WaveSystem.Update(dt, g.ECS.Wave)                                                   │
- ╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Этап 3 завершен. Система создана и интегрирована в игровой цикл.
-
-
-  Теперь я запущу игру, чтобы убедиться, что все компилируется.
- ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Shell go run cmd/game/main.go (Запускаю игру для проверки после интеграции новой системы.)     │
- │                                                                                                   │
- │    Loaded 7 tower definitions                                                                     │
- │    Loaded 3 enemy definitions                                                                     │
- │                                                                                                   │
- ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Сборка прошла успешно.
-
-
-  Мы готовы к четвертому этапу: применению эффекта замедления при попадании снаряда. Начать?
-
-> Да, у меня есть эффект урона, что враг краснеет при уроне, а тут он должен белеть, приоритет цвета основной
-  (черный) < белый (замедление) < красный (урон)
-
-✦ Отличное уточнение! Это очень важное геймдизайнерское решение, которое сделает состояние врагов понятным для
-   игрока. Я полностью понял иерархию цветов: Урон (красный) > Замедление (белый) > Обычный (черный).
-
-
-  Я скорректирую план, чтобы учесть это. Мы реализуем это в Этапе 5, когда будем изменять RenderSystem.
-
-  А сейчас давайте приступим к Этапу 4, как и планировали.
-
-  ---
-
-
-  Этап 4: Применение эффекта замедления
-
-
-  Шаг 4.1: Модификация компонента `Projectile`
-
-
-  Я добавлю поле SlowsTarget в компонент Projectile в файле internal/component/projectile.go.
-
-
-  Сначала читаю файл.
- ╭───────────────────────────────────────────────╮
- │ ✔  ReadFile internal\component\projectile.go  │
- ╰───────────────────────────────────────────────╯
-✦ Добавляю поле SlowsTarget. Я также добавлю поле SlowDuration, чтобы сделать код более гибким на будущее.
- ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\component\projectile.go:    Direction  float64... =>        Direction    float64...      │
- │                                                                                                   │
- │    13         Speed      float64                                                                  │
- │    14         Damage     int                                                                      │
- │    15         Color      color.RGBA                                                               │
- │    16   -     Direction  float64                                                                  │
- │    17   -     AttackType defs.AttackType                                                          │
- │    16   +     Direction    float64                                                                │
- │    17   +     AttackType   defs.AttackType                                                        │
- │    18   +     SlowsTarget  bool    // Замедляет ли этот снаряд цель                               │
- │    19   +     SlowDuration float64 // На какое время замедляет                                    │
- │    20   +     SlowFactor   float64 // Насколько замедляет (например, 0.5)                         │
- │    21     }                                                                                       │
- ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Компонент обновлен.
-
-
-  Шаг 4.2: Модификация `CombatSystem`
-
-
-  Теперь в internal/system/combat.go при создании снаряда от TOWER_SLOW я буду устанавливать новые поля в
-  true и задавать параметры замедления.
-
-
-  Читаю combat.go.
- ╭────────────────────────────────────────╮
- │ ✔  ReadFile internal\system\combat.go  │
- ╰────────────────────────────────────────╯
-✦ Я изменю функцию createProjectile, чтобы она принимала towerDefID и на его основе решала, добавлять ли
-✦ Я изменю функцию createProjectile, чтобы она принимала towerDefID и на его основе решала, добавлять ли
-  эффект замедления. Это чище, чем передавать много флагов.
-✦ Я изменю функцию createProjectile, чтобы она принимала towerDefID и на его основе решала, добавлять ли
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- ╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\system\combat.go:                                   baseDamage := float64(tow... =>
-                baseDamage := float64(tow...
- │                                                                                                   │
- │    134        baseDamage := float64(towerDef.Combat.Damage)                                       │
- │    135        finalDamage := int(math.Round(baseDamage * boostMultiplier *                        │
- │           degradationMultiplier))                                                                 │
- │    136        // --- Конец расчета ---                                                            │
- │    137  -     s.createProjectile(id, enemyID, &towerDef, finalDamage, combat.AttackType)          │
- │    137  +     s.createProjectile(id, enemyID, &towerDef, finalDamage)                             │
- │    138    }                                                                                       │
- │    139                                                                                            │
- │    140    // Применяем эффект ауры к скорости атаки                                               │
- ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-✦ Теперь обновляю саму createProjectile.
- ╭────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\system\combat.go: func (s *CombatSystem) createP... => func (s *CombatSystem) createP...  │
- │                                                                                                            │
- │    175        return nearestEnemy                                                                          │
- │    176    }                                                                                                │
- │    177                                                                                                     │
- │    178  - func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDef                │
- │           *defs.TowerDefinition, damage int, attackType defs.AttackType) {                                 │
- │    178  + func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDef                │
- │           *defs.TowerDefinition, damage int) {                                                             │
- │    179        projID := s.ecs.NewEntity()                                                                  │
- │    180        towerPos := s.ecs.Positions[towerID]                                                         │
- │    181        enemyPos := s.ecs.Positions[enemyID]                                                         │
- │    184        predictedPos := predictEnemyPosition(s.ecs, enemyID, towerPos, enemyPos, enemyVel,           │
- │           config.ProjectileSpeed)                                                                          │
- │    185        direction := calculateDirection(towerPos, &predictedPos)                                     │
- │    186                                                                                                     │
- │    187  -     projectileColor := getProjectileColorByAttackType(attackType)                                │
- │    187  +     projectileColor := getProjectileColorByAttackType(towerDef.Combat.AttackType)                │
- │    188                                                                                                     │
- │    189  -     s.ecs.Positions[projID] = &component.Position{X: towerPos.X, Y: towerPos.Y}                  │
- │    190  -     s.ecs.Projectiles[projID] = &component.Projectile{                                           │
- │    191  -         TargetID:  enemyID,                                                                      │
- │    192  -         Speed:     config.ProjectileSpeed,                                                       │
- │    193  -         Damage:    damage,                                                                       │
- │    194  -         Color:     projectileColor,                                                              │
- │    195  -         Direction: direction,                                                                    │
- │    196  -         AttackType: attackType,                                                                  │
- │    189  +     // Настраиваем снаряд                                                                        │
- │    190  +     proj := &component.Projectile{                                                               │
- │    191  +         TargetID:   enemyID,                                                                     │
- │    192  +         Speed:      config.ProjectileSpeed,                                                      │
- │    193  +         Damage:     damage,                                                                      │
- │    194  +         Color:      projectileColor,                                                             │
- │    195  +         Direction:  direction,                                                                   │
- │    196  +         AttackType: towerDef.Combat.AttackType,                                                  │
- │    197        }                                                                                            │
- │    198  +                                                                                                  │
- │    199  +     // Если это башня замедления, добавляем эффект                                               │
- │    200  +     if towerDef.ID == "TOWER_SLOW" {                                                             │
- │    201  +         proj.SlowsTarget = true                                                                  │
- │    202  +         proj.SlowDuration = 2.0 // Как и договаривались, 2 секунды                               │
- │    203  +         proj.SlowFactor = 0.5   // Замедление на 50%                                             │
- │    204  +         proj.Color = config.ColorBlue // Синий цвет для снаряда                                  │
- │    205  +     }                                                                                            │
- │    206  +                                                                                                  │
- │    207  +     s.ecs.Positions[projID] = &component.Position{X: towerPos.X, Y: towerPos.Y}                  │
- │    208  +     s.ecs.Projectiles[projID] = proj                                                             │
- │    209        s.ecs.Renderables[projID] = &component.Renderable{                                           │
- │    199  -         Color:     projectileColor,                                                              │
- │    ═════════════════════════════════════════════════════════════════════════════════════════════           │
- │    210  +         Color:     proj.Color,                                                                   │
- │    211            Radius:    config.ProjectileRadius,                                                      │
- │    212            HasStroke: false,                                                                        │
- │    213        }                                                                                            │
- ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ И добавлю ColorBlue в config.go.
- ╭────────────────────────────────────────╮
- │ ✔  ReadFile internal\config\config.go  │
- ╰────────────────────────────────────────╯
-✦ Добавляю ColorBlue.
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\config\config.go:   ColorRed    = color.RGBA{255,... =>     ColorRed    = color.RGBA{255,...│
- │                                                                                                          │
- │    94         ColorYellow = color.RGBA{255, 255, 0, 255}                                                 │
- │    95         ColorRed    = color.RGBA{255, 0, 0, 255}                                                   │
- │    96         ColorWhite  = color.RGBA{255, 255, 255, 255}                                               │
- │    97   +     ColorBlue   = color.RGBA{0, 0, 255, 255}                                                   │
- │    98     )                                                                                              │
+ │    88         TowerStrokeColor  = color.RGBA{255, 255, 255, 255}                                         │
+ │    89         TowerAStrokeColor = color.RGBA{255, 80, 80, 255} // Ярко-красный для типа A                │
+ │    90         TowerBStrokeColor = color.RGBA{255, 255, 0, 255} // Желтый для типа B                      │
+ │    91   -     LineColor         = color.RGBA{255, 215, 0, 180} // Насыщенный золотой с                   │
+ │           прозрачностью                                                                                  │
+ │    91   +     LineColor         = color.RGBA{255, 195, 0, 150}   // Насыщенный золотой для сети          │
+ │    92         StrokeWidth       = 2.0                                                                    │
+ │    93         SpeedButtonColors = []color.Color{                                                         │
+ │    94             color.RGBA{70, 130, 180, 220},                                                         │
+ │    95             color.RGBA{220, 60, 60, 220},                                                          │
+ │    96             color.RGBA{194, 178, 128, 255},                                                        │
+ │    97         }                                                                                          │
+ │    98   -     // --- Новая палитра снарядов ---                                                          │
+ │    99   -     ProjectileColorPhysical = color.RGBA{255, 69, 0, 255}   // OrangeRed                       │
+ │    100  -     ProjectileColorMagical  = color.RGBA{148, 0, 211, 255}  // DarkViolet                      │
+ │    101  -     ProjectileColorPure     = color.RGBA{0, 255, 255, 255}   // Cyan/Aqua                      │
+ │    102  -     ProjectileColorSlow     = color.RGBA{175, 238, 238, 255} // PaleTurquoise                  │
+ │    103  -     ProjectileColorPoison   = color.RGBA{124, 252, 0, 255}   // LawnGreen                      │
+ │    104  -                                                                                                │
+ │    105  -     // Старые цвета (могут понадобиться для отладки или UI)                                    │
+ │    106  -     ColorWhite = color.RGBA{255, 255, 255, 255}                                                │
+ │    107  -     ColorRed   = color.RGBA{255, 0, 0, 255}                                                    │
+ │    108  -     ColorBlue  = color.RGBA{0, 0, 255, 255}                                                    │
+ │    98   +     // Новая палитра для снарядов                                                              │
+ │    99   +     ProjectileColorPhysical = color.RGBA{255, 100, 0, 255}   // Яркий оранжевый                │
+ │    100  +     ProjectileColorMagical  = color.RGBA{220, 50, 220, 255}   // Яркий пурпурный               │
+ │    101  +     ProjectileColorPure     = color.RGBA{180, 240, 255, 255} // Светло-голубой                 │
+ │    102  +     ProjectileColorSlow     = color.RGBA{173, 216, 230, 255} // Ледяной синий                  │
+ │    103  +     ProjectileColorPoison   = color.RGBA{124, 252, 0, 255}   // Ядовито-салатовый              │
+ │    104    )                                                                                              │
  ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Шаг 4.3: Модификация `ProjectileSystem`
-
-
-  Теперь я изменю internal/system/projectile.go, чтобы при попадании снаряда с флагом SlowsTarget к врагу
-  добавлялся компонент SlowEffect.
-
-
-  Читаю projectile.go.
- ╭────────────────────────────────────────────╮
- │ ✔  ReadFile internal\system\projectile.go  │
- ╰────────────────────────────────────────────╯
-✦ Изменяю hitTarget, чтобы она проверяла флаг SlowsTarget и применяла эффект.
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\system\projectile.go: func (s *ProjectileSystem) hit... => func (s *ProjectileSystem) hit.… │
- │                                                                                                              │
- │    Error: Failed to edit, could not find the string to replace.                                              │
- ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-✦ Ой, моя последняя замена не удалась. Похоже, я пытался заменить код, который я уже удалил в уме. Я должен
-  был сначала прочитать файл.
-
-
-  Я исправлю это. Мне нужно заменить hitTarget целиком. Вот правильный код:
-
-
-
-    1 func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *component.Projectile) {
-    2 // Применяем эффект замедления, если он есть
-    3 if proj.SlowsTarget {
-    4           s.ecs.SlowEffects[proj.TargetID] = &component.SlowEffect{
-    5                   Timer:      proj.SlowDuration,
-    6                   SlowFactor: proj.SlowFactor,
-    7           }
-    8   }
-    9
-   10 // Наносим урон через CombatSystem, передавая тип атаки
-   11   s.combatSystem.ApplyDamage(proj.TargetID, proj.Damage, proj.AttackType)
-   12
-   13 // Удаляем снаряд
-   14   s.removeProjectile(projectileID)
-   15
-   16 // Проверяем, жив ли еще враг, чтобы обновить его радиус
-   17 if health, exists := s.ecs.Healths[proj.TargetID]; exists {
-   18 // TODO: Get enemy definition properly instead of hardcoding
-   19           def, ok := defs.EnemyLibrar"DEFAULT_ENEMY"]
-   20 if !ok {
-   21 return // or log error
-   22           }
-   23
-   24           healthf :float32(health.Value)
-   25           health_m :float32(def.Health)
-   26 if renderable, ok := s.ecs.Renderables[proj.TargetID]; ok {
-   27                   newRadius :0.6 + 0.4*(healthf/health_m)) * float32(config.HexSize*def.Visuals.RadiusFactor)
-   28                   renderable.Radius = newRadius
-   29           }
-   30   }else {
-   31 // Враг был уничтожен, отправляем событие
-   32           s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyDestroyed, Data: proj.TargetID})
-   33   }
-   34 }
-
-
-
-  Я заменю старую версию hitTarget на эту.
- ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
- │ ✔  Edit internal\system\projectile.go: func (s *ProjectileSystem) hit... => func (s *ProjectileSystem) hit.… │
- │                                                                                                              │
- │    Error: Failed to edit, could not find the string to replace.                                              │
- ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-ℹ Request cancelled.
-
-
-> Так, не торопись, если потерялся разбей задачу на подпункты, максимально простые и сохрани все файлы что
-  редактировал

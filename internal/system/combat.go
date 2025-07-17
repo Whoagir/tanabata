@@ -1,6 +1,7 @@
 package system
 
 import (
+	"encoding/json"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
@@ -11,6 +12,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"sort"
 	"time"
 )
 
@@ -30,43 +32,6 @@ func NewCombatSystem(ecs *entity.ECS,
 		powerSourceFinder: finder,
 		pathFinder:        pathFinder,
 	}
-}
-
-// calculateOreBoostMultiplier рассчитывает множитель урона на основе запаса руды.
-func calculateOreBoostMultiplier(currentReserve float64) float64 {
-	lowT := config.OreBonusLowThreshold
-	highT := config.OreBonusHighThreshold
-	maxM := config.OreBonusMaxMultiplier
-	minM := config.OreBonusMinMultiplier
-
-	if currentReserve <= lowT {
-		return maxM
-	}
-	if currentReserve >= highT {
-		return minM
-	}
-	multiplier := (currentReserve-lowT)*(minM-maxM)/(highT-lowT) + maxM
-	return multiplier
-}
-
-// calculateLineDegradationMultiplier рассчитывает штраф к урону от длины цепи.
-func (s *CombatSystem) calculateLineDegradationMultiplier(path []types.EntityID) float64 {
-	if path == nil {
-		return 1.0 // Нет пути - нет штрафа
-	}
-
-	attackerCount := 0
-	for _, towerID := range path {
-		if tower, ok := s.ecs.Towers[towerID]; ok {
-			// Считаем все башни, которые не являются добытчиками или стенами
-			if tower.Type != config.TowerTypeMiner && tower.Type != config.TowerTypeWall {
-				attackerCount++
-			}
-		}
-	}
-
-	// Формула: Урон * (Factor ^ n), где n - кол-во атакующих башен
-	return math.Pow(config.LineDegradationFactor, float64(attackerCount))
 }
 
 func (s *CombatSystem) Update(deltaTime float64) {
@@ -104,16 +69,19 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// Для башен с типом INTERNAL цель не нужна, они просто "стреляют" для списания ресурсов.
-		// Для остальных - ищем ближайшего врага.
-		targetFound := combat.AttackType == defs.AttackInternal
-		var enemyID types.EntityID
-		if !targetFound {
-			enemyID = s.findNearestEnemyInRange(id, tower.Hex, combat.Range)
-			targetFound = enemyID != 0
+		// --- Логика атаки ---
+		attackPerformed := false
+		switch combat.Attack.Type {
+		case defs.BehaviorProjectile:
+			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
+		// Сюда можно будет добавить case defs.BehaviorAoe и т.д.
+		default:
+			// По умолчанию используем логику снаряда для обратной совместимости
+			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
 		}
+		// --- Конец логики атаки ---
 
-		if targetFound {
+		if attackPerformed {
 			availableSources := []types.EntityID{}
 			for _, sourceID := range powerSources {
 				if ore, ok := s.ecs.Ores[sourceID]; ok && ore.CurrentReserve > 0 {
@@ -125,83 +93,154 @@ func (s *CombatSystem) Update(deltaTime float64) {
 				chosenSourceID := availableSources[rand.Intn(len(availableSources))]
 				chosenOre := s.ecs.Ores[chosenSourceID]
 
-				// Только для "настоящих" атак создаем снаряд
-				if combat.AttackType != defs.AttackInternal {
-					// --- Расчет финального урона ---
-					boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
-					pathToSource := s.pathFinder(id)
-					degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
-					baseDamage := float64(towerDef.Combat.Damage)
-					finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
-					// --- Конец расчета ---
-					s.createProjectile(id, enemyID, &towerDef, finalDamage)
-				}
-
-				// Применяем эффект ауры к скорости атаки
-				fireRate := combat.FireRate
-				if auraEffect, ok := s.ecs.AuraEffects[id]; ok {
-					fireRate *= auraEffect.SpeedMultiplier
-				}
-				combat.FireCooldown = 1.0 / fireRate
-
+				// Списываем стоимость выстрела
 				cost := combat.ShotCost
 				if chosenOre.CurrentReserve >= cost {
 					chosenOre.CurrentReserve -= cost
 				} else {
 					chosenOre.CurrentReserve = 0
 				}
+
+				// Устанавливаем кулдаун
+				fireRate := combat.FireRate
+				if auraEffect, ok := s.ecs.AuraEffects[id]; ok {
+					fireRate *= auraEffect.SpeedMultiplier
+				}
+				combat.FireCooldown = 1.0 / fireRate
 			}
 		}
 	}
 }
 
-func (s *CombatSystem) findNearestEnemyInRange(towerID types.EntityID, towerHex hexmap.Hex, rangeRadius int) types.EntityID {
-	var nearestEnemy types.EntityID
-	minDistance := math.MaxFloat64
-	for enemyID, enemyPos := range s.ecs.Positions {
-		if _, isTower := s.ecs.Towers[enemyID]; isTower {
-			continue
+func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *component.Tower, combat *component.Combat, towerDef *defs.TowerDefinition) bool {
+	// Для INTERNAL атак цель не нужна, просто считаем выстрел успешным
+	if combat.Attack.DamageType == defs.AttackInternal {
+		return true
+	}
+
+	// Парсим параметры атаки
+	params := defs.ProjectileAttackParams{}
+	if len(combat.Attack.Params) > 0 {
+		if err := json.Unmarshal(combat.Attack.Params, &params); err != nil {
+			log.Printf("Error unmarshalling projectile params: %v", err)
+			// Продолжаем с параметрами по умолчанию
 		}
+	}
+	if params.SplitCount <= 0 {
+		params.SplitCount = 1 // По умолчанию 1 снаряд
+	}
+
+	// Ищем цели
+	targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, params.SplitCount)
+	if len(targets) == 0 {
+		return false
+	}
+
+	// --- Расчет финального урона (делается один раз для всех снарядов) ---
+	powerSources := s.powerSourceFinder(towerID)
+	if len(powerSources) == 0 {
+		return false
+	}
+	var totalReserve float64
+	for _, sourceID := range powerSources {
+		if ore, ok := s.ecs.Ores[sourceID]; ok {
+			totalReserve += ore.CurrentReserve
+		}
+	}
+	chosenSourceID := powerSources[rand.Intn(len(powerSources))]
+	chosenOre := s.ecs.Ores[chosenSourceID]
+
+	boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
+	pathToSource := s.pathFinder(towerID)
+	degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
+	baseDamage := float64(towerDef.Combat.Damage)
+	finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
+	// --- Конец расчета ---
+
+	// Созд��ем снаряды для каждой цели
+	for _, enemyID := range targets {
+		s.createProjectile(towerID, enemyID, towerDef, finalDamage)
+	}
+
+	return true
+}
+
+// findTargetsForSplitAttack находит до `count` ближайших врагов.
+func (s *CombatSystem) findTargetsForSplitAttack(towerHex hexmap.Hex, rangeRadius int, count int) []types.EntityID {
+	type enemyWithDist struct {
+		id   types.EntityID
+		dist float64
+	}
+	var candidates []enemyWithDist
+
+	for enemyID, enemyPos := range s.ecs.Positions {
 		if _, isEnemy := s.ecs.Enemies[enemyID]; !isEnemy {
 			continue
 		}
 		enemyHex := hexmap.PixelToHex(enemyPos.X, enemyPos.Y, config.HexSize)
 		distance := float64(towerHex.Distance(enemyHex))
-		if distance <= float64(rangeRadius) && distance < minDistance {
-			minDistance = distance
-			nearestEnemy = enemyID
+
+		if distance <= float64(rangeRadius) {
+			candidates = append(candidates, enemyWithDist{id: enemyID, dist: distance})
 		}
 	}
-	return nearestEnemy
+
+	// Сортируем врагов по дистанции
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].dist < candidates[j].dist
+	})
+
+	// Берем первых `count` врагов
+	numTargets := count
+	if len(candidates) < numTargets {
+		numTargets = len(candidates)
+	}
+
+	targets := make([]types.EntityID, numTargets)
+	for i := 0; i < numTargets; i++ {
+		targets[i] = candidates[i].id
+	}
+
+	return targets
 }
 
 func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDef *defs.TowerDefinition, damage int) {
 	projID := s.ecs.NewEntity()
 	towerPos := s.ecs.Positions[towerID]
-	enemyPos := s.ecs.Positions[enemyID]
-	enemyVel := s.ecs.Velocities[enemyID]
 
-	predictedPos := predictEnemyPosition(s.ecs, enemyID, towerPos, enemyPos, enemyVel, config.ProjectileSpeed)
+	predictedPos := s.predictTargetPosition(enemyID, towerPos, config.ProjectileSpeed)
 	direction := calculateDirection(towerPos, &predictedPos)
 
-	projectileColor := getProjectileColorByAttackType(towerDef.Combat.AttackType)
+	attackDef := towerDef.Combat.Attack
+	projectileColor := getProjectileColorByAttackType(attackDef.DamageType)
 
-	// Настраиваем снаряд
 	proj := &component.Projectile{
 		TargetID:   enemyID,
 		Speed:      config.ProjectileSpeed,
 		Damage:     damage,
 		Color:      projectileColor,
 		Direction:  direction,
-		AttackType: towerDef.Combat.AttackType,
+		AttackType: attackDef.DamageType,
 	}
 
-	// Если это башня замедления, добавляем эффект
-	if towerDef.ID == "TOWER_SLOW" {
+	// --- Инициализация полей для самонаведения ---
+	proj.IsConditionallyHoming = true
+	if slowEffect, ok := s.ecs.SlowEffects[enemyID]; ok {
+		proj.TargetLastSlowFactor = slowEffect.SlowFactor
+	} else {
+		proj.TargetLastSlowFactor = 1.0 // 1.0 означает отсутствие замедления
+	}
+
+	if attackDef.DamageType == defs.AttackSlow {
 		proj.SlowsTarget = true
-		proj.SlowDuration = 2.0 // Как и договаривались, 2 секунды
-		proj.SlowFactor = 0.5   // Замедление на 50%
-		proj.Color = config.ColorBlue // Синий цвет для снаряда
+		proj.SlowDuration = 2.0
+		proj.SlowFactor = 0.5
+	}
+
+	if attackDef.DamageType == defs.AttackPoison {
+		proj.AppliesPoison = true
+		proj.PoisonDuration = 2.0
+		proj.PoisonDPS = 10
 	}
 
 	s.ecs.Positions[projID] = &component.Position{X: towerPos.X, Y: towerPos.Y}
@@ -213,66 +252,109 @@ func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDe
 	}
 }
 
-func getProjectileColorByAttackType(attackType defs.AttackType) color.RGBA {
+// calculateOreBoostMultiplier рассчитывает множитель урона на основе запаса руды.
+func calculateOreBoostMultiplier(currentReserve float64) float64 {
+	lowT := config.OreBonusLowThreshold
+	highT := config.OreBonusHighThreshold
+	maxM := config.OreBonusMaxMultiplier
+	minM := config.OreBonusMinMultiplier
+
+	if currentReserve <= lowT {
+		return maxM
+	}
+	if currentReserve >= highT {
+		return minM
+	}
+	multiplier := (currentReserve-lowT)*(minM-maxM)/(highT-lowT) + maxM
+	return multiplier
+}
+
+// calculateLineDegradationMultiplier рассчитывает штраф к урону от длины цепи.
+func (s *CombatSystem) calculateLineDegradationMultiplier(path []types.EntityID) float64 {
+	if path == nil {
+		return 1.0 // Нет пути - нет штрафа
+	}
+
+	attackerCount := 0
+	for _, towerID := range path {
+		if tower, ok := s.ecs.Towers[towerID]; ok {
+			if tower.Type != config.TowerTypeMiner && tower.Type != config.TowerTypeWall {
+				attackerCount++
+			}
+		}
+	}
+	return math.Pow(config.LineDegradationFactor, float64(attackerCount))
+}
+
+func getProjectileColorByAttackType(attackType defs.AttackDamageType) color.RGBA {
 	switch attackType {
 	case defs.AttackPhysical:
-		return config.ColorYellow
+		return config.ProjectileColorPhysical
 	case defs.AttackMagical:
-		return config.ColorRed
+		return config.ProjectileColorMagical
 	case defs.AttackPure:
-		return config.ColorWhite
+		return config.ProjectileColorPure
+	case defs.AttackSlow:
+		return config.ProjectileColorSlow
+	case defs.AttackPoison:
+		return config.ProjectileColorPoison
 	default:
-		return config.ColorWhite // По умолчанию
+		return config.ProjectileColorPure // По умолчанию чистый урон
 	}
 }
 
-// Вспомогательные функции остаются без изменений
-func predictEnemyPosition(ecs *entity.ECS, enemyID types.EntityID, towerPos, enemyPos *component.Position, enemyVel *component.Velocity, projSpeed float64) component.Position {
-	path, hasPath := ecs.Paths[enemyID]
-	if !hasPath || path.CurrentIndex >= len(path.Hexes) {
-		return *enemyPos
+// predictTargetPosition рассчитывает точку перехвата цели, учитывая текущее замедление.
+func (s *CombatSystem) predictTargetPosition(enemyID types.EntityID, towerPos *component.Position, projSpeed float64) component.Position {
+	enemyPos := s.ecs.Positions[enemyID]
+	enemyVel := s.ecs.Velocities[enemyID]
+	path, hasPath := s.ecs.Paths[enemyID]
+
+	if enemyPos == nil || enemyVel == nil || !hasPath || path.CurrentIndex >= len(path.Hexes) {
+		if enemyPos != nil {
+			return *enemyPos
+		}
+		return component.Position{} // Возвращаем нулевую позицию, если данных нет
 	}
 
+	// Проверяем, замедлена ли цель
+	currentSpeed := enemyVel.Speed
+	if slowEffect, ok := s.ecs.SlowEffects[enemyID]; ok {
+		currentSpeed *= slowEffect.SlowFactor
+	}
+
+	// Итеративный расчет точки перехвата
 	const maxIterations = 5
 	timeToHit := 0.0
-
 	for iter := 0; iter < maxIterations; iter++ {
-		predictedPos := simulateEnemyMovement(enemyPos, path, enemyVel.Speed, timeToHit, config.HexSize)
+		predictedPos := simulateEnemyMovement(enemyPos, path, currentSpeed, timeToHit, config.HexSize)
 		dx := predictedPos.X - towerPos.X
 		dy := predictedPos.Y - towerPos.Y
 		newTimeToHit := math.Sqrt(dx*dx+dy*dy) / projSpeed
-
 		if math.Abs(newTimeToHit-timeToHit) < 0.01 {
 			return predictedPos
 		}
 		timeToHit = newTimeToHit
 	}
-
-	return simulateEnemyMovement(enemyPos, path, enemyVel.Speed, timeToHit, config.HexSize)
+	return simulateEnemyMovement(enemyPos, path, currentSpeed, timeToHit, config.HexSize)
 }
 
 func simulateEnemyMovement(startPos *component.Position, path *component.Path, speed float64, duration float64, hexSize float64) component.Position {
 	currentPos := *startPos
 	remainingTime := duration
 	currentIndex := path.CurrentIndex
-
 	for currentIndex < len(path.Hexes) && remainingTime > 0 {
 		targetHex := path.Hexes[currentIndex]
 		tx, ty := targetHex.ToPixel(hexSize)
 		tx += float64(config.ScreenWidth) / 2
 		ty += float64(config.ScreenHeight) / 2
-
 		dx := tx - currentPos.X
 		dy := ty - currentPos.Y
 		distToNext := math.Sqrt(dx*dx + dy*dy)
-
 		if distToNext < 0.01 {
 			currentIndex++
 			continue
 		}
-
 		timeToNext := distToNext / speed
-
 		if timeToNext >= remainingTime {
 			fraction := remainingTime / timeToNext
 			currentPos.X += dx * fraction
@@ -285,7 +367,6 @@ func simulateEnemyMovement(startPos *component.Position, path *component.Path, s
 			remainingTime -= timeToNext
 		}
 	}
-
 	return currentPos
 }
 
@@ -295,24 +376,26 @@ func calculateDirection(from, to *component.Position) float64 {
 	return math.Atan2(dy, dx)
 }
 
-// ApplyDamage вызывает общую функцию для нанесения урона.
-func (s *CombatSystem) ApplyDamage(entityID types.EntityID, damage int, attackType defs.AttackType) {
-	ApplyDamage(s.ecs, entityID, damage, attackType)
-}
-
-// mapNumericTypeToTowerID is a temporary helper function.
 func mapNumericTypeToTowerID(numericType int) string {
 	switch numericType {
-	case config.TowerTypeRed:
-		return "TOWER_RED"
-	case config.TowerTypeGreen:
-		return "TOWER_GREEN"
-	case config.TowerTypeBlue:
-		return "TOWER_BLUE"
-	case config.TowerTypePurple:
+	case config.TowerTypePhysical:
+		return "TOWER_PHYSICAL_ATTACK"
+	case config.TowerTypeMagical:
+		return "TOWER_MAGICAL_ATTACK"
+	case config.TowerTypePure:
+		return "TOWER_PURE_ATTACK"
+	case config.TowerTypeAura:
 		return "TOWER_AURA_ATTACK_SPEED"
-	case config.TowerTypeCyan:
+	case config.TowerTypeSlow:
 		return "TOWER_SLOW"
+	case config.TowerTypeSplitPure:
+		return "TOWER_SPLIT_PURE"
+	case config.TowerTypeSplitPhysical:
+		return "TOWER_SPLIT_PHYSICAL"
+	case config.TowerTypeSplitMagical:
+		return "TOWER_SPLIT_MAGICAL"
+	case config.TowerTypePoison:
+		return "TOWER_POISON"
 	case config.TowerTypeMiner:
 		return "TOWER_MINER"
 	case config.TowerTypeWall:

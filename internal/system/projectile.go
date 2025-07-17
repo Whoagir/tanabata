@@ -15,7 +15,7 @@ import (
 type ProjectileSystem struct {
 	ecs             *entity.ECS
 	eventDispatcher *event.Dispatcher
-	combatSystem    *CombatSystem
+	combatSystem    *CombatSystem // Добавляем ссылку на CombatSystem для доступа к predictTargetPosition
 }
 
 func NewProjectileSystem(ecs *entity.ECS, eventDispatcher *event.Dispatcher, combatSystem *CombatSystem) *ProjectileSystem {
@@ -30,28 +30,26 @@ func (s *ProjectileSystem) Update(deltaTime float64) {
 	for id, proj := range s.ecs.Projectiles {
 		pos := s.ecs.Positions[id]
 		if pos == nil {
-			// log.Println("Projectile", id, "has no position, removing")
-			delete(s.ecs.Positions, id)
-			delete(s.ecs.Projectiles, id)
-			delete(s.ecs.Renderables, id)
+			s.removeProjectile(id)
 			continue
 		}
 
 		// Проверяем, существует ли цель
 		targetPos, targetExists := s.ecs.Positions[proj.TargetID]
 		if !targetExists || targetPos == nil {
-			// Цель пропала, сразу удаляем снаряд
-			// log.Println("Target", proj.TargetID, "for projectile", id, "is gone, removing projectile")
 			s.removeProjectile(id)
 			continue
 		}
+
+		// --- Логика условного самонаведения ---
+		s.handleHoming(id, proj, pos)
+		// --- Конец логики ---
 
 		// Проверяем расстояние до цели
 		dx := targetPos.X - pos.X
 		dy := targetPos.Y - pos.Y
 		dist := math.Sqrt(dx*dx + dy*dy)
 
-		// Увеличиваем радиус засчитывания до 15
 		if dist <= proj.Speed*deltaTime || dist < 15.0 {
 			s.hitTarget(id, proj)
 		} else {
@@ -60,6 +58,29 @@ func (s *ProjectileSystem) Update(deltaTime float64) {
 		}
 	}
 }
+
+func (s *ProjectileSystem) handleHoming(projID types.EntityID, proj *component.Projectile, projPos *component.Position) {
+	if !proj.IsConditionallyHoming {
+		return
+	}
+
+	// Определяем текущий фактор замедления цели
+	var currentSlowFactor float64 = 1.0
+	if slowEffect, ok := s.ecs.SlowEffects[proj.TargetID]; ok {
+		currentSlowFactor = slowEffect.SlowFactor
+	}
+
+	// Если состояние замедления изменилось, пересчитываем курс
+	if math.Abs(currentSlowFactor-proj.TargetLastSlowFactor) > 0.001 {
+		// Используем predictTargetPosition из CombatSystem, но с текущей позицией снаряда
+		predictedPos := s.combatSystem.predictTargetPosition(proj.TargetID, projPos, proj.Speed)
+
+		// Обновляем направление и состояние снаряда
+		proj.Direction = math.Atan2(predictedPos.Y-projPos.Y, predictedPos.X-projPos.X)
+		proj.TargetLastSlowFactor = currentSlowFactor
+	}
+}
+
 
 // Вспомогательная функция для удаления снаряда
 func (s *ProjectileSystem) removeProjectile(id types.EntityID) {
@@ -77,8 +98,17 @@ func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *componen
 		}
 	}
 
-	// Наносим урон через CombatSystem, передавая тип атаки
-	s.combatSystem.ApplyDamage(proj.TargetID, proj.Damage, proj.AttackType)
+	// Применяем эффект отравления, если он есть
+	if proj.AppliesPoison {
+		s.ecs.PoisonEffects[proj.TargetID] = &component.PoisonEffect{
+			Timer:        proj.PoisonDuration,
+			DamagePerSec: proj.PoisonDPS,
+			TickTimer:    1.0, // Первый тик урона будет через 1 секунду
+		}
+	}
+
+	// Наносим урон
+	ApplyDamage(s.ecs, proj.TargetID, proj.Damage, proj.AttackType)
 
 	// Удаляем снаряд
 	s.removeProjectile(projectileID)
