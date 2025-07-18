@@ -6,9 +6,9 @@ import (
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/types"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	pkgRender "go-tower-defense/pkg/render"
-	"go-tower-defense/pkg/utils"
 	"sort"
 )
 
@@ -340,7 +340,7 @@ func (g *Game) updateTowerAppearance(id types.EntityID) {
 
 	c := def.Visuals.Color
 	if tower.Type != config.TowerTypeWall && !tower.IsActive {
-		c = pkgRender.DarkenColor(config.LineColor) // Используем затемненный цвет сети
+		c = pkgRender.DarkenColor(def.Visuals.Color) // Используем затемненный цвет самой башни
 	}
 	render.Color = c
 }
@@ -521,7 +521,7 @@ func (g *Game) clearAllLines() {
 
 func (g *Game) isOnOre(hex hexmap.Hex) bool {
 	for _, ore := range g.ECS.Ores {
-		oreHex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, config.HexSize)
+		oreHex := utils.ScreenToHex(ore.Position.X, ore.Position.Y)
 		// Руда считается источником энергии, только если она существует на этом гексе
 		// И если у неё есть оставшийся запас.
 		if oreHex == hex {
@@ -867,7 +867,7 @@ func (g *Game) FindPowerSourcesForTower(startNode types.EntityID) []types.Entity
 		if tower.Type == config.TowerTypeMiner && g.isOnOre(tower.Hex) {
 			// This tower is a miner on an ore vein, find the corresponding ore entity.
 			for oreID, ore := range g.ECS.Ores {
-				oreHex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, config.HexSize)
+				oreHex := utils.ScreenToHex(ore.Position.X, ore.Position.Y)
 				if oreHex == tower.Hex {
 					sources = append(sources, oreID)
 					break

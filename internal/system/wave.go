@@ -7,6 +7,7 @@ import (
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"log"
 )
@@ -67,8 +68,8 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 	}
 
 	id := s.ecs.NewEntity()
-	x, y := s.hexMap.Entry.ToPixel(config.HexSize)
-	s.ecs.Positions[id] = &component.Position{X: x + float64(config.ScreenWidth)/2, Y: y + float64(config.ScreenHeight)/2}
+	x, y := utils.HexToScreen(s.hexMap.Entry)
+	s.ecs.Positions[id] = &component.Position{X: x, Y: y}
 	s.ecs.Velocities[id] = &component.Velocity{Speed: def.Speed}
 	s.ecs.Paths[id] = &component.Path{Hexes: wave.CurrentPath, CurrentIndex: 0}
 	s.ecs.Healths[id] = &component.Health{Value: def.Health}
@@ -78,6 +79,7 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 		HasStroke: def.Visuals.StrokeWidth > 0,
 	}
 	s.ecs.Enemies[id] = &component.Enemy{
+		DefID:              "DEFAULT_ENEMY", // <-- Сохраняем ID определения
 		OreDamageCooldown:  0,
 		LineDamageCooldown: 0,
 		PhysicalArmor:      def.PhysicalArmor,

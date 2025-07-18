@@ -9,6 +9,7 @@ import (
 	"go-tower-defense/internal/system"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/internal/ui"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"io/ioutil"
 	"log"
@@ -242,7 +243,7 @@ func (g *Game) Update(deltaTime float64) {
 
 	g.VisualEffectSystem.Update(dt) // Обновление новой системы
 
-	if g.ECS.GameState == component.WaveState {
+	if g.ECS.GameState.Phase == component.WaveState {
 		g.StatusEffectSystem.Update(dt)
 		g.CombatSystem.Update(dt)
 		g.ProjectileSystem.Update(dt)
@@ -331,7 +332,7 @@ func (g *Game) ClearProjectiles() {
 }
 
 func (g *Game) HandleIndicatorClick() {
-	if g.ECS.GameState == component.BuildState {
+	if g.ECS.GameState.Phase == component.BuildState {
 		g.StateSystem.SwitchToWaveState()
 	} else {
 		g.StateSystem.SwitchToBuildState()
@@ -399,7 +400,8 @@ func (g *Game) GetGameTime() float64 {
 func (g *Game) GetOreHexes() map[hexmap.Hex]float64 {
 	oreHexes := make(map[hexmap.Hex]float64)
 	for _, ore := range g.ECS.Ores {
-		hex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, config.HexSize)
+		// Используем новую утилиту для корректного преобразования
+		hex := utils.ScreenToHex(ore.Position.X, ore.Position.Y)
 		oreHexes[hex] = ore.Power
 	}
 	return oreHexes

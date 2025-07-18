@@ -10,18 +10,16 @@ import (
 
 type StateSystem struct {
 	ecs             *entity.ECS
-	gameContext     interfaces.GameContext // Используем интерфейс из interfaces
+	game            interfaces.Game
 	eventDispatcher *event.Dispatcher
 }
 
-func NewStateSystem(ecs *entity.ECS, gameContext interfaces.GameContext, eventDispatcher *event.Dispatcher) *StateSystem {
-	ss := &StateSystem{
+func NewStateSystem(ecs *entity.ECS, game interfaces.Game, eventDispatcher *event.Dispatcher) *StateSystem {
+	return &StateSystem{
 		ecs:             ecs,
-		gameContext:     gameContext,
+		game:            game,
 		eventDispatcher: eventDispatcher,
 	}
-	eventDispatcher.Subscribe(event.WaveEnded, ss)
-	return ss
 }
 
 func (s *StateSystem) OnEvent(e event.Event) {
@@ -36,20 +34,18 @@ func (s *StateSystem) Update(deltaTime float64) {
 }
 
 func (s *StateSystem) SwitchToBuildState() {
-	s.ecs.GameState = component.BuildState
-	s.gameContext.ClearEnemies()
-	s.gameContext.ClearProjectiles()
-	s.gameContext.SetTowersBuilt(0)
-	// log.Println("Switched to BuildState, towersBuilt reset to:", s.gameContext.GetTowersBuilt())
+	s.game.ClearEnemies()
+	s.game.ClearProjectiles()
+	s.ecs.GameState.Phase = component.BuildState
+	s.eventDispatcher.Dispatch(event.Event{Type: event.BuildPhaseStarted})
 }
 
 func (s *StateSystem) SwitchToWaveState() {
-	s.ecs.GameState = component.WaveState
-	s.gameContext.StartWave()
-	s.gameContext.SetTowersBuilt(0)
-	// log.Println("Switched to WaveState, towersBuilt reset to:", s.gameContext.GetTowersBuilt())
+	s.game.StartWave()
+	s.ecs.GameState.Phase = component.WaveState
+	s.eventDispatcher.Dispatch(event.Event{Type: event.WavePhaseStarted})
 }
 
-func (s *StateSystem) Current() component.GameState {
+func (s *StateSystem) GetState() *component.GameState {
 	return s.ecs.GameState
 }

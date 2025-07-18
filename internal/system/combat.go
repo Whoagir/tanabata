@@ -7,6 +7,7 @@ import (
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/types"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"image/color"
 	"log"
@@ -157,7 +158,7 @@ func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *com
 	finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
 	// --- Конец расчета ---
 
-	// Созд��ем снаряды для каждой цели
+	// Создаем снаряды для каждой цели
 	for _, enemyID := range targets {
 		s.createProjectile(towerID, enemyID, towerDef, finalDamage)
 	}
@@ -177,7 +178,7 @@ func (s *CombatSystem) findTargetsForSplitAttack(towerHex hexmap.Hex, rangeRadiu
 		if _, isEnemy := s.ecs.Enemies[enemyID]; !isEnemy {
 			continue
 		}
-		enemyHex := hexmap.PixelToHex(enemyPos.X, enemyPos.Y, config.HexSize)
+		enemyHex := utils.ScreenToHex(enemyPos.X, enemyPos.Y)
 		distance := float64(towerHex.Distance(enemyHex))
 
 		if distance <= float64(rangeRadius) {
@@ -313,7 +314,7 @@ func (s *CombatSystem) predictTargetPosition(enemyID types.EntityID, towerPos *c
 		if enemyPos != nil {
 			return *enemyPos
 		}
-		return component.Position{} // Возвращаем нулевую позицию, если данных нет
+		return component.Position{} // Возвращаем нулевую позицию, если данных ��ет
 	}
 
 	// Проверяем, замедлена ли цель
@@ -326,7 +327,7 @@ func (s *CombatSystem) predictTargetPosition(enemyID types.EntityID, towerPos *c
 	const maxIterations = 5
 	timeToHit := 0.0
 	for iter := 0; iter < maxIterations; iter++ {
-		predictedPos := simulateEnemyMovement(enemyPos, path, currentSpeed, timeToHit, config.HexSize)
+		predictedPos := simulateEnemyMovement(enemyPos, path, currentSpeed, timeToHit)
 		dx := predictedPos.X - towerPos.X
 		dy := predictedPos.Y - towerPos.Y
 		newTimeToHit := math.Sqrt(dx*dx+dy*dy) / projSpeed
@@ -335,18 +336,16 @@ func (s *CombatSystem) predictTargetPosition(enemyID types.EntityID, towerPos *c
 		}
 		timeToHit = newTimeToHit
 	}
-	return simulateEnemyMovement(enemyPos, path, currentSpeed, timeToHit, config.HexSize)
+	return simulateEnemyMovement(enemyPos, path, currentSpeed, timeToHit)
 }
 
-func simulateEnemyMovement(startPos *component.Position, path *component.Path, speed float64, duration float64, hexSize float64) component.Position {
+func simulateEnemyMovement(startPos *component.Position, path *component.Path, speed float64, duration float64) component.Position {
 	currentPos := *startPos
 	remainingTime := duration
 	currentIndex := path.CurrentIndex
 	for currentIndex < len(path.Hexes) && remainingTime > 0 {
 		targetHex := path.Hexes[currentIndex]
-		tx, ty := targetHex.ToPixel(hexSize)
-		tx += float64(config.ScreenWidth) / 2
-		ty += float64(config.ScreenHeight) / 2
+		tx, ty := utils.HexToScreen(targetHex)
 		dx := tx - currentPos.X
 		dy := ty - currentPos.Y
 		distToNext := math.Sqrt(dx*dx + dy*dy)

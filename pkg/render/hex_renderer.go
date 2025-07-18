@@ -4,7 +4,6 @@ package render
 import (
 	"fmt"
 	"go-tower-defense/internal/component"
-	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/system"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
@@ -20,8 +19,9 @@ import (
 type HexRenderer struct {
 	hexMap        *hexmap.HexMap
 	hexSize       float64
-	screenWidth   int
-	screenHeight  int
+	offsetX       float64
+	offsetY       float64
+	colors        *MapColors // Store map colors
 	fillImg       *ebiten.Image
 	strokeImg     *ebiten.Image
 	sortedHexes   []hexmap.Hex
@@ -35,7 +35,7 @@ type HexRenderer struct {
 	EnergyVeins   map[hexmap.Hex]float64
 }
 
-func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, hexSize float64, screenWidth, screenHeight int, fontFace font.Face) *HexRenderer {
+func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, hexSize, offsetX, offsetY float64, screenWidth, screenHeight int, fontFace font.Face, colors *MapColors) *HexRenderer {
 	fillImg := ebiten.NewImage(1, 1)
 	fillImg.Fill(color.White)
 
@@ -50,8 +50,9 @@ func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, h
 	renderer := &HexRenderer{
 		hexMap:        hexMap,
 		hexSize:       hexSize,
-		screenWidth:   screenWidth,
-		screenHeight:  screenHeight,
+		offsetX:       offsetX,
+		offsetY:       offsetY,
+		colors:        colors,
 		fillImg:       fillImg,
 		strokeImg:     strokeImg,
 		sortedHexes:   hexes,
@@ -74,6 +75,7 @@ func NewHexRenderer(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, h
 
 func (r *HexRenderer) RenderMapImage(towerHexes []hexmap.Hex) {
 	r.mapImage.Clear()
+	r.mapImage.Fill(r.colors.BackgroundColor)
 
 	towerHexSet := make(map[hexmap.Hex]struct{})
 	for _, hex := range towerHexes {
@@ -89,21 +91,21 @@ func (r *HexRenderer) RenderMapImage(towerHexes []hexmap.Hex) {
 	}
 }
 
-func (r *HexRenderer) Draw(screen *ebiten.Image, wallHexes, typeAHexes, typeBHexes []hexmap.Hex, renderSystem *system.RenderSystem, gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GameState, cancelDrag func()) {
+func (r *HexRenderer) Draw(screen *ebiten.Image, wallHexes, typeAHexes, typeBHexes []hexmap.Hex, outlineColors TowerOutlineColors, renderSystem *system.RenderSystem, gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
 	screen.DrawImage(r.mapImage, nil)
 
 	// Отрисовка обводки с учетом приоритета: Белый < Красный < Желтый
 	// 1. Стены (белый)
 	for _, hex := range wallHexes {
-		r.drawTowerOutline(screen, hex, config.TowerStrokeColor)
+		r.drawTowerOutline(screen, hex, outlineColors.WallColor)
 	}
 	// 2. Башни типа A (красный)
 	for _, hex := range typeAHexes {
-		r.drawTowerOutline(screen, hex, config.TowerAStrokeColor)
+		r.drawTowerOutline(screen, hex, outlineColors.TypeAColor)
 	}
 	// 3. Башни типа B (желтый)
 	for _, hex := range typeBHexes {
-		r.drawTowerOutline(screen, hex, config.TowerBStrokeColor)
+		r.drawTowerOutline(screen, hex, outlineColors.TypeBColor)
 	}
 
 	renderSystem.Draw(screen, gameTime, isDragging, sourceTowerID, hiddenLineID, gameState, cancelDrag)
@@ -111,8 +113,8 @@ func (r *HexRenderer) Draw(screen *ebiten.Image, wallHexes, typeAHexes, typeBHex
 
 func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex, towerHexSet map[hexmap.Hex]struct{}) {
 	x, y := hex.ToPixel(r.hexSize)
-	x += float64(r.screenWidth) / 2
-	y += float64(r.screenHeight) / 2
+	x += r.offsetX
+	y += r.offsetY
 
 	path := vector.Path{}
 	for i := 0; i < 6; i++ {
@@ -130,7 +132,7 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex, towerHex
 	tile := r.hexMap.Tiles[hex]
 	var fillColor color.RGBA
 	var coordsTextColor color.RGBA
-	var checkpointNumTextColor = color.RGBA{255, 255, 0, 255}
+	checkpointNumTextColor := r.colors.CheckpointTextColor
 
 	isCurrentHexCheckpoint := false
 	if _, isCheckpoint := r.checkpointMap[hex]; isCheckpoint {
@@ -139,37 +141,37 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex, towerHex
 	_, isTower := towerHexSet[hex]
 
 	if hex == r.hexMap.Entry {
-		fillColor = config.EntryColor
-		coordsTextColor = config.TextDarkColor
+		fillColor = r.colors.EntryColor
+		coordsTextColor = r.colors.TextDarkColor
 	} else if hex == r.hexMap.Exit {
-		fillColor = config.ExitColor
-		coordsTextColor = config.TextDarkColor
+		fillColor = r.colors.ExitColor
+		coordsTextColor = r.colors.TextDarkColor
 	} else if isCurrentHexCheckpoint {
 		fillColor = color.RGBA{
-			R: config.PassableColor.R / 2,
-			G: config.PassableColor.G / 2,
-			B: config.PassableColor.B / 2,
-			A: config.PassableColor.A,
+			R: r.colors.PassableColor.R / 2,
+			G: r.colors.PassableColor.G / 2,
+			B: r.colors.PassableColor.B / 2,
+			A: r.colors.PassableColor.A,
 		}
 		coordsTextColor = color.RGBA{
-			R: config.TextLightColor.R / 2,
-			G: config.TextLightColor.G / 2,
-			B: config.TextLightColor.B / 2,
-			A: config.TextLightColor.A,
+			R: r.colors.TextLightColor.R / 2,
+			G: r.colors.TextLightColor.G / 2,
+			B: r.colors.TextLightColor.B / 2,
+			A: r.colors.TextLightColor.A,
 		}
 	} else if tile.Passable || isTower { // Treat tower hexes as passable for coloring
-		fillColor = config.PassableColor
+		fillColor = r.colors.PassableColor
 		if (fillColor.R+fillColor.G+fillColor.B)/3 > 128 {
-			coordsTextColor = config.TextDarkColor
+			coordsTextColor = r.colors.TextDarkColor
 		} else {
-			coordsTextColor = config.TextLightColor
+			coordsTextColor = r.colors.TextLightColor
 		}
 	} else {
-		fillColor = config.ImpassableColor
+		fillColor = r.colors.ImpassableColor
 		if (fillColor.R+fillColor.G+fillColor.B)/3 > 128 {
-			coordsTextColor = config.TextDarkColor
+			coordsTextColor = r.colors.TextDarkColor
 		} else {
-			coordsTextColor = config.TextLightColor
+			coordsTextColor = r.colors.TextLightColor
 		}
 	}
 
@@ -221,8 +223,8 @@ func (r *HexRenderer) drawHexFill(target *ebiten.Image, hex hexmap.Hex, towerHex
 
 func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, towerHexSet map[hexmap.Hex]struct{}) {
 	x, y := hex.ToPixel(r.hexSize)
-	x += float64(r.screenWidth) / 2
-	y += float64(r.screenHeight) / 2
+	x += r.offsetX
+	y += r.offsetY
 
 	path := vector.Path{}
 	for i := 0; i < 6; i++ {
@@ -241,13 +243,13 @@ func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, tower
 	_, isTower := towerHexSet[hex]
 	var fillColor color.RGBA
 	if tile.Passable || isTower {
-		fillColor = config.PassableColor
+		fillColor = r.colors.PassableColor
 	} else {
-		fillColor = config.ImpassableColor
+		fillColor = r.colors.ImpassableColor
 	}
 
 	r.strokeVs, r.strokeIs = path.AppendVerticesAndIndicesForStroke(r.strokeVs[:0], r.strokeIs[:0], &vector.StrokeOptions{
-		Width: float32(config.StrokeWidth),
+		Width: r.colors.StrokeWidth,
 	})
 
 	strokeColor := color.RGBA{
@@ -271,8 +273,8 @@ func (r *HexRenderer) drawHexOutline(target *ebiten.Image, hex hexmap.Hex, tower
 // drawTowerOutline рисует обводку для гекса башни заданным цветом
 func (r *HexRenderer) drawTowerOutline(target *ebiten.Image, hex hexmap.Hex, strokeColor color.Color) {
 	x, y := hex.ToPixel(r.hexSize)
-	x += float64(r.screenWidth) / 2
-	y += float64(r.screenHeight) / 2
+	x += r.offsetX
+	y += r.offsetY
 
 	path := vector.Path{}
 	for i := 0; i < 6; i++ {
@@ -288,7 +290,7 @@ func (r *HexRenderer) drawTowerOutline(target *ebiten.Image, hex hexmap.Hex, str
 	path.Close()
 
 	r.strokeVs, r.strokeIs = path.AppendVerticesAndIndicesForStroke(r.strokeVs[:0], r.strokeIs[:0], &vector.StrokeOptions{
-		Width: float32(config.StrokeWidth),
+		Width: r.colors.StrokeWidth,
 	})
 
 	// Применяем переданный цвет
@@ -313,7 +315,11 @@ func min(a, b int) int {
 
 
 func (r *HexRenderer) GetHexAt(x, y int) hexmap.Hex {
-	return hexmap.PixelToHex(float64(x-r.screenWidth/2), float64(y-r.screenHeight/2), r.hexSize)
+	// This function is now a bit tricky because it does the reverse of the internal utils.
+	// It's not currently used, but to make it correct, we'd do this:
+	localX := float64(x) - r.offsetX
+	localY := float64(y) - r.offsetY
+	return hexmap.PixelToHex(localX, localY, r.hexSize)
 }
 
 func (r *HexRenderer) GetMapImage() *ebiten.Image {

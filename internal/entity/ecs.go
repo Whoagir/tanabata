@@ -27,7 +27,7 @@ type ECS struct {
 	SlowEffects   map[types.EntityID]*component.SlowEffect
 	PoisonEffects map[types.EntityID]*component.PoisonEffect
 	Wave          *component.Wave
-	GameState     component.GameState
+	GameState     *component.GameState
 }
 
 func NewECS() *ECS {
@@ -51,7 +51,10 @@ func NewECS() *ECS {
 		SlowEffects:   make(map[types.EntityID]*component.SlowEffect),
 		PoisonEffects: make(map[types.EntityID]*component.PoisonEffect),
 		Wave:          nil,
-		GameState:     component.BuildState,
+		GameState: &component.GameState{
+			Phase:        component.BuildState,
+			TowersToKeep: 2, // 1 miner + 1 attacker
+		},
 	}
 }
 

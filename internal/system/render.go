@@ -46,7 +46,7 @@ func NewRenderSystem(ecs *entity.ECS, tt *opentype.Font) *RenderSystem {
 	return &RenderSystem{ecs: ecs, fontFace: fontFace, uiFontFace: uiFontFace}
 }
 
-func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GameState, cancelDrag func()) {
+func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
 	s.drawPulsingOres(screen, gameTime)
 	s.drawEntities(screen, gameTime)
 	s.drawLines(screen, hiddenLineID) // Передаем ID скрытой линии

@@ -4,8 +4,11 @@ package component
 import "go-tower-defense/pkg/hexmap"
 
 type Tower struct {
-	Type     int        // Тип башни (0 - Red, 1 - Green, etc.)
-	Range    int        // Радиус действия
-	Hex      hexmap.Hex // Гекс, на котором стоит башня
-	IsActive bool       // Активна ли башня (стреляет или просто стена)
+	DefID       string     // ID из towers.json
+	Type        int        // Тип башни (0 - Red, 1 - Green, etc.)
+	Range       int        // Радиус действия
+	Hex         hexmap.Hex // Гекс, на котором стоит башня
+	IsActive    bool       // Активна ли башня (стреляет или просто стена)
+	IsTemporary bool       // Временная ли башня (для механики выбора)
+	IsSelected  bool       // Выбрана ли башня игроком
 }

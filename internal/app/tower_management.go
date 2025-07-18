@@ -7,10 +7,14 @@ import (
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/internal/types"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"log"
 	"math/rand"
 )
+
+
+
 
 // PlaceTower attempts to place a tower at the given hex.
 func (g *Game) PlaceTower(hex hexmap.Hex) bool {
@@ -25,6 +29,11 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	}
 
 	id := g.createTowerEntity(hex, towerID)
+	tower := g.ECS.Towers[id]
+	tower.IsTemporary = true
+	if tower.Type == config.TowerTypeMiner {
+		tower.IsSelected = true // Шахтеры выбираются автоматически
+	}
 
 	tile := g.HexMap.Tiles[hex]
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
@@ -33,7 +42,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	if g.DebugTowerType == config.TowerTypeNone {
 		g.towersBuilt++
 		if g.towersBuilt >= config.MaxTowersInBuildPhase {
-			g.StateSystem.SwitchToWaveState()
+			g.ECS.GameState.Phase = component.TowerSelectionState // <-- Переключаемся в режим выбора
 		}
 	} else {
 		// Reset debug mode after placing the tower
@@ -49,7 +58,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 
 // RemoveTower removes a tower from the given hex.
 func (g *Game) RemoveTower(hex hexmap.Hex) bool {
-	if g.ECS.GameState != component.BuildState {
+	if g.ECS.GameState.Phase != component.BuildState {
 		return false
 	}
 
@@ -86,7 +95,7 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 }
 
 func (g *Game) canPlaceTower(hex hexmap.Hex) bool {
-	if g.ECS.GameState != component.BuildState || g.towersBuilt >= config.MaxTowersInBuildPhase {
+	if g.ECS.GameState.Phase != component.BuildState || g.towersBuilt >= config.MaxTowersInBuildPhase {
 		return false
 	}
 
@@ -97,9 +106,7 @@ func (g *Game) canPlaceTower(hex hexmap.Hex) bool {
 
 	for id, pos := range g.ECS.Positions {
 		if _, hasTower := g.ECS.Towers[id]; hasTower {
-			px, py := hex.ToPixel(config.HexSize)
-			px += float64(config.ScreenWidth) / 2
-			py += float64(config.ScreenHeight) / 2
+			px, py := utils.HexToScreen(hex)
 			if pos.X == px && pos.Y == py {
 				return false
 			}
@@ -143,9 +150,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 	}
 
 	id := g.ECS.NewEntity()
-	px, py := hex.ToPixel(config.HexSize)
-	px += float64(config.ScreenWidth) / 2
-	py += float64(config.ScreenHeight) / 2
+	px, py := utils.HexToScreen(hex)
 	g.ECS.Positions[id] = &component.Position{X: px, Y: py}
 
 	// The old numeric type is now a string ID, but we still need the numeric one for some legacy logic.
@@ -153,6 +158,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 	numericType := g.mapTowerIDToNumericType(def.ID)
 
 	g.ECS.Towers[id] = &component.Tower{
+		DefID:    towerDefID, // <-- Сохраняем ID определения
 		Type:     numericType, // TODO: Refactor to use string ID or defs.TowerType
 		Hex:      hex,
 		IsActive: false,
@@ -225,22 +231,15 @@ func (g *Game) determineTowerID() string {
 	waveMod10 := (g.Wave - 1) % 10
 	positionInBlock := g.towersBuilt
 
-	if waveMod10 < 4 { // Pattern: A, B, D, D, D
+	if waveMod10 < 4 { // Pattern: B, A, A, A, A
 		switch positionInBlock {
 		case 0:
-			return attackerIDs[rand.Intn(len(attackerIDs))]
-		case 1:
 			return "TOWER_MINER"
 		default:
-			return "TOWER_WALL"
-		}
-	} else { // Pattern: A, A, D, D, D
-		switch positionInBlock {
-		case 0, 1:
 			return attackerIDs[rand.Intn(len(attackerIDs))]
-		default:
-			return "TOWER_WALL"
 		}
+	} else { // Pattern: A, A, A, A, A
+		return attackerIDs[rand.Intn(len(attackerIDs))]
 	}
 }
 

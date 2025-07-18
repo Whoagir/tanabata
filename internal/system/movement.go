@@ -2,9 +2,8 @@
 package system
 
 import (
-	// Добавляем импорт для доступа к компонентам
-	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/entity"
+	"go-tower-defense/internal/utils"
 	"math"
 )
 
@@ -25,9 +24,7 @@ func (s *MovementSystem) Update(deltaTime float64) {
 					continue
 				}
 				targetHex := path.Hexes[path.CurrentIndex]
-				tx, ty := targetHex.ToPixel(config.HexSize)
-				tx += float64(config.ScreenWidth) / 2
-				ty += float64(config.ScreenHeight) / 2
+				tx, ty := utils.HexToScreen(targetHex)
 
 				dx := tx - pos.X
 				dy := ty - pos.Y

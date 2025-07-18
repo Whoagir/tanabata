@@ -5,7 +5,8 @@ import "image/color"
 
 const (
 	ScreenWidth           = 1200
-	ScreenHeight          = 900
+	ScreenHeight          = 993
+	MapCenterOffsetY      = -57 // Смещение центра карты вверх
 	HexSize               = 19.0 // test
 	MapRadius             = 13   // test
 	BuildPhaseDuration    = 30.0
@@ -81,6 +82,7 @@ var (
 	TextDarkColor     = color.RGBA{20, 20, 30, 255}
 	BuildStateColor   = color.RGBA{70, 130, 180, 220}
 	WaveStateColor    = color.RGBA{220, 60, 60, 220}
+	SelectionStateColor = color.RGBA{255, 215, 0, 255} // Золотой/желтый для выбора
 	IndicatorStroke   = color.RGBA{240, 240, 240, 255}
 	BaseColor         = color.RGBA{50, 205, 50, 255}
 	EnemyColor        = color.RGBA{0, 0, 0, 255}

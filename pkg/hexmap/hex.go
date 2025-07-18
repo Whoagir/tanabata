@@ -2,7 +2,6 @@
 package hexmap
 
 import (
-	"go-tower-defense/internal/config"
 	"go-tower-defense/pkg/utils"
 )
 
@@ -25,10 +24,8 @@ func (h Hex) ToPixel(hexSize float64) (x, y float64) {
 	return
 }
 
-// PixelToHex конвертирует пиксельные координаты в гекс
+// PixelToHex конвертирует локальные пиксельные координаты (относительно центра карты) в гекс
 func PixelToHex(x, y, hexSize float64) Hex {
-	x -= float64(config.ScreenWidth) / 2
-	y -= float64(config.ScreenHeight) / 2
 	q := (Sqrt3/3*x - 1.0/3*y) / hexSize
 	r := (2.0 / 3 * y) / hexSize
 	return axialRound(q, r)

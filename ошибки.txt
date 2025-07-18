@@ -1,0 +1,526 @@
+[{
+	"resource": "/c:/go_project/go-tower-defense/internal/app/game.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 246,
+	"startColumn": 21,
+	"endLineNumber": 246,
+	"endColumn": 26,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/app/game.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MismatchedTypes",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MismatchedTypes"
+		}
+	},
+	"severity": 8,
+	"message": "invalid operation: g.ECS.GameState == component.BuildState (mismatched types *component.GameState and component.GameState)",
+	"source": "compiler",
+	"startLineNumber": 335,
+	"startColumn": 24,
+	"endLineNumber": 335,
+	"endColumn": 44,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "tower.IsTemporary undefined (type *component.Tower has no field or method IsTemporary)",
+	"source": "compiler",
+	"startLineNumber": 37,
+	"startColumn": 10,
+	"endLineNumber": 37,
+	"endColumn": 21,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "tower.IsSelected undefined (type *component.Tower has no field or method IsSelected)",
+	"source": "compiler",
+	"startLineNumber": 39,
+	"startColumn": 11,
+	"endLineNumber": 39,
+	"endColumn": 21,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 44,
+	"startColumn": 18,
+	"endLineNumber": 44,
+	"endColumn": 23,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "UndeclaredImportedName",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "UndeclaredImportedName"
+		}
+	},
+	"severity": 8,
+	"message": "undefined: component.TowerSelectionState",
+	"source": "compiler",
+	"startLineNumber": 44,
+	"startColumn": 36,
+	"endLineNumber": 44,
+	"endColumn": 55,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.ECS.GameState.TowersToKeep undefined (type *component.GameState has no field or method TowersToKeep)",
+	"source": "compiler",
+	"startLineNumber": 45,
+	"startColumn": 18,
+	"endLineNumber": 45,
+	"endColumn": 30,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 110,
+	"startColumn": 21,
+	"endLineNumber": 110,
+	"endColumn": 26,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 147,
+	"startColumn": 21,
+	"endLineNumber": 147,
+	"endColumn": 26,
+	"origin": "extHost1"
+},{
+	"resource": "/C:/go_project/go-tower-defense/internal/app/tower_management.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingLitField",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingLitField"
+		}
+	},
+	"severity": 8,
+	"message": "unknown field Attack in struct literal of type component.Combat",
+	"source": "compiler",
+	"startLineNumber": 222,
+	"startColumn": 4,
+	"endLineNumber": 222,
+	"endColumn": 10,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/entity/ecs.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "InvalidLit",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "InvalidLit"
+		}
+	},
+	"severity": 8,
+	"message": "invalid composite literal type component.GameState",
+	"source": "compiler",
+	"startLineNumber": 54,
+	"startColumn": 19,
+	"endLineNumber": 54,
+	"endColumn": 67,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/state/game_state.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.game.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 97,
+	"startColumn": 26,
+	"endLineNumber": 97,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/state/game_state.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.game.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 103,
+	"startColumn": 26,
+	"endLineNumber": 103,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/state/game_state.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.game.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 250,
+	"startColumn": 26,
+	"endLineNumber": 250,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/state/game_state.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.game.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 268,
+	"startColumn": 224,
+	"endLineNumber": 268,
+	"endColumn": 229,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/state/game_state.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "g.game.ECS.GameState.Phase undefined (type *component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 270,
+	"startColumn": 30,
+	"endLineNumber": 270,
+	"endColumn": 35,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/system/combat.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "combat.Attack undefined (type *component.Combat has no field or method Attack)",
+	"source": "compiler",
+	"startLineNumber": 75,
+	"startColumn": 17,
+	"endLineNumber": 75,
+	"endColumn": 23,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/system/combat.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "combat.Attack undefined (type *component.Combat has no field or method Attack)",
+	"source": "compiler",
+	"startLineNumber": 118,
+	"startColumn": 12,
+	"endLineNumber": 118,
+	"endColumn": 18,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/system/combat.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "combat.Attack undefined (type *component.Combat has no field or method Attack)",
+	"source": "compiler",
+	"startLineNumber": 124,
+	"startColumn": 16,
+	"endLineNumber": 124,
+	"endColumn": 22,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/system/combat.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "combat.Attack undefined (type *component.Combat has no field or method Attack)",
+	"source": "compiler",
+	"startLineNumber": 125,
+	"startColumn": 35,
+	"endLineNumber": 125,
+	"endColumn": 41,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/system/render.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "MissingFieldOrMethod",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "MissingFieldOrMethod"
+		}
+	},
+	"severity": 8,
+	"message": "gameState.Phase undefined (type component.GameState has no field or method Phase)",
+	"source": "compiler",
+	"startLineNumber": 57,
+	"startColumn": 15,
+	"endLineNumber": 57,
+	"endColumn": 20,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/system/state.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "UndeclaredName",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "UndeclaredName"
+		}
+	},
+	"severity": 8,
+	"message": "undefined: entity",
+	"source": "compiler",
+	"startLineNumber": 11,
+	"startColumn": 19,
+	"endLineNumber": 11,
+	"endColumn": 25,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/internal/system/state.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "UndeclaredName",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "UndeclaredName"
+		}
+	},
+	"severity": 8,
+	"message": "undefined: entity",
+	"source": "compiler",
+	"startLineNumber": 16,
+	"startColumn": 26,
+	"endLineNumber": 16,
+	"endColumn": 32,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/pkg/render/hex_renderer.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "BrokenImport",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/internal/typesinternal",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "BrokenImport"
+		}
+	},
+	"severity": 8,
+	"message": "could not import go-tower-defense/internal/system (missing metadata for import of \"go-tower-defense/internal/system\")",
+	"source": "compiler",
+	"startLineNumber": 7,
+	"startColumn": 2,
+	"endLineNumber": 7,
+	"endColumn": 36,
+	"origin": "extHost1"
+},{
+	"resource": "/c:/go_project/go-tower-defense/pkg/hexmap/utils.go",
+	"owner": "_generated_diagnostic_collection_name_#1",
+	"code": {
+		"value": "unusedparams",
+		"target": {
+			"$mid": 1,
+			"path": "/golang.org/x/tools/gopls/internal/analysis/unusedparams",
+			"scheme": "https",
+			"authority": "pkg.go.dev",
+			"fragment": "unusedparams"
+		}
+	},
+	"severity": 2,
+	"message": "unused parameter: y",
+	"source": "unusedparams",
+	"startLineNumber": 59,
+	"startColumn": 21,
+	"endLineNumber": 59,
+	"endColumn": 22,
+	"origin": "extHost1"
+}]

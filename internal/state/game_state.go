@@ -6,10 +6,13 @@ import (
 	game "go-tower-defense/internal/app"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/types"
 	"go-tower-defense/internal/ui"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"go-tower-defense/pkg/render"
 	"image/color"
+	"math"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -24,6 +27,7 @@ type GameState struct {
 	hexMap         *hexmap.HexMap
 	renderer       *render.HexRenderer
 	indicator      *ui.StateIndicator
+	infoPanel      *ui.InfoPanel // <-- Новая панель
 	lastClickTime  time.Time
 	lastUpdateTime time.Time
 }
@@ -31,23 +35,46 @@ type GameState struct {
 func NewGameState(sm *StateMachine) *GameState {
 	hexMap := hexmap.NewHexMap()
 	gameLogic := game.NewGame(hexMap)
-	// Передаем актуальные данные о руде в рендерер
-	renderer := render.NewHexRenderer(hexMap, gameLogic.GetOreHexes(), config.HexSize, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace)
+
+	// Создаем и заполняем структуру с цветами для рендерера
+	mapColors := &render.MapColors{
+		BackgroundColor:      config.BackgroundColor,
+		PassableColor:        config.PassableColor,
+		ImpassableColor:      config.ImpassableColor,
+		EntryColor:           config.EntryColor,
+		ExitColor:            config.ExitColor,
+		TextDarkColor:        config.TextDarkColor,
+		TextLightColor:       config.TextLightColor,
+		CheckpointTextColor:  color.RGBA{255, 255, 0, 255}, // Example, can be moved to config
+		StrokeWidth:          float32(config.StrokeWidth),
+	}
+
+	// Передаем актуальные данные о руде и цвета в рендерер
+	offsetX := float64(config.ScreenWidth) / 2
+	offsetY := float64(config.ScreenHeight)/2 + config.MapCenterOffsetY
+	renderer := render.NewHexRenderer(hexMap, gameLogic.GetOreHexes(), config.HexSize, offsetX, offsetY, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace, mapColors)
 	renderer.RenderMapImage(gameLogic.GetAllTowerHexes()) // <-- Явный вызов отрисовки карты
+
 	indicator := ui.NewStateIndicator(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
 	)
-	return &GameState{
+	// Создаем панель
+	infoPanel := ui.NewInfoPanel(gameLogic.FontFace, gameLogic.FontFace) // Используем один и тот же шрифт
+
+	gs := &GameState{
 		sm:             sm,
 		game:           gameLogic,
 		hexMap:         hexMap,
 		renderer:       renderer,
 		indicator:      indicator,
+		infoPanel:      infoPanel, // <-- Инициализация
 		lastClickTime:  time.Now(),
 		lastUpdateTime: time.Now(),
 	}
+
+	return gs
 }
 
 func (g *GameState) Enter() {
@@ -56,6 +83,7 @@ func (g *GameState) Enter() {
 
 func (g *GameState) Update(deltaTime float64) {
 	g.game.PauseButton.SetPaused(false)
+	g.infoPanel.Update() // Обновляем панель
 
 	if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
 		g.sm.SetState(NewPauseState(g.sm, g))
@@ -63,13 +91,13 @@ func (g *GameState) Update(deltaTime float64) {
 	}
 
 	// --- Новая логика для режима перетаскивания ---
-	if g.game.ECS.GameState == component.BuildState && inpututil.IsKeyJustPressed(ebiten.KeyU) {
+	if g.game.ECS.GameState.Phase == component.BuildState && inpututil.IsKeyJustPressed(ebiten.KeyU) {
 		g.game.ToggleLineDragMode()
 	}
 	// --- Конец новой логики ---
 
 	// Handle debug tower selection
-	if g.game.ECS.GameState == component.BuildState {
+	if g.game.ECS.GameState.Phase == component.BuildState {
 		if inpututil.IsKeyJustPressed(ebiten.Key1) {
 			g.game.DebugTowerType = config.TowerTypePhysical // Represents any random attacker
 		}
@@ -83,35 +111,69 @@ func (g *GameState) Update(deltaTime float64) {
 
 	g.game.Update(deltaTime)
 
-	// Обработка левой кнопки
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-		if time.Since(g.lastClickTime) > time.Duration(config.ClickDebounceTime)*time.Millisecond {
-			x, y := ebiten.CursorPosition()
-			g.handleClick(x, y, ebiten.MouseButtonLeft)
-			g.lastClickTime = time.Now()
+	// Обработка ле��ой кнопки
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		// Проверяем клик по UI элементам в первую очередь
+		if g.isClickOnUI(x, y) {
+			g.handleUIClick(x, y)
+		} else {
+			// Если не по UI, то это игровой клик
+			g.handleGameClick(x, y, ebiten.MouseButtonLeft)
 		}
-		mx, my := ebiten.CursorPosition()
-		if g.isInsideSpeedButton(float32(mx), float32(my)) {
-			if time.Since(g.game.SpeedButton.LastToggleTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
-				g.game.HandleSpeedClick()
-			}
-		}
-		if g.isInsidePauseButton(float32(mx), float32(my)) {
-			if time.Since(g.game.PauseButton.LastToggleTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
-				g.handlePauseClick()
-			}
-		}
+		g.lastClickTime = time.Now()
 	}
 
 	// Обработка правой кнопки
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) {
-		if time.Since(g.lastClickTime) > time.Duration(config.ClickDebounceTime)*time.Millisecond {
-			x, y := ebiten.CursorPosition()
-			g.handleClick(x, y, ebiten.MouseButtonRight)
-			g.lastClickTime = time.Now()
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+		x, y := ebiten.CursorPosition()
+		// Правый клик всегда игровой (например, для отмены или удаления)
+		g.handleGameClick(x, y, ebiten.MouseButtonRight)
+		g.lastClickTime = time.Now()
+	}
+}
+
+// isClickOnUI ��роверяет, был ли клик по какому-либо элементу UI
+func (g *GameState) isClickOnUI(x, y int) bool {
+	mx, my := float32(x), float32(y)
+	if g.isInsideSpeedButton(mx, my) {
+		return true
+	}
+	if g.isInsidePauseButton(mx, my) {
+		return true
+	}
+	indicatorX, indicatorY, indicatorR := float64(g.indicator.X), float64(g.indicator.Y), float64(g.indicator.Radius)
+	if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
+		return true
+	}
+	// Проверяем, видим ли мы панель и находится ли клик внутри нее
+	if g.infoPanel.IsVisible && y > (config.ScreenHeight-150) { // 150 - высота панели
+		return true
+	}
+	return false
+}
+
+// handleUIClick обрабатывает клики, которые точно попали в UI
+func (g *GameState) handleUIClick(x, y int) {
+	mx, my := float32(x), float32(y)
+	if g.isInsideSpeedButton(mx, my) {
+		if time.Since(g.game.SpeedButton.LastToggleTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
+			g.game.HandleSpeedClick()
+		}
+	} else if g.isInsidePauseButton(mx, my) {
+		if time.Since(g.game.PauseButton.LastToggleTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
+			g.handlePauseClick()
+		}
+	} else {
+		indicatorX, indicatorY, indicatorR := float64(g.indicator.X), float64(g.indicator.Y), float64(g.indicator.Radius)
+		if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
+			if time.Since(g.indicator.LastClickTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
+				g.game.HandleIndicatorClick()
+				g.indicator.LastClickTime = time.Now()
+			}
 		}
 	}
-
+	// Клик по инфо-панели обрабатывается внутри самой панели (в будущем)
 }
 
 func (g *GameState) isInsidePauseButton(mx, my float32) bool {
@@ -129,24 +191,46 @@ func (g *GameState) isInsideSpeedButton(mx, my float32) bool {
 }
 
 func (g *GameState) handlePauseClick() {
-
-	g.game.HandlePauseClick()             // Обновляем только таймстампы
-	g.sm.SetState(NewPauseState(g.sm, g)) // Переключаемся в PauseState
+	g.game.HandlePauseClick()
+	g.sm.SetState(NewPauseState(g.sm, g))
 }
 
-func (g *GameState) handleClick(x, y int, button ebiten.MouseButton) {
-	// --- Логика для UI элементов ---
-	indicatorX, indicatorY, indicatorR := float64(g.indicator.X), float64(g.indicator.Y), float64(g.indicator.Radius)
-	if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
-		if button == ebiten.MouseButtonLeft && time.Since(g.indicator.LastClickTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
-			g.game.HandleIndicatorClick()
-			g.indicator.LastClickTime = time.Now()
+// findEntityAt a helper function to find an entity at a given screen coordinate.
+func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
+	// Проверяем башни
+	for id, pos := range g.game.ECS.Positions {
+		if _, isTower := g.game.ECS.Towers[id]; isTower {
+			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
+			if dist < config.HexSize*0.5 { // Примерный радиус клика
+				return id, true
+			}
 		}
-		return // Клик был по UI, выходим
+	}
+	// Проверяем врагов
+	for id, pos := range g.game.ECS.Positions {
+		if _, isEnemy := g.game.ECS.Enemies[id]; isEnemy {
+			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
+			if dist < config.HexSize*0.5 {
+				return id, true
+			}
+		}
+	}
+	return 0, false
+}
+
+func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
+	// --- Логика выбора сущности ---
+	if button == ebiten.MouseButtonLeft {
+		if entityID, found := g.findEntityAt(x, y); found {
+			g.infoPanel.SetTarget(entityID)
+			return // Клик был по сущности, выходим
+		} else {
+			g.infoPanel.Hide() // Клик по пустой местности, скрываем панель
+		}
 	}
 
 	// --- Основная игровая логика клика ---
-	hex := hexmap.PixelToHex(float64(x), float64(y), config.HexSize)
+	hex := utils.ScreenToHex(float64(x), float64(y))
 	if !g.hexMap.Contains(hex) {
 		return // Клик вне карты
 	}
@@ -160,7 +244,7 @@ func (g *GameState) handleClick(x, y int, button ebiten.MouseButton) {
 	}
 
 	// Стандартная логика для фазы строительства
-	if g.game.ECS.GameState == component.BuildState {
+	if g.game.ECS.GameState.Phase == component.BuildState {
 		if button == ebiten.MouseButtonLeft {
 			g.game.PlaceTower(hex)
 		} else if button == ebiten.MouseButtonRight {
@@ -170,19 +254,28 @@ func (g *GameState) handleClick(x, y int, button ebiten.MouseButton) {
 }
 
 func (g *GameState) Draw(screen *ebiten.Image) {
-	screen.Fill(config.BackgroundColor)
 	wallHexes, typeAHexes, typeBHexes := g.game.GetTowerHexesByType()
-	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState, g.game.CancelLineDrag)
+
+	outlineColors := render.TowerOutlineColors{
+		WallColor:  config.TowerStrokeColor,
+		TypeAColor: config.TowerAStrokeColor,
+		TypeBColor: config.TowerBStrokeColor,
+	}
+
+	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, outlineColors, g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
 	var stateColor color.Color
-	switch g.game.ECS.GameState {
+	switch g.game.ECS.GameState.Phase {
 	case component.BuildState:
 		stateColor = config.BuildStateColor
 	case component.WaveState:
 		stateColor = config.WaveStateColor
+	case component.TowerSelectionState:
+		stateColor = config.SelectionStateColor // Новый цвет
 	}
 	g.indicator.Draw(screen, stateColor)
 	g.game.SpeedButton.Draw(screen)
 	g.game.PauseButton.Draw(screen)
+	g.infoPanel.Draw(screen, g.game.ECS) // <-- Рисуем панель
 
 	// Debug text
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("Wave: %d", g.game.Wave))

@@ -7,4 +7,6 @@ const (
 	EnemyDestroyed EventType = "EnemyDestroyed" // Враг уничтожен
 	TowerRemoved   EventType = "TowerRemoved"
 	OreDepleted    EventType = "OreDepleted" // Руда истощена
+	BuildPhaseStarted EventType = "BuildPhaseStarted"
+	WavePhaseStarted EventType = "WavePhaseStarted"
 )

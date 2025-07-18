@@ -1,9 +1,15 @@
 package component
 
-// GameState — компонент для хранения состояния игры
-type GameState int
+type GamePhase int
 
 const (
-	BuildState GameState = iota
+	BuildState GamePhase = iota
 	WaveState
+	TowerSelectionState
 )
+
+// GameState — компонент для хранения состояния игры
+type GameState struct {
+	Phase        GamePhase
+	TowersToKeep int
+}

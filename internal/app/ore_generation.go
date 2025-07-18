@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"image/color"
 	"math"
@@ -163,9 +164,7 @@ func (g *Game) generateOre() {
 
 	for hex, power := range energyVeins {
 		id := g.ECS.NewEntity()
-		px, py := hex.ToPixel(config.HexSize)
-		px += float64(config.ScreenWidth) / 2
-		py += float64(config.ScreenHeight) / 2
+		px, py := utils.HexToScreen(hex)
 		g.ECS.Positions[id] = &component.Position{X: px, Y: py}
 		g.ECS.Ores[id] = &component.Ore{
 			Power:          power,
@@ -191,9 +190,10 @@ func generateEnergyCircles(area []hexmap.Hex, totalPower float64, hexSize float6
 
 	for remainingPower > 0 {
 		hex := area[rand.Intn(len(area))]
-		cx, cy := hex.ToPixel(hexSize)
-		cx += float64(config.ScreenWidth)/2 + (rand.Float64()*2-1)*hexSize/2
-		cy += float64(config.ScreenHeight)/2 + (rand.Float64()*2-1)*hexSize/2
+		cx, cy := utils.HexToScreen(hex)
+		// Add random jitter within the hex
+		cx += (rand.Float64()*2 - 1) * hexSize / 2
+		cy += (rand.Float64()*2 - 1) * hexSize / 2
 
 		// Ограничиваем энергию до 5-20% для большего количества кружков
 		power := float64((rand.Intn(4) + 1) * 5) // 5, 10, 15, 20%
@@ -219,9 +219,7 @@ func generateEnergyCircles(area []hexmap.Hex, totalPower float64, hexSize float6
 func (g *Game) getHexesInCircle(cx, cy, radius float64) []hexmap.Hex {
 	var hexes []hexmap.Hex
 	for hex := range g.HexMap.Tiles {
-		hx, hy := hex.ToPixel(config.HexSize)
-		hx += float64(config.ScreenWidth) / 2
-		hy += float64(config.ScreenHeight) / 2
+		hx, hy := utils.HexToScreen(hex)
 		dx := hx - cx
 		dy := hy - cy
 		if math.Sqrt(dx*dx+dy*dy) < radius+config.HexSize {
