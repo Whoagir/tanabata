@@ -250,6 +250,7 @@ wave - компонент для волны врагов
 │   │   ├── event.go //штука событий, то есть мы имеем события например удаление сущности 
 │   │   └── types.go //и вот мы в этой логике event как бы обрабатываем все 
 │   ├── interfaces
+│   │   ├── game.go
 │   │   └── game_context.go  // вынос общих штук, что бы не было цикличного импорта 
 │   ├── state
 │   │   ├── game_state.go  // основная стадия игры, тут много логики работы с ui, общая для фаз и тп
@@ -271,10 +272,14 @@ wave - компонент для волны врагов
 │   │   └── wave.go
 │   ├── types
 │   │   └── types.go// вроде геттер для EntityID
-│   └── ui
-│       ├── indicator.go // индикатор состояния игры, строительство или фаза игры
-│       ├── pause_button.go// кнопка паузы 
-│       └── speed_button.go// кнопка ускорения 
+│   ├── ui
+│   │   ├── indicator.go
+│   │   ├── info_panel.go
+│   │   ├── pause_button.go
+│   │   └── speed_button.go
+│   └── utils
+│       ├── coords.go
+│       └── union_find.go
 ├── pkg
 │   ├── hexmap
 │   │   ├── hex.go

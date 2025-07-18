@@ -42,6 +42,7 @@
 │   │   ├── event.go
 │   │   └── types.go
 │   ├── interfaces
+│   │   ├── game.go
 │   │   └── game_context.go
 │   ├── state
 │   │   ├── game_state.go
@@ -63,10 +64,14 @@
 │   │   └── wave.go
 │   ├── types
 │   │   └── types.go
-│   └── ui
-│       ├── indicator.go
-│       ├── pause_button.go
-│       └── speed_button.go
+│   ├── ui
+│   │   ├── indicator.go
+│   │   ├── info_panel.go
+│   │   ├── pause_button.go
+│   │   └── speed_button.go
+│   └── utils
+│       ├── coords.go
+│       └── union_find.go
 ├── pkg
 │   ├── hexmap
 │   │   ├── hex.go
@@ -92,4 +97,5 @@
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
 ├── енерация руды.txt
-└── информация.txt
+├── информация.txt
+└── ошибки.txt

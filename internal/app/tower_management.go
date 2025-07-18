@@ -42,6 +42,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	if g.DebugTowerType == config.TowerTypeNone {
 		g.towersBuilt++
 		if g.towersBuilt >= config.MaxTowersInBuildPhase {
+			g.ECS.GameState.TowersToKeep = 2 // Устанавливаем, сколько башен нужно сохранить
 			g.ECS.GameState.Phase = component.TowerSelectionState // <-- Переключаемся в режим выбора
 		}
 	} else {
@@ -58,6 +59,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 
 // RemoveTower removes a tower from the given hex.
 func (g *Game) RemoveTower(hex hexmap.Hex) bool {
+	// Удаля��ь можно только в фазе строительства.
 	if g.ECS.GameState.Phase != component.BuildState {
 		return false
 	}
@@ -72,7 +74,13 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 		}
 	}
 
+	// Если башня найдена, проверяем, не временная ли она.
 	if towerIDToRemove != 0 {
+		// Запрещаем удаление временных башен (в процессе выбора).
+		if towerToRemove.IsTemporary {
+			return false
+		}
+
 		// Get neighbors before deleting the entity
 		neighbors := g.findPotentialNeighbors(towerToRemove.Hex, towerToRemove.Type)
 

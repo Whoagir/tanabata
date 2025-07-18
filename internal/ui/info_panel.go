@@ -3,6 +3,7 @@ package ui
 
 import (
 	"fmt"
+	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
@@ -12,6 +13,7 @@ import (
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"golang.org/x/image/font"
@@ -27,6 +29,12 @@ const (
 	regularFontSize = 14
 )
 
+// Button представляет кликабельную кнопку в UI.
+type Button struct {
+	Rect image.Rectangle
+	Text string
+}
+
 // InfoPanel displays information about a selected entity.
 type InfoPanel struct {
 	IsVisible     bool
@@ -35,6 +43,7 @@ type InfoPanel struct {
 	titleFontFace font.Face
 	currentY      float64
 	targetY       float64
+	SelectButton  Button
 }
 
 // NewInfoPanel creates a new information panel.
@@ -58,7 +67,8 @@ func (p *InfoPanel) Hide() {
 	p.targetY = config.ScreenHeight
 }
 
-func (p *InfoPanel) Update() {
+func (p *InfoPanel) Update(ecs *entity.ECS) {
+	// Анимация панели
 	if p.currentY != p.targetY {
 		diff := p.targetY - p.currentY
 		if math.Abs(diff) < animationSpeed {
@@ -72,6 +82,24 @@ func (p *InfoPanel) Update() {
 		if p.currentY >= config.ScreenHeight {
 			p.IsVisible = false
 			p.TargetEntity = 0
+		}
+	}
+
+	// Обработка клика по кнопке выбора
+	if p.IsVisible && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		cursorX, cursorY := ebiten.CursorPosition()
+		clickPoint := image.Point{X: cursorX, Y: cursorY}
+		if clickPoint.In(p.SelectButton.Rect) {
+			p.handleSelectClick(ecs)
+		}
+	}
+}
+
+func (p *InfoPanel) handleSelectClick(ecs *entity.ECS) {
+	if tower, ok := ecs.Towers[p.TargetEntity]; ok {
+		// Можно выбирать только временные атакующие башни
+		if tower.IsTemporary && tower.Type != config.TowerTypeMiner {
+			tower.IsSelected = !tower.IsSelected
 		}
 	}
 }
@@ -98,6 +126,38 @@ func (p *InfoPanel) Draw(screen *ebiten.Image, ecs *entity.ECS) {
 	}
 
 	p.drawEntityInfo(screen, ecs, panelRect.Min.X+15, panelRect.Min.Y+15)
+
+	// Рисуем кнопку выбора, если нужно
+	if ecs.GameState.Phase == component.TowerSelectionState {
+		if tower, ok := ecs.Towers[p.TargetEntity]; ok && tower.IsTemporary && tower.Type != config.TowerTypeMiner {
+			p.drawSelectButton(screen, panelRect, tower.IsSelected)
+		}
+	}
+}
+
+func (p *InfoPanel) drawSelectButton(screen *ebiten.Image, panelRect image.Rectangle, isSelected bool) {
+	btnWidth := 150
+	btnHeight := 40
+	p.SelectButton.Rect = image.Rect(
+		panelRect.Max.X-btnWidth-20,
+		panelRect.Max.Y-btnHeight-20,
+		panelRect.Max.X-20,
+		panelRect.Max.Y-20,
+	)
+
+	btnColor := color.RGBA{R: 100, G: 60, B: 60, A: 255}
+	p.SelectButton.Text = "Выбрать"
+	if isSelected {
+		btnColor = color.RGBA{R: 60, G: 120, B: 60, A: 255}
+		p.SelectButton.Text = "Выбрано"
+	}
+
+	vector.DrawFilledRect(screen, float32(p.SelectButton.Rect.Min.X), float32(p.SelectButton.Rect.Min.Y), float32(btnWidth), float32(btnHeight), btnColor, true)
+
+	textBounds := text.BoundString(p.fontFace, p.SelectButton.Text)
+	textX := p.SelectButton.Rect.Min.X + (btnWidth-textBounds.Dx())/2
+	textY := p.SelectButton.Rect.Min.Y + (btnHeight-textBounds.Dy())/2 - textBounds.Min.Y
+	text.Draw(screen, p.SelectButton.Text, p.fontFace, textX, textY, color.White)
 }
 
 func (p *InfoPanel) drawEntityInfo(screen *ebiten.Image, ecs *entity.ECS, startX, startY int) {

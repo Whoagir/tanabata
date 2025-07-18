@@ -4,6 +4,7 @@ package app
 import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/internal/system"
@@ -115,6 +116,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	// Создаем слушателя и подписываем его на события
 	listener := &GameEventListener{game: g}
 	eventDispatcher.Subscribe(event.OreDepleted, listener)
+	eventDispatcher.Subscribe(event.WaveEnded, listener)
 
 	g.placeInitialStones()
 
@@ -185,7 +187,8 @@ type GameEventListener struct {
 
 // OnEvent реализует интерфейс event.Listener.
 func (l *GameEventListener) OnEvent(e event.Event) {
-	if e.Type == event.OreDepleted {
+	switch e.Type {
+	case event.OreDepleted:
 		// log.Printf("[Log] Game: Received OreDepleted event for ore %d. Re-evaluating power grid.\n", e.Data.(types.EntityID))
 
 		// 1. Определить новый набор запитанных башен от оставшихся источников руды.
@@ -205,6 +208,8 @@ func (l *GameEventListener) OnEvent(e event.Event) {
 
 		// 4. Обновить визуальное представление всех башен (цвет).
 		l.game.updateAllTowerAppearances()
+	case event.WaveEnded:
+		l.game.StateSystem.SwitchToBuildState()
 	}
 }
 
@@ -679,4 +684,40 @@ func (g *Game) CancelLineDrag() {
 	g.dragOriginalParentID = 0
 	g.hiddenLineID = 0 // "Показываем" линию обратно
 	g.DebugInfo = nil
+}
+
+// FinalizeTowerSelection обрабатывает окончание фазы выбора башен.
+func (g *Game) FinalizeTowerSelection() {
+	for id, tower := range g.ECS.Towers {
+		if !tower.IsTemporary {
+			continue
+		}
+
+		if tower.IsSelected {
+			// Башня выбрана, делаем ее постоянной
+			tower.IsTemporary = false
+		} else {
+			// Башня не выбрана, превращаем ее в стену
+			// Сначала удаляем компоненты, которые стене не нужны
+			delete(g.ECS.Combats, id)
+			delete(g.ECS.Auras, id)
+
+			// Обновляем основные компоненты
+			wallDef := defs.TowerLibrary["TOWER_WALL"]
+			tower.DefID = "TOWER_WALL"
+			tower.Type = config.TowerTypeWall
+			tower.IsTemporary = false
+			tower.IsSelected = false
+
+			if renderable, ok := g.ECS.Renderables[id]; ok {
+				renderable.Color = wallDef.Visuals.Color
+				renderable.Radius = float32(config.HexSize * wallDef.Visuals.RadiusFactor)
+			}
+		}
+	}
+	// Сбрасываем счетчик построенных башен для следующей фазы
+	g.towersBuilt = 0
+	// Пересчитываем ауры и сеть после всех изменений
+	g.AuraSystem.RecalculateAuras()
+	g.rebuildEnergyNetwork()
 }
