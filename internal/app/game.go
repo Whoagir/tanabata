@@ -45,6 +45,7 @@ type Game struct {
 	StatusEffectSystem        *system.StatusEffectSystem
 	EnvironmentalDamageSystem *system.EnvironmentalDamageSystem
 	VisualEffectSystem        *system.VisualEffectSystem // Новая система
+	CraftingSystem            *system.CraftingSystem     // Система крафта
 	EventDispatcher           *event.Dispatcher
 	FontFace                  font.Face
 	towersBuilt               int // Счетчик для текущей фазы строительства
@@ -110,6 +111,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)
 	g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)
 	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs) // Инициализация
+	g.CraftingSystem = system.NewCraftingSystem(ecs, g.HexMap) // Инициализация системы крафта
 	g.generateOre()
 	g.initUI()
 
@@ -118,9 +120,78 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	eventDispatcher.Subscribe(event.OreDepleted, listener)
 	eventDispatcher.Subscribe(event.WaveEnded, listener)
 
+	// Подписываем систему крафта на события
+	eventDispatcher.Subscribe(event.TowerPlaced, g.CraftingSystem)
+	eventDispatcher.Subscribe(event.TowerRemoved, g.CraftingSystem)
+	eventDispatcher.Subscribe(event.CombineTowersRequest, listener)
+
 	g.placeInitialStones()
 
 	return g
+}
+
+// CombineTowers выполняет логику объединения башен.
+func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
+	combinable, ok := g.ECS.Combinables[clickedTowerID]
+	if !ok {
+		return // У башни нет комбинации
+	}
+
+	// 1. Превращаем целевую башню в Сильвер
+	silverDef := defs.TowerLibrary[combinable.RecipeOutputID]
+	if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
+		tower.DefID = combinable.RecipeOutputID
+		tower.Type = g.mapTowerIDToNumericType(combinable.RecipeOutputID)
+		// Обновляем боевой компонент
+		if combat, ok := g.ECS.Combats[clickedTowerID]; ok {
+			combat.FireRate = silverDef.Combat.FireRate
+			combat.Range = silverDef.Combat.Range
+			combat.ShotCost = silverDef.Combat.ShotCost
+			combat.Attack = silverDef.Combat.Attack
+		} else {
+			// Если у башни не было боевого компонента (например, это была стена), создаем его
+			g.ECS.Combats[clickedTowerID] = &component.Combat{
+				FireRate: silverDef.Combat.FireRate,
+				Range:    silverDef.Combat.Range,
+				ShotCost: silverDef.Combat.ShotCost,
+				Attack:   silverDef.Combat.Attack,
+			}
+		}
+		// Обновляем визуальный компонент
+		if renderable, ok := g.ECS.Renderables[clickedTowerID]; ok {
+			renderable.Color = silverDef.Visuals.Color
+			renderable.Radius = float32(config.HexSize * silverDef.Visuals.RadiusFactor)
+		}
+	}
+
+	// 2. Превращаем остальные башни в стены
+	wallDef := defs.TowerLibrary["TOWER_WALL"]
+	for _, id := range combinable.Combination {
+		if id == clickedTowerID {
+			continue // Пропускаем саму башню Сильвер
+		}
+		if tower, ok := g.ECS.Towers[id]; ok {
+			// Удаляем ненужные компоненты
+			delete(g.ECS.Combats, id)
+			delete(g.ECS.Auras, id)
+			// Превращаем в стену
+			tower.DefID = "TOWER_WALL"
+			tower.Type = config.TowerTypeWall
+			if renderable, ok := g.ECS.Renderables[id]; ok {
+				renderable.Color = wallDef.Visuals.Color
+				renderable.Radius = float32(config.HexSize * wallDef.Visuals.RadiusFactor)
+			}
+		}
+	}
+
+	// 3. Очищаем компонент Combinable у всех участников
+	for _, id := range combinable.Combination {
+		delete(g.ECS.Combinables, id)
+	}
+
+	// 4. Пересчитываем состояние игры
+	g.AuraSystem.RecalculateAuras()
+	g.rebuildEnergyNetwork()
 }
 
 // FindPathToPowerSource находит кратчайший путь от атакующей башни до ближайшего
@@ -210,6 +281,10 @@ func (l *GameEventListener) OnEvent(e event.Event) {
 		l.game.updateAllTowerAppearances()
 	case event.WaveEnded:
 		l.game.StateSystem.SwitchToBuildState()
+	case event.CombineTowersRequest:
+		if towerID, ok := e.Data.(types.EntityID); ok {
+			l.game.CombineTowers(towerID)
+		}
 	}
 }
 
@@ -246,6 +321,7 @@ func (g *Game) Update(deltaTime float64) {
 	g.gameTime += dt
 	g.ECS.GameTime = g.gameTime
 
+	g.RenderSystem.Update(dt)
 	g.VisualEffectSystem.Update(dt) // Обновление новой системы
 
 	if g.ECS.GameState.Phase == component.WaveState {

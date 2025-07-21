@@ -50,12 +50,44 @@ func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64, isDragging b
 	s.drawPulsingOres(screen, gameTime)
 	s.drawEntities(screen, gameTime)
 	s.drawLines(screen, hiddenLineID) // Передаем ID скрытой линии
+	s.drawLasers(screen)
 	s.drawDraggingLine(screen, isDragging, sourceTowerID, cancelDrag)
 	s.drawText(screen)
+	s.drawCombinationIndicators(screen) // Рисуем индикаторы последними
 
 	// Рисуем UI для режима перетаскивания
 	if gameState == component.BuildState {
 		s.drawDragModeIndicator(screen, isDragging)
+	}
+}
+
+func (s *RenderSystem) Update(deltaTime float64) {
+	// Обновляем таймеры лазеров и удаляем истекшие
+	for id, laser := range s.ecs.Lasers {
+		laser.Timer += deltaTime
+		if laser.Timer >= laser.Duration {
+			delete(s.ecs.Lasers, id)
+			delete(s.ecs.Renderables, id) // Также удаляем Renderable компонент
+		}
+	}
+}
+
+func (s *RenderSystem) drawLasers(screen *ebiten.Image) {
+	for _, laser := range s.ecs.Lasers {
+		// Вычисляем альфа-канал для эффекта затухания
+		alpha := 1.0 - (laser.Timer / laser.Duration)
+		if alpha < 0 {
+			alpha = 0
+		}
+		// Преобразуем цвет в RGBA, чтобы можно было изменить альфа
+		r, g, b, _ := laser.Color.RGBA()
+		lineColor := color.RGBA{
+			R: uint8(r >> 8),
+			G: uint8(g >> 8),
+			B: uint8(b >> 8),
+			A: uint8(alpha * 255),
+		}
+		vector.StrokeLine(screen, float32(laser.FromX), float32(laser.FromY), float32(laser.ToX), float32(laser.ToY), 2, lineColor, true)
 	}
 }
 
@@ -140,13 +172,43 @@ func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, rende
 		finalColor = config.ProjectileColorSlow //+
 	} //+
 
-	if renderable.HasStroke { //+
-		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
-		vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true)  //+
-	} else { //+
-		vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
-	} //+
+	// Проверяем, является ли сущность башней "Сильвер"
+	if tower, isTower := s.ecs.Towers[id]; isTower && tower.DefID == "TOWER_SILVER" {
+		// Рисуем квадрат
+		size := renderable.Radius * 2 // Используем радиус для определения размера
+		halfSize := size / 2
+		vector.DrawFilledRect(screen, float32(pos.X)-halfSize, float32(pos.Y)-halfSize, size, size, finalColor, true)
+		if renderable.HasStroke {
+			vector.StrokeRect(screen, float32(pos.X)-halfSize, float32(pos.Y)-halfSize, size, size, 1, color.White, true)
+		}
+	} else {
+		// Рисуем круг ��ля всех остальных сущностей
+		if renderable.HasStroke { //+
+			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
+			vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true)  //+
+		} else { //+
+			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
+		} //+
+	}
 } //+
+
+func (s *RenderSystem) drawCombinationIndicators(screen *ebiten.Image) {
+	// Итерируем по всем башням, у которых есть компонент Combinable.
+	// Это гарантирует, что каждая башня, готовая к крафту, получит индикатор.
+	for id := range s.ecs.Combinables {
+		if pos, ok := s.ecs.Positions[id]; ok {
+			if renderable, ok := s.ecs.Renderables[id]; ok {
+				indicatorRadius := renderable.Radius / 2
+				indicatorColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}       // Черный цвет
+				outlineColor := color.RGBA{R: 255, G: 255, B: 255, A: 255} // Белый цвет
+
+				// Рисуем сначала обводку, потом сам круг
+				vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), indicatorRadius+1, outlineColor, true)
+				vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), indicatorRadius, indicatorColor, true)
+			}
+		}
+	}
+}
 
 func (s *RenderSystem) drawLines(screen *ebiten.Image, hiddenLineID types.EntityID) {
 	for id, line := range s.ecs.LineRenders {

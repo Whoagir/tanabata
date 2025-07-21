@@ -129,6 +129,30 @@
     }
   },
   {
+    "id": "TOWER_SILVER",
+    "name": "Сильвер",
+    "type": "ATTACK",
+    "combat": {
+      "damage": 55,
+      "fire_rate": 1.2,
+      "range": 4,
+      "shot_cost": 0.12,
+      "attack": {
+        "type": "LASER",
+        "damage_type": "PURE",
+        "params": {
+          "slow_multiplier": 0.4,
+          "slow_duration": 1.5
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 192, "g": 192, "b": 192, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
     "id": "TOWER_AURA_ATTACK_SPEED",
     "name": "Аура (DE)",
     "type": "ATTACK",

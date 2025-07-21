@@ -59,7 +59,7 @@ func NewGameState(sm *StateMachine) *GameState {
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
 	)
-	infoPanel := ui.NewInfoPanel(gameLogic.FontFace, gameLogic.FontFace)
+	infoPanel := ui.NewInfoPanel(gameLogic.FontFace, gameLogic.FontFace, gameLogic.EventDispatcher)
 
 	gs := &GameState{
 		sm:             sm,
@@ -115,6 +115,9 @@ func (g *GameState) Update(deltaTime float64) {
 		}
 		if inpututil.IsKeyJustPressed(ebiten.Key3) {
 			g.game.DebugTowerType = config.TowerTypeWall
+		}
+		if inpututil.IsKeyJustPressed(ebiten.Key0) {
+			g.game.DebugTowerType = config.TowerTypeSilver
 		}
 	}
 

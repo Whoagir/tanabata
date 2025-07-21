@@ -67,6 +67,7 @@ const (
 	TowerTypeSplitPhysical
 	TowerTypeSplitMagical
 	TowerTypePoison
+	TowerTypeSilver
 	TowerTypeMiner
 	TowerTypeWall = -1
 	TowerTypeNone = -2

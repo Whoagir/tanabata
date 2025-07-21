@@ -7,9 +7,11 @@ import (
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
+	"go-tower-defense/internal/event"
 	"go-tower-defense/internal/types"
 	"image"
 	"image/color"
+	"log"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -37,23 +39,26 @@ type Button struct {
 
 // InfoPanel displays information about a selected entity.
 type InfoPanel struct {
-	IsVisible     bool
-	TargetEntity  types.EntityID
-	fontFace      font.Face
-	titleFontFace font.Face
-	currentY      float64
-	targetY       float64
-	SelectButton  Button
+	IsVisible       bool
+	TargetEntity    types.EntityID
+	fontFace        font.Face
+	titleFontFace   font.Face
+	currentY        float64
+	targetY         float64
+	SelectButton    Button
+	CombineButton   Button
+	eventDispatcher *event.Dispatcher
 }
 
 // NewInfoPanel creates a new information panel.
-func NewInfoPanel(font font.Face, titleFont font.Face) *InfoPanel {
+func NewInfoPanel(font font.Face, titleFont font.Face, dispatcher *event.Dispatcher) *InfoPanel {
 	return &InfoPanel{
-		IsVisible:     false,
-		fontFace:      font,
-		titleFontFace: titleFont,
-		currentY:      config.ScreenHeight,
-		targetY:       config.ScreenHeight,
+		IsVisible:       false,
+		fontFace:        font,
+		titleFontFace:   titleFont,
+		currentY:        config.ScreenHeight,
+		targetY:         config.ScreenHeight,
+		eventDispatcher: dispatcher,
 	}
 }
 
@@ -85,13 +90,31 @@ func (p *InfoPanel) Update(ecs *entity.ECS) {
 		}
 	}
 
-	// Обработка клика по кнопке выбора
+	// Обработка кликов по кнопкам
 	if p.IsVisible && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		cursorX, cursorY := ebiten.CursorPosition()
 		clickPoint := image.Point{X: cursorX, Y: cursorY}
+
+		// Клик по кнопке выбора
 		if clickPoint.In(p.SelectButton.Rect) {
 			p.handleSelectClick(ecs)
 		}
+
+		// Клик по кнопке объединения
+		if clickPoint.In(p.CombineButton.Rect) {
+			p.handleCombineClick(ecs)
+		}
+	}
+}
+
+func (p *InfoPanel) handleCombineClick(ecs *entity.ECS) {
+	if _, ok := ecs.Combinables[p.TargetEntity]; ok {
+		p.eventDispatcher.Dispatch(event.Event{
+			Type: event.CombineTowersRequest,
+			Data: p.TargetEntity,
+		})
+		log.Printf("CombineTowersRequest event dispatched for entity %d", p.TargetEntity)
+		p.Hide() // Скрываем панель после клика
 	}
 }
 
@@ -127,12 +150,36 @@ func (p *InfoPanel) Draw(screen *ebiten.Image, ecs *entity.ECS) {
 
 	p.drawEntityInfo(screen, ecs, panelRect.Min.X+15, panelRect.Min.Y+15)
 
-	// Рисуем кнопку выбора, если нужно
+	// Рисуем кнопки в зависимости от состояния игры
 	if ecs.GameState.Phase == component.TowerSelectionState {
 		if tower, ok := ecs.Towers[p.TargetEntity]; ok && tower.IsTemporary && tower.Type != config.TowerTypeMiner {
 			p.drawSelectButton(screen, panelRect, tower.IsSelected)
 		}
+	} else if ecs.GameState.Phase == component.WaveState {
+		if _, ok := ecs.Combinables[p.TargetEntity]; ok {
+			p.drawCombineButton(screen, panelRect)
+		}
 	}
+}
+
+func (p *InfoPanel) drawCombineButton(screen *ebiten.Image, panelRect image.Rectangle) {
+	btnWidth := 150
+	btnHeight := 40
+	p.CombineButton.Rect = image.Rect(
+		panelRect.Max.X-btnWidth-20,
+		panelRect.Max.Y-btnHeight-20,
+		panelRect.Max.X-20,
+		panelRect.Max.Y-20,
+	)
+	p.CombineButton.Text = "Объединить"
+
+	btnColor := color.RGBA{R: 180, G: 140, B: 20, A: 255} // Золотой цвет
+	vector.DrawFilledRect(screen, float32(p.CombineButton.Rect.Min.X), float32(p.CombineButton.Rect.Min.Y), float32(btnWidth), float32(btnHeight), btnColor, true)
+
+	textBounds := text.BoundString(p.fontFace, p.CombineButton.Text)
+	textX := p.CombineButton.Rect.Min.X + (btnWidth-textBounds.Dx())/2
+	textY := p.CombineButton.Rect.Min.Y + (btnHeight-textBounds.Dy())/2 - textBounds.Min.Y
+	text.Draw(screen, p.CombineButton.Text, p.fontFace, textX, textY, color.White)
 }
 
 func (p *InfoPanel) drawSelectButton(screen *ebiten.Image, panelRect image.Rectangle, isSelected bool) {

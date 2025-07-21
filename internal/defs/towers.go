@@ -65,3 +65,9 @@ type Visuals struct {
 type ProjectileAttackParams struct {
 	SplitCount int `json:"split_count"`
 }
+
+// LaserAttackParams defines parameters for a laser-based attack.
+type LaserAttackParams struct {
+	SlowMultiplier float64 `json:"slow_multiplier"`
+	SlowDuration   float64 `json:"slow_duration"`
+}

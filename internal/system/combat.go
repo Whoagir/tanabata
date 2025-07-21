@@ -70,11 +70,13 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// --- Логика атаки ---
+		// --- ��огика атаки ---
 		attackPerformed := false
 		switch combat.Attack.Type {
 		case defs.BehaviorProjectile:
 			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
+		case defs.BehaviorLaser:
+			attackPerformed = s.handleLaserAttack(id, tower, combat, &towerDef)
 		// Сюда можно будет добавить case defs.BehaviorAoe и т.д.
 		default:
 			// По умолчанию используем логику снаряда для обратной совместимости
@@ -89,20 +91,15 @@ func (s *CombatSystem) Update(deltaTime float64) {
 					availableSources = append(availableSources, sourceID)
 				}
 			}
-
 			if len(availableSources) > 0 {
 				chosenSourceID := availableSources[rand.Intn(len(availableSources))]
 				chosenOre := s.ecs.Ores[chosenSourceID]
-
-				// Списываем стоимость выстрела
 				cost := combat.ShotCost
 				if chosenOre.CurrentReserve >= cost {
 					chosenOre.CurrentReserve -= cost
 				} else {
 					chosenOre.CurrentReserve = 0
 				}
-
-				// Устанавливаем кулдаун
 				fireRate := combat.FireRate
 				if auraEffect, ok := s.ecs.AuraEffects[id]; ok {
 					fireRate *= auraEffect.SpeedMultiplier
@@ -113,31 +110,89 @@ func (s *CombatSystem) Update(deltaTime float64) {
 	}
 }
 
+func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *component.Tower, combat *component.Combat, towerDef *defs.TowerDefinition) bool {
+	// 1. Найти одну ближайшую цель
+	targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, 1)
+	if len(targets) == 0 {
+		return false
+	}
+	targetID := targets[0]
+	targetPos, ok := s.ecs.Positions[targetID]
+	if !ok {
+		return false
+	}
+
+	// 2. Рассчитать урон (логика аналогична handleProjectileAttack)
+	powerSources := s.powerSourceFinder(towerID)
+	if len(powerSources) == 0 {
+		return false
+	}
+	chosenSourceID := powerSources[rand.Intn(len(powerSources))]
+	chosenOre := s.ecs.Ores[chosenSourceID]
+	boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
+	pathToSource := s.pathFinder(towerID)
+	degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
+	baseDamage := float64(towerDef.Combat.Damage)
+	finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
+
+	// 3. Применить урон и эффекты напрямую
+	ApplyDamage(s.ecs, targetID, finalDamage, combat.Attack.DamageType)
+
+	// Парсим параметры для замедления
+	params := defs.LaserAttackParams{}
+	if len(combat.Attack.Params) > 0 {
+		if err := json.Unmarshal(combat.Attack.Params, &params); err != nil {
+			log.Printf("Error unmarshalling laser params: %v", err)
+		}
+	}
+	if params.SlowMultiplier > 0 && params.SlowDuration > 0 {
+		// Применяем или обновляем эффект замедления
+		if existingEffect, ok := s.ecs.SlowEffects[targetID]; ok {
+			existingEffect.Timer = params.SlowDuration // Сбрасываем таймер на полную длительность
+		} else {
+			s.ecs.SlowEffects[targetID] = &component.SlowEffect{
+				SlowFactor: 1.0 - params.SlowMultiplier,
+				Timer:      params.SlowDuration,
+			}
+		}
+	}
+
+	// 4. Создать сущность с компонентом Laser для визуализации
+	laserID := s.ecs.NewEntity()
+	towerPos := s.ecs.Positions[towerID]
+	s.ecs.Lasers[laserID] = &component.Laser{
+		FromX:    towerPos.X,
+		FromY:    towerPos.Y,
+		ToX:      targetPos.X,
+		ToY:      targetPos.Y,
+		Color:    getProjectileColorByAttackType(combat.Attack.DamageType),
+		Duration: 0.15, // Короткая вспышка
+		Timer:    0,
+	}
+	// Добавляем Renderable, чтобы система рендеринга знала об этой сущности
+	s.ecs.Renderables[laserID] = &component.Renderable{}
+
+	return true
+}
+
 func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *component.Tower, combat *component.Combat, towerDef *defs.TowerDefinition) bool {
 	// Для INTERNAL атак цель не нужна, просто считаем выстрел успешным
 	if combat.Attack.DamageType == defs.AttackInternal {
 		return true
 	}
-
-	// Парсим параметры атаки
 	params := defs.ProjectileAttackParams{}
 	if len(combat.Attack.Params) > 0 {
 		if err := json.Unmarshal(combat.Attack.Params, &params); err != nil {
 			log.Printf("Error unmarshalling projectile params: %v", err)
-			// Продолжаем с параметрами по умолчанию
 		}
 	}
 	if params.SplitCount <= 0 {
-		params.SplitCount = 1 // По умолчанию 1 снаряд
+		params.SplitCount = 1
 	}
-
-	// Ищем цели
 	targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, params.SplitCount)
 	if len(targets) == 0 {
 		return false
 	}
-
-	// --- Расчет финального урона (делается один раз для всех снарядов) ---
 	powerSources := s.powerSourceFinder(towerID)
 	if len(powerSources) == 0 {
 		return false
@@ -150,19 +205,14 @@ func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *com
 	}
 	chosenSourceID := powerSources[rand.Intn(len(powerSources))]
 	chosenOre := s.ecs.Ores[chosenSourceID]
-
 	boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
 	pathToSource := s.pathFinder(towerID)
 	degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
 	baseDamage := float64(towerDef.Combat.Damage)
 	finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
-	// --- Конец расчета ---
-
-	// Создаем снаряды для каждой цели
 	for _, enemyID := range targets {
 		s.createProjectile(towerID, enemyID, towerDef, finalDamage)
 	}
-
 	return true
 }
 
@@ -395,6 +445,8 @@ func mapNumericTypeToTowerID(numericType int) string {
 		return "TOWER_SPLIT_MAGICAL"
 	case config.TowerTypePoison:
 		return "TOWER_POISON"
+	case config.TowerTypeSilver:
+		return "TOWER_SILVER"
 	case config.TowerTypeMiner:
 		return "TOWER_MINER"
 	case config.TowerTypeWall:

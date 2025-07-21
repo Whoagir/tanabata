@@ -307,6 +307,8 @@ func (g *Game) mapTowerIDToNumericType(id string) int {
 		return config.TowerTypeSplitMagical
 	case "TOWER_POISON":
 		return config.TowerTypePoison
+	case "TOWER_SILVER":
+		return config.TowerTypeSilver
 	case "TOWER_MINER":
 		return config.TowerTypeMiner
 	case "TOWER_WALL":

@@ -9,4 +9,5 @@ const (
 	OreDepleted    EventType = "OreDepleted" // Руда истощена
 	BuildPhaseStarted EventType = "BuildPhaseStarted"
 	WavePhaseStarted EventType = "WavePhaseStarted"
+	CombineTowersRequest EventType = "CombineTowersRequest" // Запрос на объединение башен
 )

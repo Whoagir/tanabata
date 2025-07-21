@@ -23,4 +23,6 @@ const (
 	BehaviorAoe AttackBehaviorType = "AOE"
 	// BehaviorBeacon applies a continuous effect to a single target.
 	BehaviorBeacon AttackBehaviorType = "BEACON"
+	// BehaviorLaser creates an instantaneous line effect.
+	BehaviorLaser AttackBehaviorType = "LASER"
 )
