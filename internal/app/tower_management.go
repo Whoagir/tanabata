@@ -13,9 +13,6 @@ import (
 	"math/rand"
 )
 
-
-
-
 // PlaceTower attempts to place a tower at the given hex.
 func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	if !g.canPlaceTower(hex) {
@@ -42,7 +39,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	if g.DebugTowerType == config.TowerTypeNone {
 		g.towersBuilt++
 		if g.towersBuilt >= config.MaxTowersInBuildPhase {
-			g.ECS.GameState.TowersToKeep = 2 // Устанавливаем, сколько башен нужно сохранить
+			g.ECS.GameState.TowersToKeep = 2                      // Устанавливаем, сколько башен нужно сохранить
 			g.ECS.GameState.Phase = component.TowerSelectionState // <-- Переключаемся в режим выбора
 		}
 	} else {
@@ -59,7 +56,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 
 // RemoveTower removes a tower from the given hex.
 func (g *Game) RemoveTower(hex hexmap.Hex) bool {
-	// Удаля��ь можно только в фазе строительства.
+	// Удалять можно только в фазе строительства.
 	if g.ECS.GameState.Phase != component.BuildState {
 		return false
 	}
@@ -166,7 +163,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 	numericType := g.mapTowerIDToNumericType(def.ID)
 
 	g.ECS.Towers[id] = &component.Tower{
-		DefID:    towerDefID, // <-- Сохраняем ID определения
+		DefID:    towerDefID,  // <-- Сохраняем ID определения
 		Type:     numericType, // TODO: Refactor to use string ID or defs.TowerType
 		Hex:      hex,
 		IsActive: false,

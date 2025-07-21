@@ -185,7 +185,7 @@ func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, rende
 		// Рисуем круг ��ля всех остальных сущностей
 		if renderable.HasStroke { //+
 			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
-			vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true)  //+
+			vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true) //+
 		} else { //+
 			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
 		} //+
@@ -199,7 +199,7 @@ func (s *RenderSystem) drawCombinationIndicators(screen *ebiten.Image) {
 		if pos, ok := s.ecs.Positions[id]; ok {
 			if renderable, ok := s.ecs.Renderables[id]; ok {
 				indicatorRadius := renderable.Radius / 2
-				indicatorColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}       // Черный цвет
+				indicatorColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}     // Черный цвет
 				outlineColor := color.RGBA{R: 255, G: 255, B: 255, A: 255} // Белый цвет
 
 				// Рисуем сначала обводку, потом сам круг

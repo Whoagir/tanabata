@@ -110,7 +110,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	g.AuraSystem = system.NewAuraSystem(ecs)
 	g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)
 	g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)
-	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs) // Инициализация
+	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs)   // Инициализация
 	g.CraftingSystem = system.NewCraftingSystem(ecs, g.HexMap) // Инициализация системы крафта
 	g.generateOre()
 	g.initUI()
@@ -764,6 +764,10 @@ func (g *Game) CancelLineDrag() {
 
 // FinalizeTowerSelection обрабатывает окончание фазы выбора башен.
 func (g *Game) FinalizeTowerSelection() {
+	towersToConvertToWalls := []hexmap.Hex{}
+	idsToRemove := []types.EntityID{}
+
+	// Сначала собираем информацию, не изменяя срез во время итерации
 	for id, tower := range g.ECS.Towers {
 		if !tower.IsTemporary {
 			continue
@@ -773,27 +777,24 @@ func (g *Game) FinalizeTowerSelection() {
 			// Башня выбрана, делаем ее постоянной
 			tower.IsTemporary = false
 		} else {
-			// Башня не выбрана, превращаем ее в стену
-			// Сначала удаляем компоненты, которые стене не нужны
-			delete(g.ECS.Combats, id)
-			delete(g.ECS.Auras, id)
-
-			// Обновляем основные компоненты
-			wallDef := defs.TowerLibrary["TOWER_WALL"]
-			tower.DefID = "TOWER_WALL"
-			tower.Type = config.TowerTypeWall
-			tower.IsTemporary = false
-			tower.IsSelected = false
-
-			if renderable, ok := g.ECS.Renderables[id]; ok {
-				renderable.Color = wallDef.Visuals.Color
-				renderable.Radius = float32(config.HexSize * wallDef.Visuals.RadiusFactor)
-			}
+			// Башня не выбрана, помечаем ее для удаления и запоминаем ее местоположение
+			idsToRemove = append(idsToRemove, id)
+			towersToConvertToWalls = append(towersToConvertToWalls, tower.Hex)
 		}
 	}
+
+	// Удаляем все помеченные башни
+	for _, id := range idsToRemove {
+		g.deleteTowerEntity(id)
+	}
+
+	// Теперь создаем стены на месте удаленных башен
+	for _, hex := range towersToConvertToWalls {
+		g.createPermanentWall(hex)
+	}
+
 	// Сбрасываем счетчик построенных башен для следующей фазы
 	g.towersBuilt = 0
-	// Пересчитываем ауры и сеть после всех изменений
+	// Пересчитываем ауры, так как набор башен изменился.
 	g.AuraSystem.RecalculateAuras()
-	g.rebuildEnergyNetwork()
 }

@@ -313,7 +313,6 @@ func min(a, b int) int {
 	return b
 }
 
-
 func (r *HexRenderer) GetHexAt(x, y int) hexmap.Hex {
 	// This function is now a bit tricky because it does the reverse of the internal utils.
 	// It's not currently used, but to make it correct, we'd do this:

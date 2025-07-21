@@ -17,6 +17,7 @@
 │   ├── component
 │   │   ├── aura.go
 │   │   ├── combat.go
+│   │   ├── crafting.go
 │   │   ├── enemy.go
 │   │   ├── game_state.go
 │   │   ├── line.go
@@ -34,6 +35,7 @@
 │   ├── defs
 │   │   ├── enemies.go
 │   │   ├── loader.go
+│   │   ├── recipes.go
 │   │   ├── towers.go
 │   │   └── types.go
 │   ├── entity
@@ -52,6 +54,7 @@
 │   ├── system
 │   │   ├── aura.go
 │   │   ├── combat.go
+│   │   ├── crafting.go
 │   │   ├── environmental_damage.go
 │   │   ├── movement.go
 │   │   ├── ore.go
