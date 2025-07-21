@@ -169,14 +169,16 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 		IsActive: false,
 	}
 
-	if def.Type == defs.TowerTypeAttack {
-		g.ECS.Combats[id] = &component.Combat{
-			FireRate:     def.Combat.FireRate,
-			FireCooldown: 0,
-			Range:        def.Combat.Range,
-			ShotCost:     def.Combat.ShotCost,
-			Attack:       def.Combat.Attack,
+		if def.Combat != nil {
+		combatComponent := &component.Combat{
+			FireRate: def.Combat.FireRate,
+			Range:    def.Combat.Range,
+			ShotCost: def.Combat.ShotCost,
 		}
+		if def.Combat.Attack != nil {
+			combatComponent.Attack = *def.Combat.Attack
+		}
+		g.ECS.Combats[id] = combatComponent
 	}
 
 	if def.Aura != nil {

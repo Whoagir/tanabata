@@ -23,14 +23,15 @@ import (
 
 // GameState — состояние игры
 type GameState struct {
-	sm             *StateMachine
-	game           *game.Game
-	hexMap         *hexmap.HexMap
-	renderer       *render.HexRenderer
-	indicator      *ui.StateIndicator
-	infoPanel      *ui.InfoPanel
-	lastClickTime  time.Time
-	lastUpdateTime time.Time
+	sm              *StateMachine
+	game            *game.Game
+	hexMap          *hexmap.HexMap
+	renderer        *render.HexRenderer
+	indicator       *ui.StateIndicator
+	infoPanel       *ui.InfoPanel
+	lastClickTime   time.Time
+	lastUpdateTime  time.Time
+	wasShiftPressed bool // Отслеживаем состояние Shift
 }
 
 func NewGameState(sm *StateMachine) *GameState {
@@ -210,8 +211,16 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 }
 
 func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
+	isShiftPressed := ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight)
+
 	if button == ebiten.MouseButtonLeft {
 		if entityID, found := g.findEntityAt(x, y); found {
+			// Если нажат Shift, добавляем башню в ручной выбор
+			if isShiftPressed {
+				g.game.AddToManualSelection(entityID)
+				return // Выходим, чтобы не обрабатывать клик дальше
+			}
+			// Иначе, показываем инфо-панель как обычно
 			g.infoPanel.SetTarget(entityID)
 			return
 		} else {

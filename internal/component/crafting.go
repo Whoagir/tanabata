@@ -1,11 +1,17 @@
 package component
 
-import "go-tower-defense/internal/types"
+import (
+	"go-tower-defense/internal/defs"
+	"go-tower-defense/internal/types"
+)
 
-// Combinable указывает, что башня является частью действительного рецепта крафта.
-type Combinable struct {
-	// RecipeOutputID - это ID башни, которая получится в результате крафта.
-	RecipeOutputID string
-	// Combination - это список ID всех башен, участвующих в этом крафте.
+// CraftInfo содержит информацию о конкретном возможном крафте.
+type CraftInfo struct {
+	Recipe      *defs.Recipe
 	Combination []types.EntityID
+}
+
+// Combinable указывает, что башня может участвовать в одном или нескольких крафтах.
+type Combinable struct {
+	PossibleCrafts []CraftInfo
 }

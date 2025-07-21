@@ -45,7 +45,7 @@ type CombatStats struct {
 	FireRate float64   `json:"fire_rate"` // Shots per second
 	Range    int       `json:"range"`
 	ShotCost float64   `json:"shot_cost"`
-	Attack   AttackDef `json:"attack"`
+	Attack   *AttackDef `json:"attack"`
 }
 
 // EnergyStats contains parameters related to the energy network.

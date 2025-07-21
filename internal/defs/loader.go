@@ -13,6 +13,9 @@ var TowerLibrary map[string]TowerDefinition
 // EnemyLibrary is a map to hold all enemy definitions, keyed by their ID.
 var EnemyLibrary map[string]EnemyDefinition
 
+// RecipeLibrary holds all the crafting recipes loaded from the config file.
+var RecipeLibrary []Recipe
+
 // LoadTowerDefinitions reads the tower configuration file and populates the TowerLibrary.
 func LoadTowerDefinitions(path string) error {
 	file, err := os.ReadFile(path)
@@ -52,6 +55,21 @@ func LoadEnemyDefinitions(path string) error {
 	}
 
 	fmt.Printf("Loaded %d enemy definitions\n", len(EnemyLibrary))
+	return nil
+}
+
+// LoadRecipes reads the recipe configuration file and populates the RecipeLibrary.
+func LoadRecipes(path string) error {
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read recipe definitions file: %w", err)
+	}
+
+	if err := json.Unmarshal(file, &RecipeLibrary); err != nil {
+		return fmt.Errorf("failed to unmarshal recipe definitions: %w", err)
+	}
+
+	fmt.Printf("Loaded %d recipe definitions\n", len(RecipeLibrary))
 	return nil
 }
 

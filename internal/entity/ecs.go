@@ -26,10 +26,11 @@ type ECS struct {
 	AuraEffects   map[types.EntityID]*component.AuraEffect
 	SlowEffects   map[types.EntityID]*component.SlowEffect
 	PoisonEffects map[types.EntityID]*component.PoisonEffect
-	Lasers        map[types.EntityID]*component.Laser
-	Combinables   map[types.EntityID]*component.Combinable
-	Wave          *component.Wave
-	GameState     *component.GameState
+	Lasers                 map[types.EntityID]*component.Laser
+	Combinables            map[types.EntityID]*component.Combinable
+	ManualSelectionMarkers map[types.EntityID]*component.ManualSelectionMarker
+	Wave                   *component.Wave
+	GameState              *component.GameState
 }
 
 func NewECS() *ECS {
@@ -52,9 +53,10 @@ func NewECS() *ECS {
 		AuraEffects:   make(map[types.EntityID]*component.AuraEffect),
 		SlowEffects:   make(map[types.EntityID]*component.SlowEffect),
 		PoisonEffects: make(map[types.EntityID]*component.PoisonEffect),
-		Lasers:        make(map[types.EntityID]*component.Laser),
-		Combinables:   make(map[types.EntityID]*component.Combinable),
-		Wave:          nil,
+		Lasers:                 make(map[types.EntityID]*component.Laser),
+		Combinables:            make(map[types.EntityID]*component.Combinable),
+		ManualSelectionMarkers: make(map[types.EntityID]*component.ManualSelectionMarker),
+		Wave:                   nil,
 		GameState: &component.GameState{
 			Phase:        component.BuildState,
 			TowersToKeep: 2, // 1 miner + 1 attacker

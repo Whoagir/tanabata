@@ -55,6 +55,12 @@ type Game struct {
 	gameTime                  float64
 	DebugTowerType            int
 
+	// Состояние для ручного выбора крафта
+	manualCraftSelection []types.EntityID
+
+	// Состояние для ручного выбора крафта
+	ManualCraftSelection []types.EntityID
+
 	// Состояние для перетаскивания линий
 	isLineDragging       bool
 	dragSourceTowerID    types.EntityID
@@ -133,48 +139,61 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 // CombineTowers выполняет логику объединения башен.
 func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 	combinable, ok := g.ECS.Combinables[clickedTowerID]
-	if !ok {
-		return // У башни нет комбинации
+	if !ok || len(combinable.PossibleCrafts) == 0 {
+		return // У башни нет доступных крафтов
 	}
 
-	// 1. Превращаем целевую башню в Сильвер
-	silverDef := defs.TowerLibrary[combinable.RecipeOutputID]
+	// ВРЕМЕННАЯ ЗАГЛУШКА: выполняем первый доступный крафт.
+	craftToPerform := combinable.PossibleCrafts[0]
+	recipe := craftToPerform.Recipe
+	combination := craftToPerform.Combination
+
+	// 1. Превращаем целевую (кликнутую) башню в результирующую башню
+	outputDef := defs.TowerLibrary[recipe.OutputID]
 	if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
-		tower.DefID = combinable.RecipeOutputID
-		tower.Type = g.mapTowerIDToNumericType(combinable.RecipeOutputID)
-		// Обновляем боевой компонент
-		if combat, ok := g.ECS.Combats[clickedTowerID]; ok {
-			combat.FireRate = silverDef.Combat.FireRate
-			combat.Range = silverDef.Combat.Range
-			combat.ShotCost = silverDef.Combat.ShotCost
-			combat.Attack = silverDef.Combat.Attack
-		} else {
-			// Если у башни не было боевого компонента (например, это была стена), создаем его
-			g.ECS.Combats[clickedTowerID] = &component.Combat{
-				FireRate: silverDef.Combat.FireRate,
-				Range:    silverDef.Combat.Range,
-				ShotCost: silverDef.Combat.ShotCost,
-				Attack:   silverDef.Combat.Attack,
+		tower.DefID = recipe.OutputID
+		tower.Type = g.mapTowerIDToNumericType(recipe.OutputID)
+
+		// Обновляем или создаем боевой компонент
+		if outputDef.Combat != nil {
+			if combat, ok := g.ECS.Combats[clickedTowerID]; ok {
+				combat.FireRate = outputDef.Combat.FireRate
+				combat.Range = outputDef.Combat.Range
+				combat.ShotCost = outputDef.Combat.ShotCost
+				if outputDef.Combat.Attack != nil {
+					combat.Attack = *outputDef.Combat.Attack
+				}
+			} else {
+				g.ECS.Combats[clickedTowerID] = &component.Combat{
+					FireRate: outputDef.Combat.FireRate,
+					Range:    outputDef.Combat.Range,
+					ShotCost: outputDef.Combat.ShotCost,
+					Attack:   *outputDef.Combat.Attack,
+				}
 			}
+		} else {
+			// Если у новой башни нет боевых характеристик, удаляем компонент
+			delete(g.ECS.Combats, clickedTowerID)
 		}
+
 		// Обновляем визуальный компонент
 		if renderable, ok := g.ECS.Renderables[clickedTowerID]; ok {
-			renderable.Color = silverDef.Visuals.Color
-			renderable.Radius = float32(config.HexSize * silverDef.Visuals.RadiusFactor)
+			renderable.Color = outputDef.Visuals.Color
+			renderable.Radius = float32(config.HexSize * outputDef.Visuals.RadiusFactor)
 		}
 	}
 
-	// 2. Превращаем остальные башни в стены
+	// 2. Превращаем остальные башни из комбинации в стены
 	wallDef := defs.TowerLibrary["TOWER_WALL"]
-	for _, id := range combinable.Combination {
+	for _, id := range combination {
 		if id == clickedTowerID {
-			continue // Пропускаем саму башню Сильвер
+			continue // Пропускаем саму целевую башню
 		}
 		if tower, ok := g.ECS.Towers[id]; ok {
 			// Удаляем ненужные компоненты
 			delete(g.ECS.Combats, id)
 			delete(g.ECS.Auras, id)
-			// Превращаем в стену
+			// Прев��ащаем в стену
 			tower.DefID = "TOWER_WALL"
 			tower.Type = config.TowerTypeWall
 			if renderable, ok := g.ECS.Renderables[id]; ok {
@@ -184,12 +203,8 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 		}
 	}
 
-	// 3. Очищаем компонент Combinable у всех участников
-	for _, id := range combinable.Combination {
-		delete(g.ECS.Combinables, id)
-	}
-
-	// 4. Пересчитываем состояние игры
+	// 3. Пересчитываем состояние игры, так как состав башен кардинально изменился
+	g.CraftingSystem.RecalculateCombinations()
 	g.AuraSystem.RecalculateAuras()
 	g.rebuildEnergyNetwork()
 }
@@ -760,6 +775,12 @@ func (g *Game) CancelLineDrag() {
 	g.dragOriginalParentID = 0
 	g.hiddenLineID = 0 // "Показываем" линию обратно
 	g.DebugInfo = nil
+}
+
+// AddToManualSelection добавляет башню в список ручного выбора для крафта.
+func (g *Game) AddToManualSelection(id types.EntityID) {
+	g.ManualCraftSelection = append(g.ManualCraftSelection, id)
+	log.Printf("Added tower %d to manual selection. Current selection: %v", id, g.ManualCraftSelection)
 }
 
 // FinalizeTowerSelection обрабатывает окончание фазы выбора башен.

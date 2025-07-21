@@ -52,6 +52,9 @@ func main() {
 	if err := defs.LoadEnemyDefinitions("assets/data/enemies.json"); err != nil {
 		log.Fatalf("Failed to load enemy definitions: %v", err)
 	}
+	if err := defs.LoadRecipes("assets/data/recipes.json"); err != nil {
+		log.Fatalf("Failed to load recipe definitions: %v", err)
+	}
 
 	rand.Seed(time.Now().UnixNano())
 	sm := state.NewStateMachine() // Создаём машину состояний
