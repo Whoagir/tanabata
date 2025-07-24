@@ -2,6 +2,7 @@
 ├── assets
 │   ├── data
 │   │   ├── enemies.json
+│   │   ├── recipes.json
 │   │   └── towers.json
 │   └── fonts
 │       └── arial.ttf
@@ -21,10 +22,12 @@
 │   │   ├── enemy.go
 │   │   ├── game_state.go
 │   │   ├── line.go
+│   │   ├── manual_selection.go
 │   │   ├── movement.go
 │   │   ├── ore.go
 │   │   ├── projectile.go
 │   │   ├── render.go
+│   │   ├── selection.go
 │   │   ├── status_effect.go
 │   │   ├── text.go
 │   │   ├── tower.go

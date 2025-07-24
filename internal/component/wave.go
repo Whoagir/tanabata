@@ -9,4 +9,5 @@ type Wave struct {
 	SpawnTimer     float64      // Таймер спавна
 	SpawnInterval  float64      // Интервал между спавнами (в секундах)
 	CurrentPath    []hexmap.Hex // Текущий путь для врагов
+	EnemyID        string       // ID врага для этой волны
 }

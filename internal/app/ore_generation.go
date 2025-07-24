@@ -126,17 +126,72 @@ func (g *Game) generateOre() {
 
 	veinAreas := make([][]hexmap.Hex, 3)
 	for i, center := range centers {
-		veinAreas[i] = g.HexMap.GetHexesInRange(center, 2)
+		if i == 0 {
+			// Новая, точечная логика для центральной жилы
+			centralVein := make(map[hexmap.Hex]struct{})
+			startHex := center
+			centralVein[startHex] = struct{}{}
+			
+			currentHex := startHex
+			targetSize := 4 + rand.Intn(2) // Гарантированно 4 или 5 гексов
+
+			for len(centralVein) < targetSize {
+				// Получаем соседей *валидных* гексов на карте
+				neighbors := g.HexMap.GetNeighbors(currentHex)
+				validNeighbors := []hexmap.Hex{}
+				for _, n := range neighbors {
+					if _, exists := g.HexMap.Tiles[n]; exists {
+						validNeighbors = append(validNeighbors, n)
+					}
+				}
+
+				if len(validNeighbors) == 0 {
+					// Если у текущего гекса нет соседей (маловероятно),
+					// попробуем "прыгнуть" к другому случайному гексу в жиле
+					for hex := range centralVein {
+						currentHex = hex
+						break
+					}
+					continue
+				}
+				
+				nextHex := validNeighbors[rand.Intn(len(validNeighbors))]
+				centralVein[nextHex] = struct{}{} // map сам обработает дубликаты
+				currentHex = nextHex
+			}
+			
+			// Конвертируем результат в slice
+			veinAreaSlice := make([]hexmap.Hex, 0, len(centralVein))
+			for hex := range centralVein {
+				veinAreaSlice = append(veinAreaSlice, hex)
+			}
+			veinAreas[i] = veinAreaSlice
+		} else {
+			// Старая, рабочая логика для остальных жил
+			veinAreas[i] = g.HexMap.GetHexesInRange(center, 2)
+		}
 	}
 
 	energyVeins := make(map[hexmap.Hex]float64)
 
-	// Мощность жил в соответствии с пропорциями 20%, 30%, 50%
-	// Базовая мощность в старом коде была ~110.
-	// 400 руды (50%) -> 110
-	// 240 руды (30%) -> 66
-	// 160 руды (20%) -> 44
-	totalPowers := []float64{44.0, 66.0, 110.0}
+	// --- Динамическая генерация мощности жил ---
+	// 1. Генерируем общую мощность для карты
+	totalMapPower := 240.0 + rand.Float64()*30 // от 240 до 270
+
+	// 2. Определяем доли для жил со случайным разбросом
+	// Центральная жила (самая слабая)
+	centralShare := 0.18 + rand.Float64()*0.04 // 18% - 22%
+	// Средняя жила
+	midShare := 0.27 + rand.Float64()*0.06 // 27% - 33%
+	// Дальняя жила (самая сильная) получает остаток, чтобы сумма была 100%
+	farShare := 1.0 - centralShare - midShare
+
+	// 3. Распределяем общую мощность по долям
+	totalPowers := []float64{
+		totalMapPower * centralShare, // Центральная
+		totalMapPower * midShare,     // Средняя
+		totalMapPower * farShare,     // Дальняя
+	}
 
 	// Генерация кружков для каждой жилы
 	for i, area := range veinAreas {

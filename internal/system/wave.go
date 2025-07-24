@@ -32,28 +32,18 @@ func NewWaveSystem(ecs *entity.ECS, hexMap *hexmap.HexMap, eventDispatcher *even
 
 func (s *WaveSystem) Update(deltaTime float64, wave *component.Wave) {
 	if wave == nil {
-		// log.Println("Wave is nil!")
 		return
 	}
-	// log.Println("Updating wave, EnemiesToSpawn:", wave.EnemiesToSpawn, "ActiveEnemies:", s.activeEnemies)
 	if wave.EnemiesToSpawn > 0 {
 		wave.SpawnTimer += deltaTime
 		if wave.SpawnTimer >= wave.SpawnInterval {
 			s.spawnEnemy(wave)
 			wave.EnemiesToSpawn--
 			wave.SpawnTimer = 0
-
-			newInterval := config.InitialSpawnInterval - config.SpawnIntervalDecrement*wave.Number
-			if newInterval < config.MinSpawnInterval {
-				newInterval = config.MinSpawnInterval
-			}
-			wave.SpawnInterval = float64(newInterval) / 1000.0
 		}
 	} else if wave.EnemiesToSpawn == 0 && s.activeEnemies == 0 {
 		s.eventDispatcher.Dispatch(event.Event{Type: event.WaveEnded})
-		// log.Println("WaveEnded event dispatched") // Лог отправки события
 	}
-	// log.Println("EnemiesToSpawn:", wave.EnemiesToSpawn, "ActiveEnemies:", s.activeEnemies) // Лог состояния
 }
 
 func (s *WaveSystem) ResetActiveEnemies() {
@@ -61,9 +51,9 @@ func (s *WaveSystem) ResetActiveEnemies() {
 }
 
 func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
-	def, ok := defs.EnemyLibrary["DEFAULT_ENEMY"]
+	def, ok := defs.EnemyLibrary[wave.EnemyID]
 	if !ok {
-		log.Println("Error: Default enemy definition not found!")
+		log.Printf("Error: Enemy definition not found for ID: %s", wave.EnemyID)
 		return
 	}
 
@@ -79,7 +69,7 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 		HasStroke: def.Visuals.StrokeWidth > 0,
 	}
 	s.ecs.Enemies[id] = &component.Enemy{
-		DefID:              "DEFAULT_ENEMY", // <-- Сохраняем ID определения
+		DefID:              wave.EnemyID,
 		OreDamageCooldown:  0,
 		LineDamageCooldown: 0,
 		PhysicalArmor:      def.PhysicalArmor,
@@ -89,46 +79,67 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 }
 
 func (s *WaveSystem) StartWave(waveNumber int) *component.Wave {
-	enemiesToSpawn := config.EnemiesPerWave + (waveNumber-1)*config.EnemiesIncrementPerWave
-	fullPath := []hexmap.Hex{}
+	waveDef, ok := defs.WavePatterns[waveNumber]
+	if !ok {
+		// Логика для волн после 10-й: повторяем с 6-й по 10-ю
+		repeatingWaveNumber := ((waveNumber - 6) % 5) + 6
+		waveDef, ok = defs.WavePatterns[repeatingWaveNumber]
+		if !ok {
+			log.Printf("Критическая ошибка: не найдено определение для повторяющейся волны %d", repeatingWaveNumber)
+			// В качестве запасного варианта, используем первую волну
+			waveDef = defs.WavePatterns[1]
+		}
+	}
 
-	if len(s.hexMap.Checkpoints) == 0 {
-		path := hexmap.AStar(s.hexMap.Entry, s.hexMap.Exit, s.hexMap)
-		if path == nil {
-			log.Println("Не удалось найти путь от входа до выхода при старте волны!")
-			return nil
-		}
-		fullPath = path
-	} else {
-		current := s.hexMap.Entry
-		for i, cp := range s.hexMap.Checkpoints {
-			pathSegment := hexmap.AStar(current, cp, s.hexMap)
-			if pathSegment == nil {
-				log.Println("Не удалось найти путь до чекпоинта", i+1, "при старте волны!")
-				return nil
-			}
-			if len(fullPath) == 0 {
-				fullPath = pathSegment
-			} else {
-				fullPath = append(fullPath, pathSegment[1:]...)
-			}
-			current = cp
-		}
-		pathToExit := hexmap.AStar(current, s.hexMap.Exit, s.hexMap)
-		if pathToExit == nil {
-			log.Println("Не удалось найти путь до выхода при старте волны!")
-			return nil
-		}
-		fullPath = append(fullPath, pathToExit[1:]...)
+	fullPath := s.calculatePath()
+	if fullPath == nil {
+		log.Println("Не удалось рассчитать путь для волны!")
+		return nil
 	}
 
 	return &component.Wave{
 		Number:         waveNumber,
-		EnemiesToSpawn: enemiesToSpawn,
+		EnemiesToSpawn: waveDef.Count,
 		SpawnTimer:     0,
-		SpawnInterval:  float64(config.InitialSpawnInterval) / 1000.0,
+		SpawnInterval:  waveDef.SpawnInterval.Seconds(),
 		CurrentPath:    fullPath,
+		EnemyID:        waveDef.EnemyID,
 	}
+}
+
+func (s *WaveSystem) calculatePath() []hexmap.Hex {
+	fullPath := []hexmap.Hex{}
+	if len(s.hexMap.Checkpoints) == 0 {
+		path := hexmap.AStar(s.hexMap.Entry, s.hexMap.Exit, s.hexMap)
+		if path == nil {
+			log.Println("Не удалось найти путь от входа до выхода!")
+			return nil
+		}
+		return path
+	}
+
+	current := s.hexMap.Entry
+	for i, cp := range s.hexMap.Checkpoints {
+		pathSegment := hexmap.AStar(current, cp, s.hexMap)
+		if pathSegment == nil {
+			log.Printf("Не удалось найти путь до чекпоинта %d!", i+1)
+			return nil
+		}
+		if len(fullPath) == 0 {
+			fullPath = pathSegment
+		} else {
+			fullPath = append(fullPath, pathSegment[1:]...)
+		}
+		current = cp
+	}
+
+	pathToExit := hexmap.AStar(current, s.hexMap.Exit, s.hexMap)
+	if pathToExit == nil {
+		log.Println("Не удалось найти путь от последнего чекпоинта до выхода!")
+		return nil
+	}
+	fullPath = append(fullPath, pathToExit[1:]...)
+	return fullPath
 }
 
 func (s *WaveSystem) OnEvent(e event.Event) {
