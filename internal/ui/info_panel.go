@@ -165,10 +165,11 @@ func (p *InfoPanel) Draw(screen *ebiten.Image, ecs *entity.ECS) {
 func (p *InfoPanel) drawCombineButton(screen *ebiten.Image, panelRect image.Rectangle) {
 	btnWidth := 150
 	btnHeight := 40
+	// Смещаем кнопку "Объединить" влево, чтобы она не перекрывала другие кнопки
 	p.CombineButton.Rect = image.Rect(
-		panelRect.Max.X-btnWidth-20,
+		panelRect.Max.X-btnWidth*2-40,
 		panelRect.Max.Y-btnHeight-20,
-		panelRect.Max.X-20,
+		panelRect.Max.X-btnWidth-40,
 		panelRect.Max.Y-20,
 	)
 	p.CombineButton.Text = "Объединить"
