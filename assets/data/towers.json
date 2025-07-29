@@ -7,7 +7,7 @@
       "damage": 25,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.06,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PHYSICAL"
@@ -27,7 +27,7 @@
       "damage": 25,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.07,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL"
@@ -47,7 +47,7 @@
       "damage": 20,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.04,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PURE"
@@ -67,7 +67,7 @@
       "damage": 18,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.08,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PHYSICAL",
@@ -90,7 +90,7 @@
       "damage": 18,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.06,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",
@@ -113,7 +113,7 @@
       "damage": 15,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.1,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PURE",
@@ -136,7 +136,7 @@
       "damage": 55,
       "fire_rate": 1.2,
       "range": 4,
-      "shot_cost": 0.02,
+      "shot_cost": 0.15,
       "attack": {
         "type": "LASER",
         "damage_type": "PURE",
@@ -184,7 +184,7 @@
       "damage": 1,
       "fire_rate": 1.67,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.09,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "SLOW"
@@ -204,7 +204,7 @@
       "damage": 1,
       "fire_rate": 0.8,
       "range": 3,
-      "shot_cost": 0.01,
+      "shot_cost": 0.07,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "POISON"
