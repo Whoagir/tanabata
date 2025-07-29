@@ -7,7 +7,7 @@
       "damage": 25,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.05,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PHYSICAL"
@@ -27,7 +27,7 @@
       "damage": 25,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.05,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL"
@@ -47,7 +47,7 @@
       "damage": 20,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.045,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PURE"
@@ -67,7 +67,7 @@
       "damage": 18,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.09,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PHYSICAL",
@@ -90,7 +90,7 @@
       "damage": 18,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.09,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",
@@ -113,7 +113,7 @@
       "damage": 15,
       "fire_rate": 1.0,
       "range": 3,
-      "shot_cost": 0.09,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PURE",
@@ -136,7 +136,7 @@
       "damage": 55,
       "fire_rate": 1.2,
       "range": 4,
-      "shot_cost": 0.12,
+      "shot_cost": 0.02,
       "attack": {
         "type": "LASER",
         "damage_type": "PURE",
@@ -160,7 +160,7 @@
       "damage": 0,
       "fire_rate": 1.0,
       "range": 1,
-      "shot_cost": 0.2,
+      "shot_cost": 0.05,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "INTERNAL"
@@ -181,10 +181,10 @@
     "name": "Замедление (NI)",
     "type": "ATTACK",
     "combat": {
-      "damage": 5,
+      "damage": 1,
       "fire_rate": 1.67,
       "range": 3,
-      "shot_cost": 0.08,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "SLOW"
@@ -198,13 +198,13 @@
   },
   {
     "id": "TOWER_POISON",
-    "name": "Яд (NU)",
+    "name": "��д (NU)",
     "type": "ATTACK",
     "combat": {
-      "damage": 5,
+      "damage": 1,
       "fire_rate": 0.8,
       "range": 3,
-      "shot_cost": 0.1,
+      "shot_cost": 0.01,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "POISON"

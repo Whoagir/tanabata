@@ -127,45 +127,26 @@ func (g *Game) generateOre() {
 	veinAreas := make([][]hexmap.Hex, 3)
 	for i, center := range centers {
 		if i == 0 {
-			// Новая, точечная логика для центральной жилы
-			centralVein := make(map[hexmap.Hex]struct{})
-			startHex := center
-			centralVein[startHex] = struct{}{}
-			
-			currentHex := startHex
-			targetSize := 4 + rand.Intn(2) // Гарантированно 4 или 5 гексов
+			// Новая детерминированная логика для центральной жилы
+			centralVein := []hexmap.Hex{center}
+			neighbors := g.HexMap.GetNeighbors(center)
 
-			for len(centralVein) < targetSize {
-				// Получаем соседей *валидных* гексов на карте
-				neighbors := g.HexMap.GetNeighbors(currentHex)
-				validNeighbors := []hexmap.Hex{}
-				for _, n := range neighbors {
-					if _, exists := g.HexMap.Tiles[n]; exists {
-						validNeighbors = append(validNeighbors, n)
-					}
-				}
+			// Перемешиваем соседей для случайности
+			rand.Shuffle(len(neighbors), func(i, j int) {
+				neighbors[i], neighbors[j] = neighbors[j], neighbors[i]
+			})
 
-				if len(validNeighbors) == 0 {
-					// Если у текущего гекса нет соседей (маловероятно),
-					// попробуем "прыгнуть" к другому случайному гексу в жиле
-					for hex := range centralVein {
-						currentHex = hex
-						break
-					}
-					continue
+			// Добавляем первых 3 валидных соседа, чтобы получить ровно 4 гекса
+			for _, neighbor := range neighbors {
+				if len(centralVein) >= 4 {
+					break
 				}
-				
-				nextHex := validNeighbors[rand.Intn(len(validNeighbors))]
-				centralVein[nextHex] = struct{}{} // map сам обработает дубликаты
-				currentHex = nextHex
+				// Дополнительно проверяем, что сосед не является критической точкой
+				if !isTooCloseToCritical(neighbor) {
+					centralVein = append(centralVein, neighbor)
+				}
 			}
-			
-			// Конвертируем результат в slice
-			veinAreaSlice := make([]hexmap.Hex, 0, len(centralVein))
-			for hex := range centralVein {
-				veinAreaSlice = append(veinAreaSlice, hex)
-			}
-			veinAreas[i] = veinAreaSlice
+			veinAreas[i] = centralVein
 		} else {
 			// Старая, рабочая логика для остальных жил
 			veinAreas[i] = g.HexMap.GetHexesInRange(center, 2)
@@ -180,7 +161,7 @@ func (g *Game) generateOre() {
 
 	// 2. Определяем доли для жил со случайным разбросом
 	// Центральная жила (самая слабая)
-	centralShare := 0.18 + rand.Float64()*0.04 // 18% - 22%
+	centralShare := (0.18 + rand.Float64()*0.04) * (2.5 / 1.5) // 18% - 22%, УМНОЖЕНО НА 2.5 и разделено на 1.5
 	// Средняя жила
 	midShare := 0.27 + rand.Float64()*0.06 // 27% - 33%
 	// Дальняя жила (самая сильная) получает остаток, чтобы сумма была 100%
@@ -193,26 +174,54 @@ func (g *Game) generateOre() {
 		totalMapPower * farShare,     // Дальняя
 	}
 
-	// Генерация кружков для каждой жилы
+	// Распределение энергии по жилам
 	for i, area := range veinAreas {
-		// Проверяем, что область не пустая
 		if len(area) == 0 {
 			continue
 		}
 
-		circles := generateEnergyCircles(area, totalPowers[i], config.HexSize)
+		totalVeinPower := totalPowers[i]
 
-		// Привязка энергии к гексам, исключая чекпоинты
-		for _, circle := range circles {
-			hexesInCircle := g.getHexesInCircle(circle.CenterX, circle.CenterY, circle.Radius)
-			for _, hex := range hexesInCircle {
-				if g.isCheckpoint(hex) {
-					continue // Пропускаем чекпоинты
+		if i == 0 { // Специальная, детерминированная логика для центральной жилы
+			// Расп��еделяем общую мощность жилы (totalVeinPower) между 4 гексами
+			remainingPower := totalVeinPower
+			for j := 0; j < len(area)-1; j++ {
+				hex := area[j]
+				// Берем случайную долю от оставшейся мощности, но с ограничением,
+				// чтобы не забрать всё сразу и оставить что-то остальным.
+				avgPower := remainingPower / float64(len(area)-j)
+				fluctuation := avgPower * 0.4 // Колебание в пределах 40%
+				power := avgPower + (rand.Float64()*2-1)*fluctuation
+				
+				if power > remainingPower {
+					power = remainingPower
 				}
-				if _, exists := energyVeins[hex]; !exists {
-					energyVeins[hex] = 0
+				if power < 0 {
+					power = 0
 				}
-				energyVeins[hex] += circle.Power
+
+				energyVeins[hex] = power / 100.0 // Конвертируем из процентов
+				remainingPower -= power
+			}
+			// Последний гекс забирает всё оставшееся
+			if len(area) > 0 {
+				energyVeins[area[len(area)-1]] = remainingPower / 100.0
+			}
+
+		} else { // Старая, случайная логика для остальных жил
+			circles := generateEnergyCircles(area, totalVeinPower, config.HexSize)
+			// Привязка энергии к гексам ч��рез круги
+			for _, circle := range circles {
+				hexesInCircle := g.getHexesInCircle(circle.CenterX, circle.CenterY, circle.Radius)
+				for _, hex := range hexesInCircle {
+					if g.isCheckpoint(hex) {
+						continue
+					}
+					if _, exists := energyVeins[hex]; !exists {
+						energyVeins[hex] = 0
+					}
+					energyVeins[hex] += circle.Power
+				}
 			}
 		}
 	}

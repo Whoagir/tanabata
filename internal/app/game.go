@@ -816,6 +816,9 @@ func (g *Game) FinalizeTowerSelection() {
 
 	// Сбрасываем счетчик построенных башен для следующей фазы
 	g.towersBuilt = 0
-	// Пересчитываем ауры, так как набор башен изменился.
+
+	// Полностью пересчитываем состояние всех систем, зависящих от набора башен
+	g.rebuildEnergyNetwork()
 	g.AuraSystem.RecalculateAuras()
+	g.CraftingSystem.RecalculateCombinations()
 }
