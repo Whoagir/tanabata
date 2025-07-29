@@ -198,7 +198,7 @@
   },
   {
     "id": "TOWER_POISON",
-    "name": "��д (NU)",
+    "name": "Яд (NU)",
     "type": "ATTACK",
     "combat": {
       "damage": 1,

@@ -67,6 +67,7 @@ type Game struct {
 	dragOriginalParentID types.EntityID
 	hiddenLineID         types.EntityID // ID линии, скрытой на время перетаскивания
 	DebugInfo            *LineDragDebugInfo
+	SelectedHex          *hexmap.Hex // Указатель, чтобы можно было иметь nil
 }
 
 // NewGame initializes a new game instance.
@@ -479,6 +480,16 @@ func (g *Game) GetAllTowerHexes() []hexmap.Hex {
 		allHexes = append(allHexes, tower.Hex)
 	}
 	return allHexes
+}
+
+// GetTowerAtHex возвращает башню на указанном гексе, если она существует.
+func (g *Game) GetTowerAtHex(hex hexmap.Hex) (*component.Tower, bool) {
+	for _, tower := range g.ECS.Towers {
+		if tower.Hex == hex {
+			return tower, true
+		}
+	}
+	return nil, false
 }
 
 func (g *Game) SetTowersBuilt(count int) {

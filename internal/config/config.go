@@ -104,4 +104,5 @@ var (
 	ProjectileColorPure     = color.RGBA{180, 240, 255, 255} // Светло-голубой
 	ProjectileColorSlow     = color.RGBA{173, 216, 230, 255} // Ледяной синий
 	ProjectileColorPoison   = color.RGBA{124, 252, 0, 255}   // Ядовито-салатовый
+	HighlightColor          = color.RGBA{135, 206, 250, 120} // Полупрозрачный светло-голубой для подсветки
 )

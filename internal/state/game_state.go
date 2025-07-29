@@ -212,24 +212,34 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 
 func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 	isShiftPressed := ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight)
+	hex := utils.ScreenToHex(float64(x), float64(y))
 
 	if button == ebiten.MouseButtonLeft {
-		if entityID, found := g.findEntityAt(x, y); found {
-			// Если нажат Shift, добавляем башню в ручной выбор
+		entityID, entityFound := g.findEntityAt(x, y)
+		tower, towerFound := g.game.GetTowerAtHex(hex)
+
+		if entityFound {
 			if isShiftPressed {
 				g.game.AddToManualSelection(entityID)
-				return // Выходим, чтобы не обрабатывать клик дальше
+				return
 			}
-			// Иначе, показываем инфо-панель как обычно
 			g.infoPanel.SetTarget(entityID)
+			// Если найдена башня, сохраняем ее гекс для подсветки
+			if towerFound {
+				g.game.SelectedHex = &tower.Hex
+			} else {
+				g.game.SelectedHex = nil
+			}
 			return
 		} else {
+			// Клик мимо сущности
 			g.infoPanel.Hide()
+			g.game.SelectedHex = nil
 		}
 	}
 
-	hex := utils.ScreenToHex(float64(x), float64(y))
 	if !g.hexMap.Contains(hex) {
+		g.game.SelectedHex = nil // Сбрасываем выбор, если клик за пределами карты
 		return
 	}
 
@@ -240,6 +250,7 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 		return
 	}
 
+	// Логика размещения/удаления башен остается без изменений
 	if g.game.ECS.GameState.Phase == component.BuildState {
 		if button == ebiten.MouseButtonLeft {
 			g.game.PlaceTower(hex)
@@ -250,6 +261,7 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 }
 
 func (g *GameState) Draw(screen *ebiten.Image) {
+	// --- Отрисовка карты и статичных элементов ---
 	wallHexes, typeAHexes, typeBHexes := g.game.GetTowerHexesByType()
 	outlineColors := render.TowerOutlineColors{
 		WallColor:  config.TowerStrokeColor,
@@ -258,6 +270,26 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 	}
 	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, outlineColors, g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
 
+	// --- Отрисовка подсветки выбранного гекса ---
+	if g.game.SelectedHex != nil {
+		// Используем существующий метод рендерера для получения экранных координат
+		// и вершин полигона для гекса.
+		screenX, screenY := g.renderer.HexToPixel(*g.game.SelectedHex)
+		vertices, indices := g.renderer.GetHexPolygonVertices(screenX, screenY)
+
+		// Рисуем полигон с цветом подсветки
+		for i := 0; i < len(indices); i += 3 {
+			v0 := vertices[indices[i]]
+			v1 := vertices[indices[i+1]]
+			v2 := vertices[indices[i+2]]
+			screen.DrawTriangles([]ebiten.Vertex{v0, v1, v2}, []uint16{0, 1, 2}, render.GetSubImage(), &ebiten.DrawTrianglesOptions{
+				FillRule: ebiten.FillAll,
+				ColorM:   render.ColorToScale(config.HighlightColor),
+			})
+		}
+	}
+
+	// --- Отрисовка UI ---
 	var stateColor color.Color
 	switch g.game.ECS.GameState.Phase {
 	case component.BuildState:

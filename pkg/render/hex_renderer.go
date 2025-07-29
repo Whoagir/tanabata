@@ -7,6 +7,7 @@ import (
 	"go-tower-defense/internal/system"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
+	"image"
 	"image/color"
 	"math"
 
@@ -324,3 +325,53 @@ func (r *HexRenderer) GetHexAt(x, y int) hexmap.Hex {
 func (r *HexRenderer) GetMapImage() *ebiten.Image {
 	return r.mapImage
 }
+
+// HexToPixel преобразует координаты гекса в экранные координаты.
+// Эта функция вынесена для общего доступа, например, для отрисовки подсветки.
+func (r *HexRenderer) HexToPixel(h hexmap.Hex) (float64, float64) {
+	x, y := h.ToPixel(r.hexSize)
+	return x + r.offsetX, y + r.offsetY
+}
+
+// GetHexPolygonVertices возвращает вершины для отрисовки полигона гекса.
+// Это также вынесено для общего использования.
+func (r *HexRenderer) GetHexPolygonVertices(screenX, screenY float64) ([]ebiten.Vertex, []uint16) {
+	path := vector.Path{}
+	for i := 0; i < 6; i++ {
+		angle := math.Pi/3*float64(i) + math.Pi/6
+		px := screenX + r.hexSize*math.Cos(angle)
+		py := screenY + r.hexSize*math.Sin(angle)
+		if i == 0 {
+			path.MoveTo(float32(px), float32(py))
+		} else {
+			path.LineTo(float32(px), float32(py))
+		}
+	}
+	path.Close()
+
+	var vs []ebiten.Vertex
+	var is []uint16
+	vs, is = path.AppendVerticesAndIndicesForFilling(vs, is)
+	return vs, is
+}
+
+// GetSubImage возвращает 1x1 белый пиксель, используемый для заливки.
+func GetSubImage() *ebiten.Image {
+	img := ebiten.NewImage(3, 3)
+	img.Fill(color.White)
+	return img.SubImage(image.Rect(1, 1, 2, 2)).(*ebiten.Image)
+}
+
+// ColorToScale преобразует color.Color в ebiten.ColorM для использования в DrawTrianglesOptions.
+func ColorToScale(clr color.Color) ebiten.ColorM {
+	r, g, b, a := clr.RGBA()
+	rf := float64(r) / 0xffff
+	gf := float64(g) / 0xffff
+	bf := float64(b) / 0xffff
+	af := float64(a) / 0xffff
+
+	cm := ebiten.ColorM{}
+	cm.Scale(rf, gf, bf, af)
+	return cm
+}
+
