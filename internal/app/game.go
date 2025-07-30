@@ -52,22 +52,24 @@ type Game struct {
 	SpeedButton               *ui.SpeedButton
 	SpeedMultiplier           float64
 	PauseButton               *ui.PauseButton
-	gameTime                  float64
 	DebugTowerType            int
+	DebugInfo                 *LineDragDebugInfo
 
-	// Состояние для ручного выбора крафта
-	manualCraftSelection []types.EntityID
+	// Game state
+	gameTime               float64
+	isPaused               bool
+	gameSpeed              float64
+	currentWave            *component.Wave
+	isDragging             bool
+	sourceTowerID          types.EntityID
+	hiddenLineID           types.EntityID
+	highlightedTower       types.EntityID
+	manuallySelectedTowers []types.EntityID
 
-	// Состояние для ручного выбора крафта
-	ManualCraftSelection []types.EntityID
-
-	// Состояние для перетаскивания линий
+	// Line dragging state
 	isLineDragging       bool
 	dragSourceTowerID    types.EntityID
 	dragOriginalParentID types.EntityID
-	hiddenLineID         types.EntityID // ID линии, скрытой на время перетаскивания
-	DebugInfo            *LineDragDebugInfo
-	SelectedHex          *hexmap.Hex // Указатель, чтобы можно было иметь nil
 }
 
 // NewGame initializes a new game instance.
@@ -126,11 +128,12 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	listener := &GameEventListener{game: g}
 	eventDispatcher.Subscribe(event.OreDepleted, listener)
 	eventDispatcher.Subscribe(event.WaveEnded, listener)
+	eventDispatcher.Subscribe(event.CombineTowersRequest, listener)
+	eventDispatcher.Subscribe(event.ToggleTowerSelectionForSaveRequest, listener)
 
 	// Подписываем систему крафта на события
 	eventDispatcher.Subscribe(event.TowerPlaced, g.CraftingSystem)
 	eventDispatcher.Subscribe(event.TowerRemoved, g.CraftingSystem)
-	eventDispatcher.Subscribe(event.CombineTowersRequest, listener)
 
 	g.placeInitialStones()
 
@@ -301,6 +304,10 @@ func (l *GameEventListener) OnEvent(e event.Event) {
 		if towerID, ok := e.Data.(types.EntityID); ok {
 			l.game.CombineTowers(towerID)
 		}
+	case event.ToggleTowerSelectionForSaveRequest:
+		if towerID, ok := e.Data.(types.EntityID); ok {
+			l.game.ToggleTowerSelectionForSave(towerID)
+		}
 	}
 }
 
@@ -431,6 +438,7 @@ func (g *Game) ClearProjectiles() {
 func (g *Game) HandleIndicatorClick() {
 	if g.ECS.GameState.Phase == component.BuildState {
 		g.StateSystem.SwitchToWaveState()
+		g.ClearAllSelections() // <-- Сбрасываем выбор при ручном старте волны
 	} else {
 		g.StateSystem.SwitchToBuildState()
 	}
@@ -504,6 +512,32 @@ func (g *Game) GetGameTime() float64 {
 	return g.gameTime
 }
 
+// ToggleTowerSelectionForSave инвертирует состояние IsSelected для башни.
+// Используется UI для отметки башен, которые нужно сохранить.
+func (g *Game) ToggleTowerSelectionForSave(id types.EntityID) {
+	if tower, ok := g.ECS.Towers[id]; ok {
+		tower.IsSelected = !tower.IsSelected
+	}
+}
+
+// SetHighlightedTower устанавливает башню, которая должна быть подсвечена для UI.
+func (g *Game) SetHighlightedTower(id types.EntityID) {
+	// Снимаем подсветку со старой башни
+	if g.highlightedTower != 0 {
+		if tower, ok := g.ECS.Towers[g.highlightedTower]; ok {
+			tower.IsHighlighted = false
+		}
+	}
+
+	// Устанавливаем новую подсвеченную башню
+	g.highlightedTower = id
+	if id != 0 {
+		if tower, ok := g.ECS.Towers[id]; ok {
+			tower.IsHighlighted = true
+		}
+	}
+}
+
 func (g *Game) GetOreHexes() map[hexmap.Hex]float64 {
 	oreHexes := make(map[hexmap.Hex]float64)
 	for _, ore := range g.ECS.Ores {
@@ -516,9 +550,92 @@ func (g *Game) GetOreHexes() map[hexmap.Hex]float64 {
 
 // --- Функции для режима перетаскивания линий ---
 
+// ClearAllSelections сбрасывает все виды выбора (ручной и одиночный).
+func (g *Game) ClearAllSelections() {
+	// Сбрасываем подсветку
+	g.SetHighlightedTower(0)
+
+	// Сбрасываем ручной выбор
+	if len(g.manuallySelectedTowers) > 0 {
+		for _, towerID := range g.manuallySelectedTowers {
+			if tower, ok := g.ECS.Towers[towerID]; ok {
+				tower.IsManuallySelected = false
+			}
+		}
+		g.manuallySelectedTowers = []types.EntityID{}
+	}
+
+	// Пересчитываем комбинации, так как ручной выбор сброшен
+	g.CraftingSystem.RecalculateCombinations()
+}
+
 // IsInLineDragMode возвращает true, если игра в режиме перетаскивания линий.
 func (g *Game) IsInLineDragMode() bool {
 	return g.isLineDragging
+}
+
+// ClearManualSelection сбрасывает текущий ручной выбор башен.
+func (g *Game) ClearManualSelection() {
+	if len(g.manuallySelectedTowers) == 0 {
+		return // Нечего сбрасывать
+	}
+	for _, towerID := range g.manuallySelectedTowers {
+		if tower, ok := g.ECS.Towers[towerID]; ok {
+			tower.IsManuallySelected = false // Используем новое поле
+		}
+	}
+	g.manuallySelectedTowers = []types.EntityID{}
+	g.CraftingSystem.RecalculateCombinations()
+}
+
+// HandleShiftClick обрабатывает клики мыши, когда зажата клавиша Shift.
+func (g *Game) HandleShiftClick(hex hexmap.Hex, isLeftClick, isRightClick bool) {
+	// Эта логика работает только если мы кликнули на башню
+	clickedTowerID, clickedOnTower := g.getTowerAt(hex)
+	if !clickedOnTower {
+		return
+	}
+
+	if isLeftClick {
+		// Проверяем, есть ли башня уже в списке
+		foundIndex := -1
+		for i, id := range g.manuallySelectedTowers {
+			if id == clickedTowerID {
+				foundIndex = i
+				break
+			}
+		}
+
+		if foundIndex != -1 {
+			// Если нашли, удаляем и добавляем в конец, чтобы сделать ее "последней"
+			g.manuallySelectedTowers = append(g.manuallySelectedTowers[:foundIndex], g.manuallySelectedTowers[foundIndex+1:]...)
+			g.manuallySelectedTowers = append(g.manuallySelectedTowers, clickedTowerID)
+		} else {
+			// Если не нашли, просто добавляем
+			g.manuallySelectedTowers = append(g.manuallySelectedTowers, clickedTowerID)
+			if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
+				tower.IsManuallySelected = true // Используем новое поле
+			}
+		}
+	} else if isRightClick {
+		// Удаляем башню из списка
+		foundIndex := -1
+		for i, id := range g.manuallySelectedTowers {
+			if id == clickedTowerID {
+				foundIndex = i
+				break
+			}
+		}
+		if foundIndex != -1 {
+			if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
+				tower.IsManuallySelected = false // Используем новое поле
+			}
+			g.manuallySelectedTowers = append(g.manuallySelectedTowers[:foundIndex], g.manuallySelectedTowers[foundIndex+1:]...)
+		}
+	}
+	// После любого изменения в ручном выборе, нужно пересчитать комбинации
+	g.CraftingSystem.RecalculateCombinations()
+	log.Printf("Manual selection updated. Count: %d, IDs: %v", len(g.manuallySelectedTowers), g.manuallySelectedTowers)
 }
 
 // ToggleLineDragMode переключает режим перетаскивания линий.
@@ -788,12 +905,6 @@ func (g *Game) CancelLineDrag() {
 	g.DebugInfo = nil
 }
 
-// AddToManualSelection добавляет башню в список ручного выбора для крафта.
-func (g *Game) AddToManualSelection(id types.EntityID) {
-	g.ManualCraftSelection = append(g.ManualCraftSelection, id)
-	log.Printf("Added tower %d to manual selection. Current selection: %v", id, g.ManualCraftSelection)
-}
-
 // FinalizeTowerSelection обрабатывает окончание фазы выбора башен.
 func (g *Game) FinalizeTowerSelection() {
 	towersToConvertToWalls := []hexmap.Hex{}
@@ -827,6 +938,9 @@ func (g *Game) FinalizeTowerSelection() {
 
 	// Сбрасываем счетчик построенных башен для следующей фазы
 	g.towersBuilt = 0
+
+	// Сбрасываем любой выбор, чтобы в начале волны не было подсветки
+	g.ClearAllSelections()
 
 	// Полностью пересчитываем состояние всех систем, зависящих от набора башен
 	g.rebuildEnergyNetwork()

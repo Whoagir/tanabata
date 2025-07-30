@@ -41,6 +41,7 @@ func (s *StateSystem) SwitchToBuildState() {
 }
 
 func (s *StateSystem) SwitchToWaveState() {
+	s.game.ClearAllSelections() // <-- Вот оно, надежное место для сброса
 	s.game.StartWave()
 	s.ecs.GameState.Phase = component.WaveState
 	s.eventDispatcher.Dispatch(event.Event{Type: event.WavePhaseStarted})

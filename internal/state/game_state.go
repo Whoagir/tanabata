@@ -124,20 +124,37 @@ func (g *GameState) Update(deltaTime float64) {
 
 	g.game.Update(deltaTime)
 
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		x, y := ebiten.CursorPosition()
-		if g.isClickOnUI(x, y) {
-			g.handleUIClick(x, y)
-		} else {
-			g.handleGameClick(x, y, ebiten.MouseButtonLeft)
-		}
-		g.lastClickTime = time.Now()
-	}
+	isShiftPressed := ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight)
 
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
-		x, y := ebiten.CursorPosition()
-		g.handleGameClick(x, y, ebiten.MouseButtonRight)
-		g.lastClickTime = time.Now()
+	// --- Раздельная обработка ввода ---
+	if isShiftPressed {
+		// Новая логика для мульти-селекта
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			x, y := ebiten.CursorPosition()
+			hex := utils.ScreenToHex(float64(x), float64(y))
+			g.game.HandleShiftClick(hex, true, false)
+		}
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+			x, y := ebiten.CursorPosition()
+			hex := utils.ScreenToHex(float64(x), float64(y))
+			g.game.HandleShiftClick(hex, false, true)
+		}
+	} else {
+		// Старая, проверенная логика для всего остального
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			x, y := ebiten.CursorPosition()
+			if g.isClickOnUI(x, y) {
+				g.handleUIClick(x, y)
+			} else {
+				g.handleGameClick(x, y, ebiten.MouseButtonLeft)
+			}
+			g.lastClickTime = time.Now()
+		}
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+			x, y := ebiten.CursorPosition()
+			g.handleGameClick(x, y, ebiten.MouseButtonRight)
+			g.lastClickTime = time.Now()
+		}
 	}
 }
 
@@ -150,10 +167,10 @@ func (g *GameState) isClickOnUI(x, y int) bool {
 	if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
 		return true
 	}
-	if g.infoPanel.IsVisible && p.In(g.infoPanel.SelectButton.Rect) {
-		// Клик по кнопке "Выбрать" в панели теперь не считается общим UI-кликом,
-		// так как он обрабатывается внутри infoPanel.Update
-		return false
+	// Важно: клик по кнопке в инфо-панели НЕ считается общим UI-кликом,
+	// так как он обрабатывается самой панелью.
+	if g.infoPanel.IsVisible && (p.In(g.infoPanel.SelectButton.Rect) || p.In(g.infoPanel.CombineButton.Rect)) {
+		return true // Возвращаем true, чтобы основной обработчик его проигнорировал
 	}
 	return false
 }
@@ -191,6 +208,7 @@ func (g *GameState) handlePauseClick() {
 }
 
 func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
+	// Сначала ищем башни, так как они чаще являются целью клика
 	for id, pos := range g.game.ECS.Positions {
 		if _, isTower := g.game.ECS.Towers[id]; isTower {
 			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
@@ -199,6 +217,7 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 			}
 		}
 	}
+	// Потом врагов
 	for id, pos := range g.game.ECS.Positions {
 		if _, isEnemy := g.game.ECS.Enemies[id]; isEnemy {
 			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
@@ -210,36 +229,36 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 	return 0, false
 }
 
+// handleGameClick - это восстановленная старая логика обработки кликов.
 func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
-	isShiftPressed := ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight)
+	// При любом обычном клике сбрасываем ручной выбор
+	g.game.ClearManualSelection()
+
 	hex := utils.ScreenToHex(float64(x), float64(y))
 
 	if button == ebiten.MouseButtonLeft {
 		entityID, entityFound := g.findEntityAt(x, y)
-		tower, towerFound := g.game.GetTowerAtHex(hex)
-
 		if entityFound {
-			if isShiftPressed {
-				g.game.AddToManualSelection(entityID)
-				return
-			}
+			// Показываем инфо-панель и подсвечиваем башню в ЛЮБОЙ фазе
 			g.infoPanel.SetTarget(entityID)
-			// Если найдена башня, сохраняем ее гекс для подсветки
-			if towerFound {
-				g.game.SelectedHex = &tower.Hex
-			} else {
-				g.game.SelectedHex = nil
-			}
-			return
+			g.game.SetHighlightedTower(entityID)
 		} else {
-			// Клик мимо сущности
+			// Клик мимо всего - сбрасываем всё
 			g.infoPanel.Hide()
-			g.game.SelectedHex = nil
+			g.game.ClearAllSelections()
 		}
 	}
 
+	// --- Логика, зависящая от фазы (исполняется ПОСЛЕ общей логики) ---
+
+	// В фазе выбора больше ничего делать не нужно
+	if g.game.ECS.GameState.Phase == component.TowerSelectionState {
+		return
+	}
+
+	// В остальных фазах проверяем клик правой кнопкой или клик по карте
 	if !g.hexMap.Contains(hex) {
-		g.game.SelectedHex = nil // Сбрасываем выбор, если клик за пределами карты
+		g.game.ClearAllSelections()
 		return
 	}
 
@@ -250,7 +269,6 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 		return
 	}
 
-	// Логика размещения/удаления башен остается без изменений
 	if g.game.ECS.GameState.Phase == component.BuildState {
 		if button == ebiten.MouseButtonLeft {
 			g.game.PlaceTower(hex)
@@ -270,22 +288,20 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 	}
 	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, outlineColors, g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
 
-	// --- Отрисовка подсветки выбранного гекса ---
-	if g.game.SelectedHex != nil {
-		// Используем существующий метод рендерера для получения экранных координат
-		// и вершин полигона для гекса.
-		screenX, screenY := g.renderer.HexToPixel(*g.game.SelectedHex)
-		vertices, indices := g.renderer.GetHexPolygonVertices(screenX, screenY)
-
-		// Рисуем полигон с цветом подсветки
-		for i := 0; i < len(indices); i += 3 {
-			v0 := vertices[indices[i]]
-			v1 := vertices[indices[i+1]]
-			v2 := vertices[indices[i+2]]
-			screen.DrawTriangles([]ebiten.Vertex{v0, v1, v2}, []uint16{0, 1, 2}, render.GetSubImage(), &ebiten.DrawTrianglesOptions{
-				FillRule: ebiten.FillAll,
-				ColorM:   render.ColorToScale(config.HighlightColor),
-			})
+	// --- Новая отрисовка подсветки для всех выбранных башен ---
+	for _, tower := range g.game.ECS.Towers {
+		if tower.IsHighlighted || tower.IsManuallySelected {
+			screenX, screenY := g.renderer.HexToPixel(tower.Hex)
+			vertices, indices := g.renderer.GetHexPolygonVertices(screenX, screenY)
+			for i := 0; i < len(indices); i += 3 {
+				v0 := vertices[indices[i]]
+				v1 := vertices[indices[i+1]]
+				v2 := vertices[indices[i+2]]
+				screen.DrawTriangles([]ebiten.Vertex{v0, v1, v2}, []uint16{0, 1, 2}, render.GetSubImage(), &ebiten.DrawTrianglesOptions{
+					FillRule: ebiten.FillAll,
+					ColorM:   render.ColorToScale(config.HighlightColor),
+				})
+			}
 		}
 	}
 
@@ -308,3 +324,4 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 }
 
 func (g *GameState) Exit() {}
+

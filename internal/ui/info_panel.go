@@ -122,7 +122,11 @@ func (p *InfoPanel) handleSelectClick(ecs *entity.ECS) {
 	if tower, ok := ecs.Towers[p.TargetEntity]; ok {
 		// Можно выбирать только временные атакующие башни
 		if tower.IsTemporary && tower.Type != config.TowerTypeMiner {
-			tower.IsSelected = !tower.IsSelected
+			// Отправляем событие, вместо прямого изменения состояния
+			p.eventDispatcher.Dispatch(event.Event{
+				Type: event.ToggleTowerSelectionForSaveRequest,
+				Data: p.TargetEntity,
+			})
 		}
 	}
 }

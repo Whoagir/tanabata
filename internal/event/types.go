@@ -10,4 +10,5 @@ const (
 	BuildPhaseStarted EventType = "BuildPhaseStarted"
 	WavePhaseStarted EventType = "WavePhaseStarted"
 	CombineTowersRequest EventType = "CombineTowersRequest" // Запрос на объединение башен
+	ToggleTowerSelectionForSaveRequest EventType = "ToggleTowerSelectionForSaveRequest" // Запрос на изменение выбора башни для сохранения
 )
