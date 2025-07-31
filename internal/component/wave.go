@@ -1,3 +1,4 @@
+// internal/component/wave.go
 package component
 
 import "go-tower-defense/pkg/hexmap"

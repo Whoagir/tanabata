@@ -1,3 +1,4 @@
+// internal/component/combat.go
 package component
 
 import "go-tower-defense/internal/defs"

@@ -121,7 +121,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)
 	g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)
 	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs)   // Инициализация
-	g.CraftingSystem = system.NewCraftingSystem(ecs, g.HexMap) // Инициализация системы крафта
+	g.CraftingSystem = system.NewCraftingSystem(ecs) // Инициализация системы крафта
 	g.generateOre()
 	g.initUI()
 

@@ -163,6 +163,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 
 	g.ECS.Towers[id] = &component.Tower{
 		DefID:         towerDefID, // <-- Сохраняем ID определения
+		Level:         def.Level,
 		CraftingLevel: def.CraftingLevel,
 		Hex:           hex,
 		IsActive:      false,

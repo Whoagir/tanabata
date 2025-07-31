@@ -239,6 +239,12 @@ func (p *InfoPanel) drawEntityInfo(screen *ebiten.Image, ecs *entity.ECS, startX
 
 func (p *InfoPanel) drawTowerInfo(screen *ebiten.Image, ecs *entity.ECS, towerDef *defs.TowerDefinition, startX, startY int) {
 	y := startY
+	tower, _ := ecs.Towers[p.TargetEntity]
+
+	// Отображаем уровень башни
+	text.Draw(screen, fmt.Sprintf("Level: %d", tower.Level), p.fontFace, startX, y, config.TextLightColor)
+	y += lineHeight
+
 	if combat, ok := ecs.Combats[p.TargetEntity]; ok {
 		if towerDef.Combat != nil {
 			text.Draw(screen, fmt.Sprintf("Damage: %d", towerDef.Combat.Damage), p.fontFace, startX, y, config.TextLightColor)

@@ -1,3 +1,4 @@
+// internal/ui/indicator.go
 package ui
 
 import (

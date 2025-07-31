@@ -5,8 +5,9 @@ import "go-tower-defense/pkg/hexmap"
 
 type Tower struct {
 	DefID              string     // ID из towers.json
-	CraftingLevel      int        // Уровень крафта (0 - базовая, 1 - крафт 1-го уровня и т.д.)
-	Range              int        // Рад��ус действия
+	Level              int        // Уровень башни
+	CraftingLevel      int        // Уровень крафта (0 - базо��ая, 1 - крафт 1-го уровня и т.д.)
+	Range              int        // Радиус действия
 	Hex                hexmap.Hex // Гекс, на котором стоит башня
 	IsActive           bool       // Активна ли башня (стреляет или просто стена)
 	IsTemporary        bool       // Временная ли башня (для механики выбора)

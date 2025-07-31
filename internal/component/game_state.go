@@ -1,3 +1,4 @@
+// internal/component/game_state.go
 package component
 
 type GamePhase int

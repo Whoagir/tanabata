@@ -1,10 +1,18 @@
 [
   {
-    "input_ids": ["TA", "TE", "TO"],
+    "inputs": [
+      { "id": "TA", "level": 1 },
+      { "id": "PA", "level": 1 },
+      { "id": "NI", "level": 1 }
+    ],
     "output_id": "TOWER_SILVER"
   },
   {
-    "input_ids": ["PA", "PE", "PO"],
+    "inputs": [
+      { "id": "PA", "level": 1 },
+      { "id": "PE", "level": 1 },
+      { "id": "PO", "level": 1 }
+    ],
     "output_id": "TOWER_MALACHITE"
   }
 ]

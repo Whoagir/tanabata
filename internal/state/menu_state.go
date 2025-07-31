@@ -1,3 +1,4 @@
+// internal/state/menu_state.go
 package state
 
 import (

@@ -20,6 +20,7 @@ type TowerDefinition struct {
 	ID      string       `json:"id"`
 	Name           string       `json:"name"`
 	Type           TowerType    `json:"type"`
+	Level          int          `json:"level"`
 	CraftingLevel  int          `json:"crafting_level"`
 	Combat         *CombatStats `json:"combat,omitempty"`
 	Aura           *AuraDef     `json:"aura,omitempty"`

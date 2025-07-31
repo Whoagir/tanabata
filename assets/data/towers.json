@@ -4,6 +4,7 @@
     "name": "TA (Физ. атака)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 25,
       "fire_rate": 1.0,
@@ -25,6 +26,7 @@
     "name": "TE (Маг. атака)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 25,
       "fire_rate": 1.0,
@@ -46,6 +48,7 @@
     "name": "TO (Чист. атака)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 20,
       "fire_rate": 1.0,
@@ -67,6 +70,7 @@
     "name": "PA (Сплит-физ.)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 18,
       "fire_rate": 1.0,
@@ -91,6 +95,7 @@
     "name": "PE (Сплит-маг.)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 18,
       "fire_rate": 1.0,
@@ -115,6 +120,7 @@
     "name": "PO (Сплит-чист.)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 15,
       "fire_rate": 1.0,
@@ -139,6 +145,7 @@
     "name": "Сильвер",
     "type": "ATTACK",
     "crafting_level": 1,
+    "level": 2,
     "combat": {
       "damage": 55,
       "fire_rate": 1.2,
@@ -146,11 +153,7 @@
       "shot_cost": 0.15,
       "attack": {
         "type": "LASER",
-        "damage_type": "PURE",
-        "params": {
-          "slow_multiplier": 0.4,
-          "slow_duration": 1.5
-        }
+        "damage_type": "PHYSICAL"
       }
     },
     "visuals": {
@@ -164,6 +167,7 @@
     "name": "Малахит",
     "type": "ATTACK",
     "crafting_level": 1,
+    "level": 2,
     "combat": {
       "damage": 20,
       "fire_rate": 1.1,
@@ -188,6 +192,7 @@
     "name": "DE (Аура)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 0,
       "fire_rate": 1.0,
@@ -213,6 +218,7 @@
     "name": "NI (Замедление)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 1,
       "fire_rate": 1.67,
@@ -234,6 +240,7 @@
     "name": "NU (Яд)",
     "type": "ATTACK",
     "crafting_level": 0,
+    "level": 1,
     "combat": {
       "damage": 1,
       "fire_rate": 0.8,
@@ -255,6 +262,7 @@
     "name": "Шахтер",
     "type": "MINER",
     "crafting_level": 0,
+    "level": 1,
     "energy": {
       "transfer_radius": 3,
       "line_degradation_factor": 0.6
@@ -270,6 +278,7 @@
     "name": "Стена",
     "type": "WALL",
     "crafting_level": 0,
+    "level": 1,
     "visuals": {
       "color": {"r": 105, "g": 105, "b": 105, "a": 255},
       "radius_factor": 0.4,
