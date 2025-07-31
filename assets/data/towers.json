@@ -1,7 +1,7 @@
 [
   {
-    "id": "TOWER_PHYSICAL_ATTACK",
-    "name": "Физ. башня (TA)",
+    "id": "TA",
+    "name": "TA (Физ. атака)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -21,8 +21,8 @@
     }
   },
   {
-    "id": "TOWER_MAGICAL_ATTACK",
-    "name": "Маг. башня (TE)",
+    "id": "TE",
+    "name": "TE (Маг. атака)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -42,8 +42,8 @@
     }
   },
   {
-    "id": "TOWER_PURE_ATTACK",
-    "name": "Чист. башня (TO)",
+    "id": "TO",
+    "name": "TO (Чист. атака)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -63,8 +63,8 @@
     }
   },
   {
-    "id": "TOWER_SPLIT_PHYSICAL",
-    "name": "Сплит-физ. (PA)",
+    "id": "PA",
+    "name": "PA (Сплит-физ.)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -87,8 +87,8 @@
     }
   },
   {
-    "id": "TOWER_SPLIT_MAGICAL",
-    "name": "Сплит-маг. (PE)",
+    "id": "PE",
+    "name": "PE (Сплит-маг.)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -111,8 +111,8 @@
     }
   },
     {
-    "id": "TOWER_SPLIT_PURE",
-    "name": "Сплит-чист.",
+    "id": "PO",
+    "name": "PO (Сплит-чист.)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -184,8 +184,8 @@
     }
   },
   {
-    "id": "TOWER_AURA_ATTACK_SPEED",
-    "name": "Аура (DE)",
+    "id": "DE",
+    "name": "DE (Аура)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -209,8 +209,8 @@
     }
   },
   {
-    "id": "TOWER_SLOW",
-    "name": "Замедление (NI)",
+    "id": "NI",
+    "name": "NI (Замедление)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {
@@ -230,8 +230,8 @@
     }
   },
   {
-    "id": "TOWER_POISON",
-    "name": "Яд (NU)",
+    "id": "NU",
+    "name": "NU (Яд)",
     "type": "ATTACK",
     "crafting_level": 0,
     "combat": {

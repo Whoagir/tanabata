@@ -220,9 +220,7 @@ func (g *Game) determineTowerID() string {
 		// In debug mode, TowerTypePhysical represents any random attacker
 		if g.DebugTowerType == config.TowerTypePhysical {
 			attackerIDs := []string{
-				"TOWER_PHYSICAL_ATTACK", "TOWER_MAGICAL_ATTACK", "TOWER_PURE_ATTACK",
-				"TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW", "TOWER_POISON",
-				"TOWER_SPLIT_PURE", "TOWER_SPLIT_PHYSICAL", "TOWER_SPLIT_MAGICAL",
+				"TA", "TE", "TO", "DE", "NI", "NU", "PO", "PA", "PE",
 			}
 			return attackerIDs[rand.Intn(len(attackerIDs))]
 		}
@@ -232,9 +230,7 @@ func (g *Game) determineTowerID() string {
 
 	// Standard tower placement logic
 	attackerIDs := []string{
-		"TOWER_PHYSICAL_ATTACK", "TOWER_MAGICAL_ATTACK", "TOWER_PURE_ATTACK",
-		"TOWER_AURA_ATTACK_SPEED", "TOWER_SLOW", "TOWER_POISON",
-		"TOWER_SPLIT_PURE", "TOWER_SPLIT_PHYSICAL", "TOWER_SPLIT_MAGICAL",
+		"TA", "TE", "TO", "DE", "NI", "NU", "PO", "PA", "PE",
 	}
 	waveMod10 := (g.Wave - 1) % 10
 	positionInBlock := g.towersBuilt
@@ -289,23 +285,23 @@ func (g *Game) canPlaceWall(hex hexmap.Hex) bool {
 // TODO: This should be removed once all systems use string IDs or defs.TowerType.
 func (g *Game) mapTowerIDToNumericType(id string) int {
 	switch id {
-	case "TOWER_PHYSICAL_ATTACK":
+	case "TA":
 		return config.TowerTypePhysical
-	case "TOWER_MAGICAL_ATTACK":
+	case "TE":
 		return config.TowerTypeMagical
-	case "TOWER_PURE_ATTACK":
+	case "TO":
 		return config.TowerTypePure
-	case "TOWER_AURA_ATTACK_SPEED":
+	case "DE":
 		return config.TowerTypeAura
-	case "TOWER_SLOW":
+	case "NI":
 		return config.TowerTypeSlow
-	case "TOWER_SPLIT_PURE":
+	case "PO":
 		return config.TowerTypeSplitPure
-	case "TOWER_SPLIT_PHYSICAL":
+	case "PA":
 		return config.TowerTypeSplitPhysical
-	case "TOWER_SPLIT_MAGICAL":
+	case "PE":
 		return config.TowerTypeSplitMagical
-	case "TOWER_POISON":
+	case "NU":
 		return config.TowerTypePoison
 	case "TOWER_SILVER":
 		return config.TowerTypeSilver
@@ -317,5 +313,39 @@ func (g *Game) mapTowerIDToNumericType(id string) int {
 		return config.TowerTypeWall
 	default:
 		return config.TowerTypeNone
+	}
+}
+
+// mapNumericTypeToTowerID is a temporary helper function.
+func mapNumericTypeToTowerID(numericType int) string {
+	switch numericType {
+	case config.TowerTypePhysical:
+		return "TA"
+	case config.TowerTypeMagical:
+		return "TE"
+	case config.TowerTypePure:
+		return "TO"
+	case config.TowerTypeAura:
+		return "DE"
+	case config.TowerTypeSlow:
+		return "NI"
+	case config.TowerTypeSplitPure:
+		return "PO"
+	case config.TowerTypeSplitPhysical:
+		return "PA"
+	case config.TowerTypeSplitMagical:
+		return "PE"
+	case config.TowerTypePoison:
+		return "NU"
+	case config.TowerTypeSilver:
+		return "TOWER_SILVER"
+	case config.TowerTypeMalachite:
+		return "TOWER_MALACHITE"
+	case config.TowerTypeMiner:
+		return "TOWER_MINER"
+	case config.TowerTypeWall:
+		return "TOWER_WALL"
+	default:
+		return ""
 	}
 }

@@ -332,8 +332,7 @@ func (g *Game) updateTowerAppearance(id types.EntityID) {
 		return
 	}
 
-	towerDefID := mapNumericTypeToTowerID(tower.Type)
-	def, ok := defs.TowerLibrary[towerDefID]
+	def, ok := defs.TowerLibrary[tower.DefID]
 	if !ok {
 		return // Definition not found, do nothing.
 	}
@@ -885,36 +884,4 @@ func (g *Game) FindPowerSourcesForTower(startNode types.EntityID) []types.Entity
 		}
 	}
 	return sources
-}
-
-// mapNumericTypeToTowerID is a temporary helper function.
-func mapNumericTypeToTowerID(numericType int) string {
-	switch numericType {
-	case config.TowerTypePhysical:
-		return "TOWER_PHYSICAL_ATTACK"
-	case config.TowerTypeMagical:
-		return "TOWER_MAGICAL_ATTACK"
-	case config.TowerTypePure:
-		return "TOWER_PURE_ATTACK"
-	case config.TowerTypeAura:
-		return "TOWER_AURA_ATTACK_SPEED"
-	case config.TowerTypeSlow:
-		return "TOWER_SLOW"
-	case config.TowerTypeSplitPure:
-		return "TOWER_SPLIT_PURE"
-	case config.TowerTypeSplitPhysical:
-		return "TOWER_SPLIT_PHYSICAL"
-	case config.TowerTypeSplitMagical:
-		return "TOWER_SPLIT_MAGICAL"
-	case config.TowerTypePoison:
-		return "TOWER_POISON"
-	case config.TowerTypeSilver:
-		return "TOWER_SILVER"
-	case config.TowerTypeMiner:
-		return "TOWER_MINER"
-	case config.TowerTypeWall:
-		return "TOWER_WALL"
-	default:
-		return ""
-	}
 }

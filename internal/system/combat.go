@@ -428,23 +428,23 @@ func calculateDirection(from, to *component.Position) float64 {
 func mapNumericTypeToTowerID(numericType int) string {
 	switch numericType {
 	case config.TowerTypePhysical:
-		return "TOWER_PHYSICAL_ATTACK"
+		return "TA"
 	case config.TowerTypeMagical:
-		return "TOWER_MAGICAL_ATTACK"
+		return "TE"
 	case config.TowerTypePure:
-		return "TOWER_PURE_ATTACK"
+		return "TO"
 	case config.TowerTypeAura:
-		return "TOWER_AURA_ATTACK_SPEED"
+		return "DE"
 	case config.TowerTypeSlow:
-		return "TOWER_SLOW"
+		return "NI"
 	case config.TowerTypeSplitPure:
-		return "TOWER_SPLIT_PURE"
+		return "PO"
 	case config.TowerTypeSplitPhysical:
-		return "TOWER_SPLIT_PHYSICAL"
+		return "PA"
 	case config.TowerTypeSplitMagical:
-		return "TOWER_SPLIT_MAGICAL"
+		return "PE"
 	case config.TowerTypePoison:
-		return "TOWER_POISON"
+		return "NU"
 	case config.TowerTypeSilver:
 		return "TOWER_SILVER"
 	case config.TowerTypeMalachite:
