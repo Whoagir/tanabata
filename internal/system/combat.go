@@ -42,10 +42,9 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		towerDefID := mapNumericTypeToTowerID(tower.Type)
-		towerDef, ok := defs.TowerLibrary[towerDefID]
+		towerDef, ok := defs.TowerLibrary[tower.DefID]
 		if !ok {
-			log.Printf("CombatSystem: Could not find tower definition for ID %s (numeric: %d)", towerDefID, tower.Type)
+			log.Printf("CombatSystem: Could not find tower definition for ID %s", tower.DefID)
 			continue
 		}
 
@@ -70,7 +69,7 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// --- ��огика атаки ---
+		// --- Логика атаки ---
 		attackPerformed := false
 		switch combat.Attack.Type {
 		case defs.BehaviorProjectile:
@@ -329,8 +328,10 @@ func (s *CombatSystem) calculateLineDegradationMultiplier(path []types.EntityID)
 	attackerCount := 0
 	for _, towerID := range path {
 		if tower, ok := s.ecs.Towers[towerID]; ok {
-			if tower.Type != config.TowerTypeMiner && tower.Type != config.TowerTypeWall {
-				attackerCount++
+			if towerDef, ok := defs.TowerLibrary[tower.DefID]; ok {
+				if towerDef.Type != defs.TowerTypeMiner && towerDef.Type != defs.TowerTypeWall {
+					attackerCount++
+				}
 			}
 		}
 	}
@@ -364,7 +365,7 @@ func (s *CombatSystem) predictTargetPosition(enemyID types.EntityID, towerPos *c
 		if enemyPos != nil {
 			return *enemyPos
 		}
-		return component.Position{} // Возвращаем нулевую позицию, если данных ��ет
+		return component.Position{} // Возвращаем нулевую позицию, если данных нет
 	}
 
 	// Проверяем, замедлена ли цель
@@ -423,37 +424,4 @@ func calculateDirection(from, to *component.Position) float64 {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	return math.Atan2(dy, dx)
-}
-
-func mapNumericTypeToTowerID(numericType int) string {
-	switch numericType {
-	case config.TowerTypePhysical:
-		return "TA"
-	case config.TowerTypeMagical:
-		return "TE"
-	case config.TowerTypePure:
-		return "TO"
-	case config.TowerTypeAura:
-		return "DE"
-	case config.TowerTypeSlow:
-		return "NI"
-	case config.TowerTypeSplitPure:
-		return "PO"
-	case config.TowerTypeSplitPhysical:
-		return "PA"
-	case config.TowerTypeSplitMagical:
-		return "PE"
-	case config.TowerTypePoison:
-		return "NU"
-	case config.TowerTypeSilver:
-		return "TOWER_SILVER"
-	case config.TowerTypeMalachite:
-		return "TOWER_MALACHITE"
-	case config.TowerTypeMiner:
-		return "TOWER_MINER"
-	case config.TowerTypeWall:
-		return "TOWER_WALL"
-	default:
-		return ""
-	}
 }

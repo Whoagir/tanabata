@@ -3,7 +3,7 @@ package system
 
 import (
 	"go-tower-defense/internal/component"
-	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 )
 
@@ -33,8 +33,13 @@ func (s *AuraSystem) RecalculateAuras() {
 
 		// Найти все атакующие башни в радиусе.
 		for targetID, targetTower := range s.ecs.Towers {
+			targetDef, ok := defs.TowerLibrary[targetTower.DefID]
+			if !ok {
+				continue // Пропускаем, если определение не найдено
+			}
+
 			// Эффект не применяется к самой башне-ауре, стенам и добытчикам.
-			if targetID == auraTowerID || targetTower.Type == config.TowerTypeWall || targetTower.Type == config.TowerTypeMiner {
+			if targetID == auraTowerID || targetDef.Type == defs.TowerTypeWall || targetDef.Type == defs.TowerTypeMiner {
 				continue
 			}
 			// Проверяем, является ли цель атакующей башней

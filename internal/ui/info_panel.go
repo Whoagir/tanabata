@@ -120,13 +120,15 @@ func (p *InfoPanel) handleCombineClick(ecs *entity.ECS) {
 
 func (p *InfoPanel) handleSelectClick(ecs *entity.ECS) {
 	if tower, ok := ecs.Towers[p.TargetEntity]; ok {
-		// Можно выбирать только временные атакующие башни
-		if tower.IsTemporary && tower.Type != config.TowerTypeMiner {
-			// Отправляем событие, вместо прямого изменения состояния
-			p.eventDispatcher.Dispatch(event.Event{
-				Type: event.ToggleTowerSelectionForSaveRequest,
-				Data: p.TargetEntity,
-			})
+		if towerDef, ok := defs.TowerLibrary[tower.DefID]; ok {
+			// Можно выбирать только временные атакующие башни
+			if tower.IsTemporary && towerDef.Type != defs.TowerTypeMiner {
+				// Отправляем событие, вместо прямого изменения состояния
+				p.eventDispatcher.Dispatch(event.Event{
+					Type: event.ToggleTowerSelectionForSaveRequest,
+					Data: p.TargetEntity,
+				})
+			}
 		}
 	}
 }
@@ -156,8 +158,10 @@ func (p *InfoPanel) Draw(screen *ebiten.Image, ecs *entity.ECS) {
 
 	// Рисуем кнопки в зависимости от состояния игры
 	if ecs.GameState.Phase == component.TowerSelectionState {
-		if tower, ok := ecs.Towers[p.TargetEntity]; ok && tower.IsTemporary && tower.Type != config.TowerTypeMiner {
-			p.drawSelectButton(screen, panelRect, tower.IsSelected)
+		if tower, ok := ecs.Towers[p.TargetEntity]; ok {
+			if towerDef, ok := defs.TowerLibrary[tower.DefID]; ok && tower.IsTemporary && towerDef.Type != defs.TowerTypeMiner {
+				p.drawSelectButton(screen, panelRect, tower.IsSelected)
+			}
 		}
 	} else if ecs.GameState.Phase == component.WaveState {
 		if _, ok := ecs.Combinables[p.TargetEntity]; ok {

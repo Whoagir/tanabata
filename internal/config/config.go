@@ -37,7 +37,7 @@ const (
 
 	SpeedButtonOffsetX = 80   // Отступ слева от края индикатора
 	SpeedButtonY       = 30   // Позиция по Y
-	SpeedButtonSize    = 18.0 // Размер кнопки (радиус или ширина, в зависимости от реализации ui.SpeedButton)
+	SpeedButtonSize    = 18.0 // Размер кнопки (радиус или ��ирина, в зависимости от реализации ui.SpeedButton)
 
 	EnergyTransferRadius     = 3
 	OrePerHexMin             = 15
@@ -55,23 +55,6 @@ const (
 	OreBonusMaxMultiplier = 1.5  // Максимальный множитель урона
 	OreBonusMinMultiplier = 0.5  // Минимальный множитель урона
 	LineDegradationFactor = 0.6  // Коэффициент снижения урона за каждую башню типа А в цепи
-)
-
-const (
-	TowerTypePhysical = iota
-	TowerTypeMagical
-	TowerTypePure
-	TowerTypeAura
-	TowerTypeSlow
-	TowerTypeSplitPure
-	TowerTypeSplitPhysical
-	TowerTypeSplitMagical
-	TowerTypePoison
-	TowerTypeSilver
-	TowerTypeMalachite
-	TowerTypeMiner
-	TowerTypeWall = -1
-	TowerTypeNone = -2
 )
 
 var (

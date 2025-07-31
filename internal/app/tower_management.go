@@ -25,10 +25,18 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 		return false
 	}
 
+	// Запоминаем, был ли это отладочный вызов
+	wasDebug := g.DebugTowerID != ""
+
 	id := g.createTowerEntity(hex, towerID)
 	tower := g.ECS.Towers[id]
 	tower.IsTemporary = true
-	if tower.Type == config.TowerTypeMiner {
+	towerDef, ok := defs.TowerLibrary[tower.DefID]
+	if !ok {
+		// This should not happen if determineTowerID is correct
+		return false
+	}
+	if towerDef.Type == defs.TowerTypeMiner {
 		tower.IsSelected = true // Шахтеры выбираются автоматически
 	}
 
@@ -36,16 +44,14 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
 
 	// Only increment tower count and check for wave start in normal mode
-	if g.DebugTowerType == config.TowerTypeNone {
+	if !wasDebug {
 		g.towersBuilt++
 		if g.towersBuilt >= config.MaxTowersInBuildPhase {
 			g.ECS.GameState.TowersToKeep = 2                      // Устанавливаем, сколько башен нужно сохранить
 			g.ECS.GameState.Phase = component.TowerSelectionState // <-- Переключаемся в режим выбора
 		}
-	} else {
-		// Reset debug mode after placing the tower
-		g.DebugTowerType = config.TowerTypeNone
 	}
+	// Сброс g.DebugTowerID теперь происходит в determineTowerID
 
 	g.addTowerToEnergyNetwork(id)
 	g.AuraSystem.RecalculateAuras()
@@ -77,9 +83,13 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 		if towerToRemove.IsTemporary {
 			return false
 		}
+		towerDef, ok := defs.TowerLibrary[towerToRemove.DefID]
+		if !ok {
+			return false
+		}
 
 		// Get neighbors before deleting the entity
-		neighbors := g.findPotentialNeighbors(towerToRemove.Hex, towerToRemove.Type)
+		neighbors := g.findPotentialNeighbors(towerToRemove.Hex, towerDef.Type)
 
 		// Delete the entity and its direct connections
 		g.deleteTowerEntity(towerIDToRemove)
@@ -158,19 +168,14 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 	px, py := utils.HexToScreen(hex)
 	g.ECS.Positions[id] = &component.Position{X: px, Y: py}
 
-	// The old numeric type is now a string ID, but we still need the numeric one for some legacy logic.
-	// We'll need to refactor this away later. For now, we map it.
-	numericType := g.mapTowerIDToNumericType(def.ID)
-
 	g.ECS.Towers[id] = &component.Tower{
-		DefID:         towerDefID,  // <-- Сохраняем ID определения
-		Type:          numericType, // TODO: Refactor to use string ID or defs.TowerType
+		DefID:         towerDefID, // <-- Сохраняем ID определения
 		CraftingLevel: def.CraftingLevel,
 		Hex:           hex,
 		IsActive:      false,
 	}
 
-		if def.Combat != nil {
+	if def.Combat != nil {
 		combatComponent := &component.Combat{
 			FireRate: def.Combat.FireRate,
 			Range:    def.Combat.Range,
@@ -216,16 +221,10 @@ func (g *Game) deleteTowerEntity(id types.EntityID) {
 
 func (g *Game) determineTowerID() string {
 	// Handle debug tower placement
-	if g.DebugTowerType != config.TowerTypeNone {
-		// In debug mode, TowerTypePhysical represents any random attacker
-		if g.DebugTowerType == config.TowerTypePhysical {
-			attackerIDs := []string{
-				"TA", "TE", "TO", "DE", "NI", "NU", "PO", "PA", "PE",
-			}
-			return attackerIDs[rand.Intn(len(attackerIDs))]
-		}
-		// For other debug types, we find the corresponding ID
-		return mapNumericTypeToTowerID(g.DebugTowerType)
+	if g.DebugTowerID != "" {
+		id := g.DebugTowerID
+		g.DebugTowerID = "" // Reset debug mode
+		return id
 	}
 
 	// Standard tower placement logic
@@ -279,73 +278,4 @@ func (g *Game) canPlaceWall(hex hexmap.Hex) bool {
 	}
 
 	return true
-}
-
-// mapTowerIDToNumericType is a temporary helper to bridge the old system with the new.
-// TODO: This should be removed once all systems use string IDs or defs.TowerType.
-func (g *Game) mapTowerIDToNumericType(id string) int {
-	switch id {
-	case "TA":
-		return config.TowerTypePhysical
-	case "TE":
-		return config.TowerTypeMagical
-	case "TO":
-		return config.TowerTypePure
-	case "DE":
-		return config.TowerTypeAura
-	case "NI":
-		return config.TowerTypeSlow
-	case "PO":
-		return config.TowerTypeSplitPure
-	case "PA":
-		return config.TowerTypeSplitPhysical
-	case "PE":
-		return config.TowerTypeSplitMagical
-	case "NU":
-		return config.TowerTypePoison
-	case "TOWER_SILVER":
-		return config.TowerTypeSilver
-	case "TOWER_MALACHITE":
-		return config.TowerTypeMalachite
-	case "TOWER_MINER":
-		return config.TowerTypeMiner
-	case "TOWER_WALL":
-		return config.TowerTypeWall
-	default:
-		return config.TowerTypeNone
-	}
-}
-
-// mapNumericTypeToTowerID is a temporary helper function.
-func mapNumericTypeToTowerID(numericType int) string {
-	switch numericType {
-	case config.TowerTypePhysical:
-		return "TA"
-	case config.TowerTypeMagical:
-		return "TE"
-	case config.TowerTypePure:
-		return "TO"
-	case config.TowerTypeAura:
-		return "DE"
-	case config.TowerTypeSlow:
-		return "NI"
-	case config.TowerTypeSplitPure:
-		return "PO"
-	case config.TowerTypeSplitPhysical:
-		return "PA"
-	case config.TowerTypeSplitMagical:
-		return "PE"
-	case config.TowerTypePoison:
-		return "NU"
-	case config.TowerTypeSilver:
-		return "TOWER_SILVER"
-	case config.TowerTypeMalachite:
-		return "TOWER_MALACHITE"
-	case config.TowerTypeMiner:
-		return "TOWER_MINER"
-	case config.TowerTypeWall:
-		return "TOWER_WALL"
-	default:
-		return ""
-	}
 }

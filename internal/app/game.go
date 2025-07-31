@@ -52,7 +52,7 @@ type Game struct {
 	SpeedButton               *ui.SpeedButton
 	SpeedMultiplier           float64
 	PauseButton               *ui.PauseButton
-	DebugTowerType            int
+	DebugTowerID              string
 	DebugInfo                 *LineDragDebugInfo
 
 	// Game state
@@ -110,7 +110,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		FontFace:        face,
 		towersBuilt:     0,
 		gameTime:        0.0,
-		DebugTowerType:  config.TowerTypeNone,
+		DebugTowerID:    "",
 	}
 	g.RenderSystem = system.NewRenderSystem(ecs, tt)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
@@ -156,8 +156,7 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 	outputDef := defs.TowerLibrary[recipe.OutputID]
 	if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
 		tower.DefID = recipe.OutputID
-		tower.Type = g.mapTowerIDToNumericType(recipe.OutputID)
-		tower.CraftingLevel = outputDef.CraftingLevel // <--- ВОТ ИСПРАВЛЕНИЕ
+		tower.CraftingLevel = outputDef.CraftingLevel
 
 		// Обновляем или создаем боевой компонент
 		if outputDef.Combat != nil {
@@ -198,9 +197,8 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 			// Удаляем ненужные компоненты
 			delete(g.ECS.Combats, id)
 			delete(g.ECS.Auras, id)
-			// Прев��ащаем в стену
+			// Превращаем в стену
 			tower.DefID = "TOWER_WALL"
-			tower.Type = config.TowerTypeWall
 			if renderable, ok := g.ECS.Renderables[id]; ok {
 				renderable.Color = wallDef.Visuals.Color
 				renderable.Radius = float32(config.HexSize * wallDef.Visuals.RadiusFactor)
@@ -236,7 +234,11 @@ func (g *Game) FindPathToPowerSource(startNode types.EntityID) []types.EntityID 
 		head++
 
 		tower := g.ECS.Towers[currentID]
-		if tower.Type == config.TowerTypeMiner && g.isOnOre(tower.Hex) {
+		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		if !ok {
+			continue
+		}
+		if towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex) {
 			pathEnd = currentID
 			break // Найден ближайший источник, выходим
 		}
@@ -466,12 +468,16 @@ func (g *Game) GetTowerHexesByType() ([]hexmap.Hex, []hexmap.Hex, []hexmap.Hex) 
 	var wallHexes, typeAHexes, typeBHexes []hexmap.Hex
 
 	for _, tower := range g.ECS.Towers {
+		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		if !ok {
+			continue
+		}
 		// Башни типа A - все, кроме стен и добытчиков
-		isTypeA := tower.Type != config.TowerTypeWall && tower.Type != config.TowerTypeMiner
+		isTypeA := towerDef.Type != defs.TowerTypeWall && towerDef.Type != defs.TowerTypeMiner
 		// Башни типа B - только добытчики
-		isTypeB := tower.Type == config.TowerTypeMiner
+		isTypeB := towerDef.Type == defs.TowerTypeMiner
 
-		if tower.Type == config.TowerTypeWall {
+		if towerDef.Type == defs.TowerTypeWall {
 			wallHexes = append(wallHexes, tower.Hex)
 		} else if isTypeA {
 			typeAHexes = append(typeAHexes, tower.Hex)
@@ -733,7 +739,11 @@ func (g *Game) findPoweredTowersWithAdj(adj map[types.EntityID][]types.EntityID)
 
 	// Начинаем с корневых башен (добытчики на руде)
 	for id, tower := range g.ECS.Towers {
-		if tower.Type == config.TowerTypeMiner && g.isOnOre(tower.Hex) {
+		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		if !ok {
+			continue
+		}
+		if towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex) {
 			queue = append(queue, id)
 			poweredSet[id] = struct{}{}
 		}
@@ -768,11 +778,13 @@ func (g *Game) reconnectTower(sourceID, targetID, originalParentID types.EntityI
 	// 2. Создать новую линию
 	sourceTower := g.ECS.Towers[sourceID]
 	targetTower := g.ECS.Towers[targetID]
+	sourceDef := defs.TowerLibrary[sourceTower.DefID]
+	targetDef := defs.TowerLibrary[targetTower.DefID]
 	g.createLine(energyEdge{
 		Tower1ID: sourceID,
 		Tower2ID: targetID,
-		Type1:    sourceTower.Type,
-		Type2:    targetTower.Type,
+		Type1:    sourceDef.Type,
+		Type2:    targetDef.Type,
 		Distance: float64(sourceTower.Hex.Distance(targetTower.Hex)),
 	})
 
@@ -803,7 +815,8 @@ func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
 
 	// Нельзя перетаскивать от корневых добытчиков
 	tower := g.ECS.Towers[sourceID]
-	isRootMiner := tower.Type == config.TowerTypeMiner && g.isOnOre(tower.Hex)
+	towerDef := defs.TowerLibrary[tower.DefID]
+	isRootMiner := towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex)
 	if isRootMiner {
 		return
 	}

@@ -24,7 +24,13 @@ func (s *EnvironmentalDamageSystem) Update(deltaTime float64) {
 	for _, line := range s.ecs.LineRenders {
 		tower1, ok1 := s.ecs.Towers[line.Tower1ID]
 		tower2, ok2 := s.ecs.Towers[line.Tower2ID]
-		if ok1 && ok2 && tower1.Type == config.TowerTypeMiner && tower2.Type == config.TowerTypeMiner {
+		if !ok1 || !ok2 {
+			continue
+		}
+		def1, ok1 := defs.TowerLibrary[tower1.DefID]
+		def2, ok2 := defs.TowerLibrary[tower2.DefID]
+
+		if ok1 && ok2 && def1.Type == defs.TowerTypeMiner && def2.Type == defs.TowerTypeMiner {
 			for _, hex := range tower1.Hex.LineTo(tower2.Hex) {
 				lineHexes[hex] = true
 			}

@@ -109,16 +109,16 @@ func (g *GameState) Update(deltaTime float64) {
 
 	if g.game.ECS.GameState.Phase == component.BuildState {
 		if inpututil.IsKeyJustPressed(ebiten.Key1) {
-			g.game.DebugTowerType = config.TowerTypePhysical
+			g.game.DebugTowerID = "TA" // "TA" - любая атакующая башня для случайного выбора в determineTowerID
 		}
 		if inpututil.IsKeyJustPressed(ebiten.Key2) {
-			g.game.DebugTowerType = config.TowerTypeMiner
+			g.game.DebugTowerID = "TOWER_MINER"
 		}
 		if inpututil.IsKeyJustPressed(ebiten.Key3) {
-			g.game.DebugTowerType = config.TowerTypeWall
+			g.game.DebugTowerID = "TOWER_WALL"
 		}
 		if inpututil.IsKeyJustPressed(ebiten.Key0) {
-			g.game.DebugTowerType = config.TowerTypeSilver
+			g.game.DebugTowerID = "TOWER_SILVER"
 		}
 	}
 
@@ -324,4 +324,3 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 }
 
 func (g *GameState) Exit() {}
-
