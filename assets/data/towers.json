@@ -3,6 +3,7 @@
     "id": "TOWER_PHYSICAL_ATTACK",
     "name": "Физ. башня (TA)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 25,
       "fire_rate": 1.0,
@@ -23,6 +24,7 @@
     "id": "TOWER_MAGICAL_ATTACK",
     "name": "Маг. башня (TE)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 25,
       "fire_rate": 1.0,
@@ -43,6 +45,7 @@
     "id": "TOWER_PURE_ATTACK",
     "name": "Чист. башня (TO)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 20,
       "fire_rate": 1.0,
@@ -63,6 +66,7 @@
     "id": "TOWER_SPLIT_PHYSICAL",
     "name": "Сплит-физ. (PA)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 18,
       "fire_rate": 1.0,
@@ -86,6 +90,7 @@
     "id": "TOWER_SPLIT_MAGICAL",
     "name": "Сплит-маг. (PE)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 18,
       "fire_rate": 1.0,
@@ -109,6 +114,7 @@
     "id": "TOWER_SPLIT_PURE",
     "name": "Сплит-чист.",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 15,
       "fire_rate": 1.0,
@@ -132,6 +138,7 @@
     "id": "TOWER_SILVER",
     "name": "Сильвер",
     "type": "ATTACK",
+    "crafting_level": 1,
     "combat": {
       "damage": 55,
       "fire_rate": 1.2,
@@ -153,9 +160,34 @@
     }
   },
   {
+    "id": "TOWER_MALACHITE",
+    "name": "Малахит",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "combat": {
+      "damage": 20,
+      "fire_rate": 1.1,
+      "range": 4,
+      "shot_cost": 0.18,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 3
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 11, "g": 128, "b": 96, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
     "id": "TOWER_AURA_ATTACK_SPEED",
     "name": "Аура (DE)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 0,
       "fire_rate": 1.0,
@@ -180,6 +212,7 @@
     "id": "TOWER_SLOW",
     "name": "Замедление (NI)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 1,
       "fire_rate": 1.67,
@@ -200,6 +233,7 @@
     "id": "TOWER_POISON",
     "name": "Яд (NU)",
     "type": "ATTACK",
+    "crafting_level": 0,
     "combat": {
       "damage": 1,
       "fire_rate": 0.8,
@@ -220,6 +254,7 @@
     "id": "TOWER_MINER",
     "name": "Шахтер",
     "type": "MINER",
+    "crafting_level": 0,
     "energy": {
       "transfer_radius": 3,
       "line_degradation_factor": 0.6
@@ -234,6 +269,7 @@
     "id": "TOWER_WALL",
     "name": "Стена",
     "type": "WALL",
+    "crafting_level": 0,
     "visuals": {
       "color": {"r": 105, "g": 105, "b": 105, "a": 255},
       "radius_factor": 0.4,

@@ -447,6 +447,8 @@ func mapNumericTypeToTowerID(numericType int) string {
 		return "TOWER_POISON"
 	case config.TowerTypeSilver:
 		return "TOWER_SILVER"
+	case config.TowerTypeMalachite:
+		return "TOWER_MALACHITE"
 	case config.TowerTypeMiner:
 		return "TOWER_MINER"
 	case config.TowerTypeWall:

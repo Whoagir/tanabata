@@ -157,6 +157,7 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 	if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
 		tower.DefID = recipe.OutputID
 		tower.Type = g.mapTowerIDToNumericType(recipe.OutputID)
+		tower.CraftingLevel = outputDef.CraftingLevel // <--- ВОТ ИСПРАВЛЕНИЕ
 
 		// Обновляем или создаем боевой компонент
 		if outputDef.Combat != nil {

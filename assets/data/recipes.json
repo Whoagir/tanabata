@@ -2,5 +2,9 @@
   {
     "input_ids": ["TOWER_PHYSICAL_ATTACK", "TOWER_MAGICAL_ATTACK", "TOWER_PURE_ATTACK"],
     "output_id": "TOWER_SILVER"
+  },
+  {
+    "input_ids": ["TOWER_SPLIT_PHYSICAL", "TOWER_SPLIT_MAGICAL", "TOWER_SPLIT_PURE"],
+    "output_id": "TOWER_MALACHITE"
   }
 ]

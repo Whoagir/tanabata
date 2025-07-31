@@ -40,7 +40,8 @@
 │   │   ├── loader.go
 │   │   ├── recipes.go
 │   │   ├── towers.go
-│   │   └── types.go
+│   │   ├── types.go
+│   │   └── waves.go
 │   ├── entity
 │   │   └── ecs.go
 │   ├── event
@@ -102,6 +103,13 @@
 ├── reset_env.ps1
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
+├── диалог.txt
+├── дневник.txt
 ├── енерация руды.txt
+├── игра 3.png
+├── игра 4.png
+├── игра 5.png
+├── игра.png
+├── игрга 2.png
 ├── информация.txt
 └── ошибки.txt

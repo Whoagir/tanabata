@@ -163,10 +163,11 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 	numericType := g.mapTowerIDToNumericType(def.ID)
 
 	g.ECS.Towers[id] = &component.Tower{
-		DefID:    towerDefID,  // <-- Сохраняем ID определения
-		Type:     numericType, // TODO: Refactor to use string ID or defs.TowerType
-		Hex:      hex,
-		IsActive: false,
+		DefID:         towerDefID,  // <-- Сохраняем ID определения
+		Type:          numericType, // TODO: Refactor to use string ID or defs.TowerType
+		CraftingLevel: def.CraftingLevel,
+		Hex:           hex,
+		IsActive:      false,
 	}
 
 		if def.Combat != nil {
@@ -308,6 +309,8 @@ func (g *Game) mapTowerIDToNumericType(id string) int {
 		return config.TowerTypePoison
 	case "TOWER_SILVER":
 		return config.TowerTypeSilver
+	case "TOWER_MALACHITE":
+		return config.TowerTypeMalachite
 	case "TOWER_MINER":
 		return config.TowerTypeMiner
 	case "TOWER_WALL":

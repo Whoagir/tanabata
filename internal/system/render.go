@@ -172,8 +172,8 @@ func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, rende
 		finalColor = config.ProjectileColorSlow //+
 	} //+
 
-	// Проверяем, является ли сущность башней "Сильвер"
-	if tower, isTower := s.ecs.Towers[id]; isTower && tower.DefID == "TOWER_SILVER" {
+	// Проверяем, является ли сущность башней c уровнем крафта 1 или выше
+	if tower, isTower := s.ecs.Towers[id]; isTower && tower.CraftingLevel >= 1 {
 		// Рисуем квадрат
 		size := renderable.Radius * 2 // Используем радиус для определения размера
 		halfSize := size / 2
@@ -182,7 +182,7 @@ func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, rende
 			vector.StrokeRect(screen, float32(pos.X)-halfSize, float32(pos.Y)-halfSize, size, size, 1, color.White, true)
 		}
 	} else {
-		// Рисуем круг ��ля всех остальных сущностей
+		// Рисуем круг для всех остальных сущностей
 		if renderable.HasStroke { //+
 			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
 			vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true) //+
