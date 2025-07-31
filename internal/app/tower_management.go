@@ -10,7 +10,6 @@ import (
 	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"log"
-	"math/rand"
 )
 
 // PlaceTower attempts to place a tower at the given hex.
@@ -214,23 +213,42 @@ func (g *Game) deleteTowerEntity(id types.EntityID) {
 }
 
 func (g *Game) determineTowerID() string {
-	// Standard tower placement logic
-	attackerIDs := []string{
-		"TA", "TE", "TO", "DE", "NI", "NU", "PO", "PA", "PE",
-	}
+	// Новая логика определения башни
 	waveMod10 := (g.Wave - 1) % 10
 	positionInBlock := g.towersBuilt
 
-	if waveMod10 < 4 { // Pattern: B, A, A, A, A
-		switch positionInBlock {
-		case 0:
-			return "TOWER_MINER"
-		default:
-			return attackerIDs[rand.Intn(len(attackerIDs))]
-		}
-	} else { // Pattern: A, A, A, A, A
-		return attackerIDs[rand.Intn(len(attackerIDs))]
+	// Специальное правило для Шахтера в начале блока
+	if waveMod10 < 4 && positionInBlock == 0 {
+		return "TOWER_MINER"
 	}
+
+	// Получаем уровень игрока.
+	// Так как сущность игрока у нас одна, мы можем просто найти ее.
+	var playerLevel int = 1 // Уровень по умолчанию, если что-то пойдет не так
+	for _, state := range g.ECS.PlayerState {
+		playerLevel = state.Level
+		break // Нашли, выходим
+	}
+
+	// Получаем соответствующую таблицу выпадения.
+	// Если для текущего уровня нет таблицы, пытаемся использовать таблицу более низкого уровня.
+	var lootTable defs.LootTable
+	found := false
+	for level := playerLevel; level >= 1; level-- {
+		if table, ok := defs.LootTableLibrary[level]; ok {
+			lootTable = table
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		log.Println("Error: No suitable loot table found for any player level.")
+		return "" // Не можем определить башню
+	}
+
+	// Используем наш новый сервис для взвешенного выбора
+	return g.Rng.ChooseWeighted(lootTable.Entries)
 }
 
 func (g *Game) createPermanentWall(hex hexmap.Hex) {

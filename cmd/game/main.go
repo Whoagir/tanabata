@@ -55,6 +55,9 @@ func main() {
 	if err := defs.LoadRecipes("assets/data/recipes.json"); err != nil {
 		log.Fatalf("Failed to load recipe definitions: %v", err)
 	}
+	if err := defs.LoadLootTables("assets/data/loot_tables.json"); err != nil {
+		log.Fatalf("Failed to load loot tables: %v", err)
+	}
 
 	rand.Seed(time.Now().UnixNano())
 	sm := state.NewStateMachine() // Создаём машину состояний

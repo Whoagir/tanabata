@@ -172,7 +172,7 @@
       "damage": 20,
       "fire_rate": 1.1,
       "range": 4,
-      "shot_cost": 0.18,
+      "shot_cost": 0.3,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",

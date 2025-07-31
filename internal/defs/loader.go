@@ -16,6 +16,9 @@ var EnemyLibrary map[string]EnemyDefinition
 // RecipeLibrary holds all the crafting recipes loaded from the config file.
 var RecipeLibrary []Recipe
 
+// LootTableLibrary holds all the loot tables, keyed by player level.
+var LootTableLibrary map[int]LootTable
+
 // LoadTowerDefinitions reads the tower configuration file and populates the TowerLibrary.
 func LoadTowerDefinitions(path string) error {
 	file, err := os.ReadFile(path)
@@ -62,14 +65,34 @@ func LoadEnemyDefinitions(path string) error {
 func LoadRecipes(path string) error {
 	file, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to read recipe definitions file: %w", err)
+		return fmt.Errorf("failed to read recipes file: %w", err)
 	}
 
 	if err := json.Unmarshal(file, &RecipeLibrary); err != nil {
-		return fmt.Errorf("failed to unmarshal recipe definitions: %w", err)
+		return fmt.Errorf("failed to unmarshal recipes: %w", err)
 	}
 
 	fmt.Printf("Loaded %d recipe definitions\n", len(RecipeLibrary))
 	return nil
 }
 
+// LoadLootTables reads the loot table configuration file and populates the LootTableLibrary.
+func LoadLootTables(path string) error {
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read loot table file: %w", err)
+	}
+
+	var tables []LootTable
+	if err := json.Unmarshal(file, &tables); err != nil {
+		return fmt.Errorf("failed to unmarshal loot tables: %w", err)
+	}
+
+	LootTableLibrary = make(map[int]LootTable)
+	for _, table := range tables {
+		LootTableLibrary[table.PlayerLevel] = table
+	}
+
+	fmt.Printf("Loaded %d loot table(s)\n", len(LootTableLibrary))
+	return nil
+}

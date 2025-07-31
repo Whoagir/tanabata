@@ -49,7 +49,8 @@ type Game struct {
 	CraftingSystem            *system.CraftingSystem     // Система крафта
 	EventDispatcher           *event.Dispatcher
 	FontFace                  font.Face
-	towersBuilt               int // Счетчик для текущей фазы строительства
+	Rng                       *utils.PRNGService // <<< Наш новый сервис PRNG
+	towersBuilt               int                // Счетчик для текущей фазы строительства
 	SpeedButton               *ui.SpeedButton
 	SpeedMultiplier           float64
 	PauseButton               *ui.PauseButton
@@ -109,6 +110,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		OreSystem:       system.NewOreSystem(ecs, eventDispatcher),
 		EventDispatcher: eventDispatcher,
 		FontFace:        face,
+		Rng:             utils.NewPRNGService(0), // Инициализируем PRNG
 		towersBuilt:     0,
 		gameTime:        0.0,
 		DebugTowerID:    "",
@@ -137,6 +139,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	eventDispatcher.Subscribe(event.TowerRemoved, g.CraftingSystem)
 
 	g.placeInitialStones()
+	g.createPlayerEntity() // <<< Создаем сущность игрока
 
 	return g
 }
@@ -993,4 +996,12 @@ func (g *Game) CreateDebugTower(hex hexmap.Hex, towerDefID string) {
 	g.addTowerToEnergyNetwork(id)
 	g.AuraSystem.RecalculateAuras()
 	g.EventDispatcher.Dispatch(event.Event{Type: event.TowerPlaced, Data: hex})
+}
+
+// createPlayerEntity создает сущность для игрока и добавляет ей начальные компоненты.
+func (g *Game) createPlayerEntity() {
+	playerID := g.ECS.NewEntity()
+	g.ECS.PlayerState[playerID] = &component.PlayerStateComponent{
+		Level: 1, // Начальный уровень игрока
+	}
 }
