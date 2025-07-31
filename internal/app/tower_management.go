@@ -25,9 +25,6 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 		return false
 	}
 
-	// Запоминаем, был ли это отладочный вызов
-	wasDebug := g.DebugTowerID != ""
-
 	id := g.createTowerEntity(hex, towerID)
 	tower := g.ECS.Towers[id]
 	tower.IsTemporary = true
@@ -43,15 +40,11 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	tile := g.HexMap.Tiles[hex]
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
 
-	// Only increment tower count and check for wave start in normal mode
-	if !wasDebug {
-		g.towersBuilt++
-		if g.towersBuilt >= config.MaxTowersInBuildPhase {
-			g.ECS.GameState.TowersToKeep = 2                      // Устанавливаем, сколько башен нужно сохранить
-			g.ECS.GameState.Phase = component.TowerSelectionState // <-- Переключаемся в режим выбора
-		}
+	g.towersBuilt++
+	if g.towersBuilt >= config.MaxTowersInBuildPhase {
+		g.ECS.GameState.TowersToKeep = 2                      // Устанавливаем, сколько башен нужно сохранить
+		g.ECS.GameState.Phase = component.TowerSelectionState // <-- Переключаемся в режим выбора
 	}
-	// Сброс g.DebugTowerID теперь происходит в determineTowerID
 
 	g.addTowerToEnergyNetwork(id)
 	g.AuraSystem.RecalculateAuras()
@@ -62,8 +55,8 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 
 // RemoveTower removes a tower from the given hex.
 func (g *Game) RemoveTower(hex hexmap.Hex) bool {
-	// Удалять можно только в фазе строительства.
-	if g.ECS.GameState.Phase != component.BuildState {
+	// Разрешаем удаление в фазах строительства и выбора.
+	if g.ECS.GameState.Phase != component.BuildState && g.ECS.GameState.Phase != component.TowerSelectionState {
 		return false
 	}
 
@@ -77,12 +70,12 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 		}
 	}
 
-	// Если башня найдена, проверяем, не временная ли она.
 	if towerIDToRemove != 0 {
-		// Запрещаем удаление временных башен (в процессе выбора).
+		// Если удаляем временную башню, уменьшаем счетчик построенных.
 		if towerToRemove.IsTemporary {
-			return false
+			g.towersBuilt--
 		}
+
 		towerDef, ok := defs.TowerLibrary[towerToRemove.DefID]
 		if !ok {
 			return false
@@ -220,13 +213,6 @@ func (g *Game) deleteTowerEntity(id types.EntityID) {
 }
 
 func (g *Game) determineTowerID() string {
-	// Handle debug tower placement
-	if g.DebugTowerID != "" {
-		id := g.DebugTowerID
-		g.DebugTowerID = "" // Reset debug mode
-		return id
-	}
-
 	// Standard tower placement logic
 	attackerIDs := []string{
 		"TA", "TE", "TO", "DE", "NI", "NU", "PO", "PA", "PE",

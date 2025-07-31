@@ -103,22 +103,10 @@ func (g *GameState) Update(deltaTime float64) {
 		return
 	}
 
-	if g.game.ECS.GameState.Phase == component.BuildState && inpututil.IsKeyJustPressed(ebiten.KeyU) {
-		g.game.ToggleLineDragMode()
-	}
-
 	if g.game.ECS.GameState.Phase == component.BuildState {
-		if inpututil.IsKeyJustPressed(ebiten.Key1) {
-			g.game.DebugTowerID = "TA" // "TA" - любая атакующая башня для случайного выбора в determineTowerID
-		}
-		if inpututil.IsKeyJustPressed(ebiten.Key2) {
-			g.game.DebugTowerID = "TOWER_MINER"
-		}
-		if inpututil.IsKeyJustPressed(ebiten.Key3) {
-			g.game.DebugTowerID = "TOWER_WALL"
-		}
-		if inpututil.IsKeyJustPressed(ebiten.Key0) {
-			g.game.DebugTowerID = "TOWER_SILVER"
+		g.handleDebugKeys()
+		if inpututil.IsKeyJustPressed(ebiten.KeyU) {
+			g.game.ToggleLineDragMode()
 		}
 	}
 
@@ -155,6 +143,21 @@ func (g *GameState) Update(deltaTime float64) {
 			g.handleGameClick(x, y, ebiten.MouseButtonRight)
 			g.lastClickTime = time.Now()
 		}
+	}
+}
+
+func (g *GameState) handleDebugKeys() {
+	if inpututil.IsKeyJustPressed(ebiten.Key1) {
+		g.game.DebugTowerID = "RANDOM_ATTACK"
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key2) {
+		g.game.DebugTowerID = "TOWER_MINER"
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key3) {
+		g.game.DebugTowerID = "TOWER_WALL"
+	}
+	if inpututil.IsKeyJustPressed(ebiten.Key0) {
+		g.game.DebugTowerID = "TOWER_SILVER"
 	}
 }
 
@@ -229,7 +232,7 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 	return 0, false
 }
 
-// handleGameClick - это восстановленная старая логика обработки кликов.
+// handleGameClick - это во��становленная старая логика обработки кликов.
 func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 	// При любом обычном клике сбрасываем ручной выбор
 	g.game.ClearManualSelection()
@@ -251,11 +254,6 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 
 	// --- Логика, зависящая от фазы (исполняется ПОСЛЕ общей логики) ---
 
-	// В фазе выбора больше ничего делать не нужно
-	if g.game.ECS.GameState.Phase == component.TowerSelectionState {
-		return
-	}
-
 	// В остальных фазах проверяем клик правой кнопкой или клик по карте
 	if !g.hexMap.Contains(hex) {
 		g.game.ClearAllSelections()
@@ -269,9 +267,15 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 		return
 	}
 
-	if g.game.ECS.GameState.Phase == component.BuildState {
+	// Разрешаем действия в фазах строительств�� и выбора
+	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		if button == ebiten.MouseButtonLeft {
-			g.game.PlaceTower(hex)
+			if g.game.DebugTowerID != "" {
+				g.game.CreateDebugTower(hex, g.game.DebugTowerID)
+				g.game.DebugTowerID = "" // Сбрасываем режим отладки после установки
+			} else {
+				g.game.PlaceTower(hex) // Эта функция сама проверит фазу
+			}
 		} else if button == ebiten.MouseButtonRight {
 			g.game.RemoveTower(hex)
 		}

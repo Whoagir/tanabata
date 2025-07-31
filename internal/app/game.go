@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"math/rand"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/opentype"
@@ -960,4 +961,36 @@ func (g *Game) FinalizeTowerSelection() {
 	g.rebuildEnergyNetwork()
 	g.AuraSystem.RecalculateAuras()
 	g.CraftingSystem.RecalculateCombinations()
+}
+
+// CreateDebugTower places a tower for debugging purposes, bypassing normal game rules.
+func (g *Game) CreateDebugTower(hex hexmap.Hex, towerDefID string) {
+	// Используем canPlaceWall, так как он проверяет базовые вещи (не на пути, не на другой башне),
+	// но не проверяет лимит башен или фазу игры.
+	if !g.canPlaceWall(hex) {
+		return
+	}
+
+	// Если это запрос на случайную атакующую башню
+	if towerDefID == "RANDOM_ATTACK" {
+		attackerIDs := []string{"TA", "TE", "TO", "DE", "NI", "NU", "PO", "PA", "PE"}
+		towerDefID = attackerIDs[rand.Intn(len(attackerIDs))]
+	}
+
+	id := g.createTowerEntity(hex, towerDefID)
+	if id == 0 {
+		return // Не удалось создать сущность
+	}
+
+	tower := g.ECS.Towers[id]
+	tower.IsTemporary = false // Отладочные башни всегда постоянные
+	tower.IsSelected = false  // И не требуют выбора
+
+	tile := g.HexMap.Tiles[hex]
+	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
+
+	// Сразу добавляем в сеть и пересчитываем все, что нужно
+	g.addTowerToEnergyNetwork(id)
+	g.AuraSystem.RecalculateAuras()
+	g.EventDispatcher.Dispatch(event.Event{Type: event.TowerPlaced, Data: hex})
 }
