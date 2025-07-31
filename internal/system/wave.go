@@ -26,7 +26,7 @@ func NewWaveSystem(ecs *entity.ECS, hexMap *hexmap.HexMap, eventDispatcher *even
 		eventDispatcher: eventDispatcher,
 		activeEnemies:   0,
 	}
-	eventDispatcher.Subscribe(event.EnemyDestroyed, ws)
+	eventDispatcher.Subscribe(event.EnemyRemovedFromGame, ws)
 	return ws
 }
 
@@ -143,7 +143,7 @@ func (s *WaveSystem) calculatePath() []hexmap.Hex {
 }
 
 func (s *WaveSystem) OnEvent(e event.Event) {
-	if e.Type == event.EnemyDestroyed {
+	if e.Type == event.EnemyRemovedFromGame {
 		s.activeEnemies--
 	}
 }

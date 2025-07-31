@@ -129,6 +129,6 @@ func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *componen
 		}
 	} else {
 		// Враг был уничтожен, отправляем событие
-		s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyDestroyed, Data: proj.TargetID})
+		s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyRemovedFromGame, Data: proj.TargetID})
 	}
 }

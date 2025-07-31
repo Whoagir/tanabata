@@ -325,6 +325,20 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 	g.infoPanel.Draw(screen, g.game.ECS)
 
 	ebitenutil.DebugPrint(screen, fmt.Sprintf("Wave: %d", g.game.Wave))
+
+	// --- Отрисовка уровня и опыта игрока ---
+	// Находим компонент игрока (предполагаем, что он один)
+	var playerState *component.PlayerStateComponent
+	for _, state := range g.game.ECS.PlayerState {
+		playerState = state
+		break
+	}
+
+	if playerState != nil {
+		levelStr := fmt.Sprintf("Lvl: %d (%d/%d)", playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
+		// Рисуем текст чуть ниже информации о волне
+		ebitenutil.DebugPrintAt(screen, levelStr, 0, 20)
+	}
 }
 
 func (g *GameState) Exit() {}

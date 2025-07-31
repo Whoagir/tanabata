@@ -55,7 +55,16 @@ const (
 	OreBonusMaxMultiplier = 1.5  // Максимальный множитель урона
 	OreBonusMinMultiplier = 0.5  // Минимальный множитель урона
 	LineDegradationFactor = 0.6  // Коэффициент снижения урона за каждую башню типа А в цепи
+
+	// Константы для системы уровней игрока
+	XPPerKill = 7 // Опыта за убийство одного врага
 )
+
+// CalculateXPForNextLevel рассчитывает, сколько опыта нужно для достижения следующего уровня.
+func CalculateXPForNextLevel(level int) int {
+	// Формула: 75 для первого уровня, +25 за каждый последующий
+	return 75 + (level * 25)
+}
 
 var (
 	BackgroundColor   = color.RGBA{20, 20, 30, 255}

@@ -47,10 +47,11 @@ type Game struct {
 	EnvironmentalDamageSystem *system.EnvironmentalDamageSystem
 	VisualEffectSystem        *system.VisualEffectSystem // Новая система
 	CraftingSystem            *system.CraftingSystem     // Система крафта
+	PlayerSystem              *system.PlayerSystem       // <<< Новая система
 	EventDispatcher           *event.Dispatcher
 	FontFace                  font.Face
 	Rng                       *utils.PRNGService // <<< Наш новый сервис PRNG
-	towersBuilt               int                // Счетчик для текущей фазы строительства
+	towersBuilt               int                // Счет��ик для текущей фазы строительства
 	SpeedButton               *ui.SpeedButton
 	SpeedMultiplier           float64
 	PauseButton               *ui.PauseButton
@@ -124,6 +125,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)
 	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs)   // Инициализация
 	g.CraftingSystem = system.NewCraftingSystem(ecs) // Инициализация системы крафта
+	g.PlayerSystem = system.NewPlayerSystem(ecs)     // Инициализация системы игрока
 	g.generateOre()
 	g.initUI()
 
@@ -137,6 +139,9 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	// Подписываем систему крафта на события
 	eventDispatcher.Subscribe(event.TowerPlaced, g.CraftingSystem)
 	eventDispatcher.Subscribe(event.TowerRemoved, g.CraftingSystem)
+
+	// Подписываем систему игрока на события
+	eventDispatcher.Subscribe(event.EnemyKilled, g.PlayerSystem)
 
 	g.placeInitialStones()
 	g.createPlayerEntity() // <<< Создаем сущность игрока
@@ -407,6 +412,11 @@ func (g *Game) cleanupDestroyedEntities() {
 		health, hasHealth := g.ECS.Healths[id]
 		noHealth := hasHealth && health.Value <= 0
 
+		if noHealth {
+			// Генерируем событие УБИЙСТВА только если у врага кончилось здоровье
+			g.EventDispatcher.Dispatch(event.Event{Type: event.EnemyKilled, Data: id})
+		}
+
 		if reachedEnd || noHealth {
 			// Удаляем все компоненты сущности
 			delete(g.ECS.Positions, id)
@@ -415,7 +425,7 @@ func (g *Game) cleanupDestroyedEntities() {
 			delete(g.ECS.Healths, id)
 			delete(g.ECS.Renderables, id)
 			delete(g.ECS.Enemies, id) // Удаляем из списка врагов
-			g.EventDispatcher.Dispatch(event.Event{Type: event.EnemyDestroyed, Data: id})
+			g.EventDispatcher.Dispatch(event.Event{Type: event.EnemyRemovedFromGame, Data: id})
 		}
 	}
 }
@@ -1001,7 +1011,10 @@ func (g *Game) CreateDebugTower(hex hexmap.Hex, towerDefID string) {
 // createPlayerEntity создает сущность для игрока и добавляет ей начальные компоненты.
 func (g *Game) createPlayerEntity() {
 	playerID := g.ECS.NewEntity()
+	initialLevel := 1
 	g.ECS.PlayerState[playerID] = &component.PlayerStateComponent{
-		Level: 1, // Начальный уровень игрока
+		Level:         initialLevel,
+		CurrentXP:     0,
+		XPToNextLevel: config.CalculateXPForNextLevel(initialLevel),
 	}
 }
