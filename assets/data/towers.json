@@ -306,5 +306,31 @@
       "radius_factor": 0.35,
       "stroke_width": 2.0
     }
+  },
+  {
+    "id": "TOWER_LIGHTHOUSE",
+    "name": "Маяк",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 35,
+      "fire_rate": 1.0,
+      "range": 4,
+      "shot_cost": 0.20,
+      "attack": {
+        "type": "ROTATING_BEAM",
+        "damage_type": "PURE",
+        "params": {
+          "rotation_speed": 1.5,
+          "arc_angle": 0.785 
+        }
+      }
+    },
+    "visuals": {
+      "color": { "r": 255, "g": 255, "b": 102, "a": 255 },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   }
 ]

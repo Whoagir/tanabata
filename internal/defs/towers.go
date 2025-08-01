@@ -2,7 +2,6 @@
 package defs
 
 import (
-	"encoding/json"
 	"image/color"
 )
 
@@ -38,15 +37,28 @@ type AuraDef struct {
 type AttackDef struct {
 	Type       AttackBehaviorType `json:"type"`
 	DamageType AttackDamageType   `json:"damage_type"`
-	Params     json.RawMessage    `json:"params,omitempty"` // Flexible parameters for different attack types
+	Params     *AttackParams      `json:"params,omitempty"` // Flexible parameters for different attack types
+}
+
+// AttackParams holds parameters for various attack types.
+// Using pointers to avoid including all fields for all attack types.
+type AttackParams struct {
+	// For Projectile
+	SplitCount *int `json:"split_count,omitempty"`
+	// For Laser
+	SlowMultiplier *float64 `json:"slow_multiplier,omitempty"`
+	SlowDuration   *float64 `json:"slow_duration,omitempty"`
+	// For RotatingBeam
+	RotationSpeed float64 `json:"rotation_speed,omitempty"`
+	ArcAngle      float64 `json:"arc_angle,omitempty"`
 }
 
 // CombatStats contains parameters related to a tower's combat abilities.
 type CombatStats struct {
-	Damage   int       `json:"damage"`
-	FireRate float64   `json:"fire_rate"` // Shots per second
-	Range    int       `json:"range"`
-	ShotCost float64   `json:"shot_cost"`
+	Damage   int        `json:"damage"`
+	FireRate float64    `json:"fire_rate"` // Shots per second
+	Range    int        `json:"range"`
+	ShotCost float64    `json:"shot_cost"`
 	Attack   *AttackDef `json:"attack"`
 }
 

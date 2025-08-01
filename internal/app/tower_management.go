@@ -176,6 +176,19 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 		}
 		if def.Combat.Attack != nil {
 			combatComponent.Attack = *def.Combat.Attack
+
+			// Если это атака вращающимся лучом, создаем соответствующий компонент
+			if def.Combat.Attack.Type == defs.BehaviorRotatingBeam && def.Combat.Attack.Params != nil {
+				g.ECS.RotatingBeams[id] = &component.RotatingBeamComponent{
+					CurrentAngle:  0, // Начальный угол
+					RotationSpeed: def.Combat.Attack.Params.RotationSpeed,
+					ArcAngle:      def.Combat.Attack.Params.ArcAngle,
+					Damage:        float64(def.Combat.Damage), // Явное преобразование типа
+					DamageType:    string(def.Combat.Attack.DamageType),
+					Range:         def.Combat.Range,
+					LastHitTime:   make(map[types.EntityID]float64),
+				}
+			}
 		}
 		g.ECS.Combats[id] = combatComponent
 	}

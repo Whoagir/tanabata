@@ -27,4 +27,6 @@ const (
 	BehaviorLaser AttackBehaviorType = "LASER"
 	// BehaviorAreaOfEffect affects an area around the tower.
 	BehaviorAreaOfEffect AttackBehaviorType = "AREA_OF_EFFECT"
+	// BehaviorRotatingBeam creates a rotating beam attack.
+	BehaviorRotatingBeam AttackBehaviorType = "ROTATING_BEAM"
 )

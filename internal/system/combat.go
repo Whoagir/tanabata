@@ -1,7 +1,6 @@
 package system
 
 import (
-	"encoding/json"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
@@ -36,6 +35,18 @@ func NewCombatSystem(ecs *entity.ECS,
 }
 
 func (s *CombatSystem) Update(deltaTime float64) {
+	// Сначала обновим вращение всех маяков, это должно происходить всегда
+	for id, beam := range s.ecs.RotatingBeams {
+		if tower, ok := s.ecs.Towers[id]; ok && tower.IsActive {
+			beam.CurrentAngle += beam.RotationSpeed * deltaTime
+			beam.CurrentAngle = math.Mod(beam.CurrentAngle, 2*math.Pi)
+			if beam.CurrentAngle < 0 {
+				beam.CurrentAngle += 2 * math.Pi
+			}
+		}
+	}
+
+	// Затем обрабатываем логику атаки для всех башен
 	for id, combat := range s.ecs.Combats {
 		tower, hasTower := s.ecs.Towers[id]
 		if !hasTower || !tower.IsActive {
@@ -76,9 +87,10 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
 		case defs.BehaviorLaser:
 			attackPerformed = s.handleLaserAttack(id, tower, combat, &towerDef)
-		// Сюда можно будет добавить case defs.BehaviorAoe и т.д.
+		case defs.BehaviorRotatingBeam:
+			// Для маяка deltaTime не передаем, т.к. вращение уже произошло
+			attackPerformed = s.handleRotatingBeamAttack(id, tower, combat, &towerDef)
 		default:
-			// По умолчанию используем логику снаряда для обратной совместимости
 			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
 		}
 		// --- Конец логики атаки ---
@@ -137,21 +149,19 @@ func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *componen
 	// 3. Применить урон и эффекты напрямую
 	ApplyDamage(s.ecs, targetID, finalDamage, combat.Attack.DamageType)
 
-	// Парсим параметры для замедления
-	params := defs.LaserAttackParams{}
-	if len(combat.Attack.Params) > 0 {
-		if err := json.Unmarshal(combat.Attack.Params, &params); err != nil {
-			log.Printf("Error unmarshalling laser params: %v", err)
-		}
-	}
-	if params.SlowMultiplier > 0 && params.SlowDuration > 0 {
-		// Применяем или обновляем эффект замедления
-		if existingEffect, ok := s.ecs.SlowEffects[targetID]; ok {
-			existingEffect.Timer = params.SlowDuration // Сбрасываем таймер на полную длительность
-		} else {
-			s.ecs.SlowEffects[targetID] = &component.SlowEffect{
-				SlowFactor: 1.0 - params.SlowMultiplier,
-				Timer:      params.SlowDuration,
+	// Применяем замедление, если оно есть
+	if combat.Attack.Params != nil && combat.Attack.Params.SlowMultiplier != nil && combat.Attack.Params.SlowDuration != nil {
+		slowMultiplier := *combat.Attack.Params.SlowMultiplier
+		slowDuration := *combat.Attack.Params.SlowDuration
+		if slowMultiplier > 0 && slowDuration > 0 {
+			// Применяем или обновляем эффект замедления
+			if existingEffect, ok := s.ecs.SlowEffects[targetID]; ok {
+				existingEffect.Timer = slowDuration // Сбрасываем таймер на полную длительность
+			} else {
+				s.ecs.SlowEffects[targetID] = &component.SlowEffect{
+					SlowFactor: 1.0 - slowMultiplier,
+					Timer:      slowDuration,
+				}
 			}
 		}
 	}
@@ -179,16 +189,16 @@ func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *com
 	if combat.Attack.DamageType == defs.AttackInternal {
 		return true
 	}
-	params := defs.ProjectileAttackParams{}
-	if len(combat.Attack.Params) > 0 {
-		if err := json.Unmarshal(combat.Attack.Params, &params); err != nil {
-			log.Printf("Error unmarshalling projectile params: %v", err)
-		}
+
+	splitCount := 1
+	if combat.Attack.Params != nil && combat.Attack.Params.SplitCount != nil {
+		splitCount = *combat.Attack.Params.SplitCount
 	}
-	if params.SplitCount <= 0 {
-		params.SplitCount = 1
+	if splitCount <= 0 {
+		splitCount = 1
 	}
-	targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, params.SplitCount)
+
+	targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, splitCount)
 	if len(targets) == 0 {
 		return false
 	}
@@ -306,7 +316,7 @@ func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDe
 	}
 }
 
-// calculateOreBoostMultiplier рассчитывает ��ножитель урона на основе запаса руды.
+// calculateOreBoostMultiplier рассчитывает множитель урона на основе запаса руды.
 func calculateOreBoostMultiplier(currentReserve float64) float64 {
 	lowT := config.OreBonusLowThreshold
 	highT := config.OreBonusHighThreshold
@@ -378,7 +388,7 @@ func (s *CombatSystem) predictTargetPosition(enemyID types.EntityID, towerPos *c
 		currentSpeed *= slowEffect.SlowFactor
 	}
 
-	// Итеративный расчет точки перехвата
+	// Итеративн��й расчет точки перехвата
 	const maxIterations = 5
 	timeToHit := 0.0
 	for iter := 0; iter < maxIterations; iter++ {
@@ -428,4 +438,96 @@ func calculateDirection(from, to *component.Position) float64 {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	return math.Atan2(dy, dx)
+}
+
+func (s *CombatSystem) handleRotatingBeamAttack(towerID types.EntityID, tower *component.Tower, combat *component.Combat, towerDef *defs.TowerDefinition) bool {
+	beam, ok := s.ecs.RotatingBeams[towerID]
+	if !ok {
+		return false
+	}
+
+	// Вращение уже произошло в Update. Здесь только логика урона.
+	towerPos := s.ecs.Positions[towerID]
+	if towerPos == nil {
+		return false
+	}
+	enemiesInRange := s.findEnemiesInRadius(tower.Hex, beam.Range)
+	if len(enemiesInRange) == 0 {
+		return false
+	}
+
+	hitOccurred := false
+	finalDamage := s.calculateFinalDamage(towerID, towerDef.Combat.Damage)
+	damageCooldown := 1.0 / combat.FireRate
+
+	for _, enemyID := range enemiesInRange {
+		// Проверяем кулдаун для каждого врага индивидуально
+		lastHit, wasHit := beam.LastHitTime[enemyID]
+		if wasHit && (s.ecs.GameTime-lastHit) < damageCooldown {
+			continue
+		}
+
+		enemyPos := s.ecs.Positions[enemyID]
+		if enemyPos == nil {
+			continue
+		}
+
+		angleToEnemy := math.Atan2(enemyPos.Y-towerPos.Y, enemyPos.X-towerPos.X)
+		if angleToEnemy < 0 {
+			angleToEnemy += 2 * math.Pi
+		}
+
+		diff := angleToEnemy - beam.CurrentAngle
+		if diff > math.Pi {
+			diff -= 2 * math.Pi
+		} else if diff < -math.Pi {
+			diff += 2 * math.Pi
+		}
+
+		if math.Abs(diff) <= beam.ArcAngle/2 {
+			ApplyDamage(s.ecs, enemyID, finalDamage, defs.AttackDamageType(beam.DamageType))
+			beam.LastHitTime[enemyID] = s.ecs.GameTime // Обновляем время последнего удара для этого врага
+			hitOccurred = true
+		}
+	}
+
+	return hitOccurred
+}
+
+func (s *CombatSystem) calculateFinalDamage(towerID types.EntityID, baseDamage int) int {
+	powerSources := s.powerSourceFinder(towerID)
+	if len(powerSources) == 0 {
+		return baseDamage // Возвращаем базовый урон, если нет источников
+	}
+	// Для упрощения пока берем первый источник
+	chosenSourceID := powerSources[0]
+	chosenOre, ok := s.ecs.Ores[chosenSourceID]
+	if !ok {
+		return baseDamage
+	}
+
+	boostMultiplier := calculateOreBoostMultiplier(chosenOre.CurrentReserve)
+	pathToSource := s.pathFinder(towerID)
+	degradationMultiplier := s.calculateLineDegradationMultiplier(pathToSource)
+
+	finalDamage := float64(baseDamage) * boostMultiplier * degradationMultiplier
+	return int(math.Round(finalDamage))
+}
+
+// findEnemiesInRadius находит всех врагов в заданном радиусе от гекса.
+func (s *CombatSystem) findEnemiesInRadius(towerHex hexmap.Hex, rangeRadius int) []types.EntityID {
+	var targets []types.EntityID
+	for enemyID, enemyPos := range s.ecs.Positions {
+		if _, isEnemy := s.ecs.Enemies[enemyID]; !isEnemy {
+			continue
+		}
+		if health, hasHealth := s.ecs.Healths[enemyID]; !hasHealth || health.Value <= 0 {
+			continue
+		}
+		enemyHex := utils.ScreenToHex(enemyPos.X, enemyPos.Y)
+		if towerHex.Distance(enemyHex) <= rangeRadius {
+			targets = append(targets, enemyID)
+		}
+	}
+	return targets
 }

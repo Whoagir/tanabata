@@ -166,7 +166,7 @@ func (g *GameState) handleDebugKeys() {
 		g.game.DebugTowerID = "TOWER_WALL"
 	}
 	if inpututil.IsKeyJustPressed(ebiten.Key0) {
-		g.game.DebugTowerID = "TOWER_SILVER"
+		g.game.DebugTowerID = "TOWER_LIGHTHOUSE"
 	}
 }
 

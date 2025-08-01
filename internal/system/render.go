@@ -51,6 +51,7 @@ func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64, isDragging b
 	s.drawEntities(screen, gameTime)
 	s.drawLines(screen, hiddenLineID) // Передаем ID скрытой линии
 	s.drawLasers(screen)
+	s.drawRotatingBeams(screen) // <<< РИСУЕМ ЛУЧИ
 	s.drawDraggingLine(screen, isDragging, sourceTowerID, cancelDrag)
 	s.drawText(screen)
 	s.drawCombinationIndicators(screen) // Рисуем индикаторы последними
@@ -251,5 +252,37 @@ func (s *RenderSystem) drawDraggingLine(screen *ebiten.Image, isDragging bool, s
 func (s *RenderSystem) drawText(screen *ebiten.Image) {
 	for _, txt := range s.ecs.Texts {
 		text.Draw(screen, txt.Value, s.fontFace, int(txt.Position.X), int(txt.Position.Y), txt.Color)
+	}
+}
+
+func (s *RenderSystem) drawRotatingBeams(screen *ebiten.Image) {
+	if s.ecs.GameState.Phase != component.WaveState {
+		return
+	}
+	for id, beam := range s.ecs.RotatingBeams {
+		pos, ok := s.ecs.Positions[id]
+		if !ok {
+			continue
+		}
+
+		// Цвет луча с альфа-каналом для полупрозрачности
+		beamColor := color.RGBA{R: 255, G: 255, B: 102, A: 80}
+
+		// Углы для границ сектора
+		angle1 := beam.CurrentAngle - beam.ArcAngle/2
+		angle2 := beam.CurrentAngle + beam.ArcAngle/2
+
+		// Координаты конечных точек линий
+		endX1 := float32(pos.X + float64(beam.Range*config.HexSize)*math.Cos(angle1))
+		endY1 := float32(pos.Y + float64(beam.Range*config.HexSize)*math.Sin(angle1))
+		endX2 := float32(pos.X + float64(beam.Range*config.HexSize)*math.Cos(angle2))
+		endY2 := float32(pos.Y + float64(beam.Range*config.HexSize)*math.Sin(angle2))
+
+		// Рисуем две линии, образующие сектор
+		vector.StrokeLine(screen, float32(pos.X), float32(pos.Y), endX1, endY1, 2, beamColor, true)
+		vector.StrokeLine(screen, float32(pos.X), float32(pos.Y), endX2, endY2, 2, beamColor, true)
+
+		// Можно так��е нарисовать дугу, соединяющую концы, для лучшей визуализации
+		// (это более сложная отрисовка, пока ограничимся линиями)
 	}
 }

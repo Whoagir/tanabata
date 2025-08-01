@@ -22,5 +22,13 @@
       { "id": "NU", "level": 1 }
     ],
     "output_id": "TOWER_VOLCANO"
+  },
+  {
+    "inputs": [
+      { "id": "TO", "level": 1 },
+      { "id": "DE", "level": 1 },
+      { "id": "PO", "level": 1 }
+    ],
+    "output_id": "TOWER_LIGHTHOUSE"
   }
 ]
