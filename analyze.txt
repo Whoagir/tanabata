@@ -80,6 +80,7 @@
 │   │   ├── indicator.go
 │   │   ├── info_panel.go
 │   │   ├── pause_button.go
+│   │   ├── player_level_indicator.go
 │   │   ├── speed_button.go
 │   │   └── wave_indicator.go
 │   └── utils
@@ -111,6 +112,7 @@
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
 ├── диалог.txt
+├── дневник (2).txt
 ├── дневник.txt
 ├── енерация руды.txt
 ├── игра 3.png

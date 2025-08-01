@@ -387,6 +387,7 @@ wave - компонент для волны врагов, тут есть ном
 │   │   ├── indicator.go
 │   │   ├── info_panel.go // ui шка которая нужна что бы показывать состояние сущностей
 │   │   ├── pause_button.go // ui шка что бы ставить паузу (альтернатива F9) 
+│   │   ├── player_level_indicator.go
 │   │   ├── speed_button.go // ui шка для контроля скорости игры
 │   │   └── wave_indicator.go
 │   └── utils

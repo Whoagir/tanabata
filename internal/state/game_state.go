@@ -66,10 +66,10 @@ func NewGameState(sm *StateMachine) *GameState {
 		0,
 		config.BuildStateColor,
 	)
-	// Располагаем новый индикатор правее индикатора волн
+	// Располагаем новый индикатор в правом верхнем углу, под остальными элементами
 	playerLevelIndicator := ui.NewPlayerLevelIndicator(
-		waveIndicator.X-35, // -10 -> -35 (сдвиг влево на 25)
-		waveIndicator.Y+30,
+		float32(config.ScreenWidth-ui.XpBarWidth-config.IndicatorOffsetX+10), // Сдвигаем правее
+		float32(config.IndicatorOffsetX+28),                                  // 33 -> 28 (сдвиг вверх на 5)
 	)
 	infoPanel := ui.NewInfoPanel(gameLogic.FontFace, gameLogic.FontFace, gameLogic.EventDispatcher)
 

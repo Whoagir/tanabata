@@ -14,20 +14,18 @@ type PlayerLevelIndicator struct {
 }
 
 const (
-	// Новые размеры (уменьшены на 5%)
-	xpBarWidth      = 118
+	XpBarWidth      = 110
 	xpBarHeight     = 12
-	levelRectWidth  = 16
+	levelRectWidth  = 14
 	levelRectHeight = 12
-	levelRectGap    = 9
+	levelRectGap    = 10
 	maxPlayerLevel  = 5
-	borderWidth     = 1
+	borderWidth     = 2 // Обводка стала толще
 )
 
 var (
-	// Новый цвет, как у проходимых гексов
-	xpBarColorFill = color.RGBA{70, 100, 120, 220}
-	borderColor    = color.White
+	xpBarColorFill = color.RGBA{R: 70, G: 100, B: 120, A: 220}
+	borderColor    = color.RGBA{R: 255, G: 255, B: 255, A: 255}
 )
 
 // NewPlayerLevelIndicator создает новый индикатор уровня.
@@ -37,10 +35,8 @@ func NewPlayerLevelIndicator(x, y float32) *PlayerLevelIndicator {
 
 // Draw отрисовывает индикатор.
 func (i *PlayerLevelIndicator) Draw(screen *ebiten.Image, level, currentXP, xpToNext int) {
-	// 1. Рисуем белую обводку для полосы опыта
-	vector.StrokeRect(screen, i.X, i.Y, xpBarWidth, xpBarHeight, borderWidth, borderColor, true)
+	vector.StrokeRect(screen, i.X, i.Y, XpBarWidth, xpBarHeight, borderWidth, borderColor, false)
 
-	// 2. Р��суем заполненную часть полосы опыта
 	fillRatio := 0.0
 	if xpToNext > 0 {
 		fillRatio = float64(currentXP) / float64(xpToNext)
@@ -48,19 +44,16 @@ func (i *PlayerLevelIndicator) Draw(screen *ebiten.Image, level, currentXP, xpTo
 	if fillRatio > 1.0 {
 		fillRatio = 1.0
 	}
-	fillWidth := float32(float64(xpBarWidth-borderWidth*2) * fillRatio)
+	fillWidth := float32(float64(XpBarWidth-borderWidth*2) * fillRatio)
 	if fillWidth > 0 {
 		vector.DrawFilledRect(screen, i.X+borderWidth, i.Y+borderWidth, fillWidth, xpBarHeight-borderWidth*2, xpBarColorFill, true)
 	}
 
-	// 3. Рисуем прямоугольники уровня
-	rectY := i.Y + xpBarHeight + 10 // 10 пикселей отступ вниз
+	rectY := i.Y + xpBarHeight + 10
 	for j := 0; j < maxPlayerLevel; j++ {
 		rectX := i.X + float32(j)*(levelRectWidth+levelRectGap)
-		// Рисуем обводку для каждого прямоугольника
-		vector.StrokeRect(screen, rectX, rectY, levelRectWidth, levelRectHeight, borderWidth, borderColor, true)
+		vector.StrokeRect(screen, rectX, rectY, levelRectWidth, levelRectHeight, borderWidth, borderColor, false)
 		if j < level {
-			// Заполненный прямоугольник (внутри обводки)
 			vector.DrawFilledRect(screen, rectX+borderWidth, rectY+borderWidth, levelRectWidth-borderWidth*2, levelRectHeight-borderWidth*2, xpBarColorFill, true)
 		}
 	}
