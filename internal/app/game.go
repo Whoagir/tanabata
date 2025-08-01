@@ -48,8 +48,11 @@ type Game struct {
 	VisualEffectSystem        *system.VisualEffectSystem // Новая система
 	CraftingSystem            *system.CraftingSystem     // Система крафта
 	PlayerSystem              *system.PlayerSystem       // <<< Новая система
+	AreaAttackSystem          *system.AreaAttackSystem   // <<< Система для атаки по области
 	EventDispatcher           *event.Dispatcher
 	FontFace                  font.Face
+	SmallFontFace             font.Face
+	TitleFontFace             font.Face
 	Rng                       *utils.PRNGService // <<< Наш новый сервис PRNG
 	towersBuilt               int                // Счет��ик для текущей фазы строительства
 	SpeedButton               *ui.SpeedButton
@@ -99,6 +102,24 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		log.Fatal(err)
 	}
 
+	smallFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    fontSize - 3, // Меньший шрифт для подписей
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	titleFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
+		Size:    fontSize + 14, // Большой шрифт для заголовков/индикаторов
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	ecs := entity.NewECS()
 	eventDispatcher := event.NewDispatcher()
 	g := &Game{
@@ -111,6 +132,8 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		OreSystem:       system.NewOreSystem(ecs, eventDispatcher),
 		EventDispatcher: eventDispatcher,
 		FontFace:        face,
+		SmallFontFace:   smallFace,
+		TitleFontFace:   titleFace,
 		Rng:             utils.NewPRNGService(0), // Инициализируем PRNG
 		towersBuilt:     0,
 		gameTime:        0.0,
@@ -126,6 +149,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs)   // Инициализация
 	g.CraftingSystem = system.NewCraftingSystem(ecs) // Инициализация системы крафта
 	g.PlayerSystem = system.NewPlayerSystem(ecs)     // Инициализация системы игрока
+	g.AreaAttackSystem = system.NewAreaAttackSystem(ecs) // Инициализация системы атаки по области
 	g.generateOre()
 	g.initUI()
 
@@ -142,6 +166,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 
 	// Подписываем систему игрока на события
 	eventDispatcher.Subscribe(event.EnemyKilled, g.PlayerSystem)
+	eventDispatcher.Subscribe(event.EnemyKilled, g.ProjectileSystem)
 
 	g.placeInitialStones()
 	g.createPlayerEntity() // <<< Создаем сущность игрока
@@ -361,6 +386,7 @@ func (g *Game) Update(deltaTime float64) {
 
 	if g.ECS.GameState.Phase == component.WaveState {
 		g.StatusEffectSystem.Update(dt)
+		g.AreaAttackSystem.Update(dt)
 		g.CombatSystem.Update(dt)
 		g.ProjectileSystem.Update(dt)
 		g.WaveSystem.Update(dt, g.ECS.Wave)

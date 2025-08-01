@@ -284,5 +284,27 @@
       "radius_factor": 0.4,
       "stroke_width": 0
     }
+  },
+  {
+    "id": "TOWER_VOLCANO",
+    "name": "Вулкан",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 40,
+      "fire_rate": 0.5,
+      "range": 2,
+      "shot_cost": 0.25,
+      "attack": {
+        "type": "AREA_OF_EFFECT",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 69, "b": 0, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   }
 ]

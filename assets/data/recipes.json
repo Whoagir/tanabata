@@ -14,5 +14,13 @@
       { "id": "PO", "level": 1 }
     ],
     "output_id": "TOWER_MALACHITE"
+  },
+  {
+    "inputs": [
+      { "id": "PE", "level": 1 },
+      { "id": "DE", "level": 1 },
+      { "id": "NU", "level": 1 }
+    ],
+    "output_id": "TOWER_VOLCANO"
   }
 ]

@@ -25,4 +25,6 @@ const (
 	BehaviorBeacon AttackBehaviorType = "BEACON"
 	// BehaviorLaser creates an instantaneous line effect.
 	BehaviorLaser AttackBehaviorType = "LASER"
+	// BehaviorAreaOfEffect affects an area around the tower.
+	BehaviorAreaOfEffect AttackBehaviorType = "AREA_OF_EFFECT"
 )

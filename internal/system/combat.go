@@ -227,6 +227,10 @@ func (s *CombatSystem) findTargetsForSplitAttack(towerHex hexmap.Hex, rangeRadiu
 		if _, isEnemy := s.ecs.Enemies[enemyID]; !isEnemy {
 			continue
 		}
+		// Проверяем, что у врага есть здоровье и оно больше 0
+		if health, hasHealth := s.ecs.Healths[enemyID]; !hasHealth || health.Value <= 0 {
+			continue
+		}
 		enemyHex := utils.ScreenToHex(enemyPos.X, enemyPos.Y)
 		distance := float64(towerHex.Distance(enemyHex))
 
@@ -302,7 +306,7 @@ func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDe
 	}
 }
 
-// calculateOreBoostMultiplier рассчитывает множитель урона на основе запаса руды.
+// calculateOreBoostMultiplier рассчитывает ��ножитель урона на основе запаса руды.
 func calculateOreBoostMultiplier(currentReserve float64) float64 {
 	lowT := config.OreBonusLowThreshold
 	highT := config.OreBonusHighThreshold

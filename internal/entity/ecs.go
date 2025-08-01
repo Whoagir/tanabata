@@ -21,7 +21,8 @@ type ECS struct {
 	Enemies       map[types.EntityID]*component.Enemy
 	LineRenders   map[types.EntityID]*component.LineRender
 	Texts         map[types.EntityID]*component.Text
-	DamageFlashes map[types.EntityID]*component.DamageFlash
+	DamageFlashes map[types.EntityID]*component.DamageFlashComponent
+	AoeEffects    map[types.EntityID]*component.AoeEffectComponent
 	Auras         map[types.EntityID]*component.Aura
 	AuraEffects   map[types.EntityID]*component.AuraEffect
 	SlowEffects   map[types.EntityID]*component.SlowEffect
@@ -49,7 +50,8 @@ func NewECS() *ECS {
 		Enemies:                make(map[types.EntityID]*component.Enemy),
 		LineRenders:            make(map[types.EntityID]*component.LineRender),
 		Texts:                  make(map[types.EntityID]*component.Text),
-		DamageFlashes:          make(map[types.EntityID]*component.DamageFlash),
+		DamageFlashes:          make(map[types.EntityID]*component.DamageFlashComponent),
+		AoeEffects:             make(map[types.EntityID]*component.AoeEffectComponent),
 		Auras:                  make(map[types.EntityID]*component.Aura),
 		AuraEffects:            make(map[types.EntityID]*component.AuraEffect),
 		SlowEffects:            make(map[types.EntityID]*component.SlowEffect),

@@ -2,7 +2,6 @@
 package state
 
 import (
-	"fmt"
 	game "go-tower-defense/internal/app"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
@@ -17,21 +16,22 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
 // GameState — состояние игры
 type GameState struct {
-	sm              *StateMachine
-	game            *game.Game
-	hexMap          *hexmap.HexMap
-	renderer        *render.HexRenderer
-	indicator       *ui.StateIndicator
-	infoPanel       *ui.InfoPanel
-	lastClickTime   time.Time
-	lastUpdateTime  time.Time
-	wasShiftPressed bool // Отслеживаем состояние Shift
+	sm                   *StateMachine
+	game                 *game.Game
+	hexMap               *hexmap.HexMap
+	renderer             *render.HexRenderer
+	indicator            *ui.StateIndicator
+	waveIndicator        *ui.WaveIndicator
+	playerLevelIndicator *ui.PlayerLevelIndicator // <<< Новый индикатор уровня
+	infoPanel            *ui.InfoPanel
+	lastClickTime        time.Time
+	lastUpdateTime       time.Time
+	wasShiftPressed      bool
 }
 
 func NewGameState(sm *StateMachine) *GameState {
@@ -60,17 +60,30 @@ func NewGameState(sm *StateMachine) *GameState {
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
 	)
+	waveIndicator := ui.NewWaveIndicator(
+		float32(config.IndicatorOffsetX+30),
+		float32(config.IndicatorOffsetX+15),
+		0,
+		config.BuildStateColor,
+	)
+	// Располагаем новый индикатор правее индикатора волн
+	playerLevelIndicator := ui.NewPlayerLevelIndicator(
+		waveIndicator.X-35, // -10 -> -35 (сдвиг влево на 25)
+		waveIndicator.Y+30,
+	)
 	infoPanel := ui.NewInfoPanel(gameLogic.FontFace, gameLogic.FontFace, gameLogic.EventDispatcher)
 
 	gs := &GameState{
-		sm:             sm,
-		game:           gameLogic,
-		hexMap:         hexMap,
-		renderer:       renderer,
-		indicator:      indicator,
-		infoPanel:      infoPanel,
-		lastClickTime:  time.Now(),
-		lastUpdateTime: time.Now(),
+		sm:                   sm,
+		game:                 gameLogic,
+		hexMap:               hexMap,
+		renderer:             renderer,
+		indicator:            indicator,
+		waveIndicator:        waveIndicator,
+		playerLevelIndicator: playerLevelIndicator,
+		infoPanel:            infoPanel,
+		lastClickTime:        time.Now(),
+		lastUpdateTime:       time.Now(),
 	}
 
 	return gs
@@ -82,7 +95,6 @@ func (g *GameState) Update(deltaTime float64) {
 	g.game.PauseButton.SetPaused(false)
 	g.infoPanel.Update(g.game.ECS)
 
-	// Логика автоматического подтверждения выбора
 	if g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		selectedCount := 0
 		for _, tower := range g.game.ECS.Towers {
@@ -114,9 +126,7 @@ func (g *GameState) Update(deltaTime float64) {
 
 	isShiftPressed := ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight)
 
-	// --- Раздельная обработка ввода ---
 	if isShiftPressed {
-		// Новая логика для мульти-селекта
 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 			x, y := ebiten.CursorPosition()
 			hex := utils.ScreenToHex(float64(x), float64(y))
@@ -128,7 +138,6 @@ func (g *GameState) Update(deltaTime float64) {
 			g.game.HandleShiftClick(hex, false, true)
 		}
 	} else {
-		// Старая, проверенная логика для всего остального
 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 			x, y := ebiten.CursorPosition()
 			if g.isClickOnUI(x, y) {
@@ -170,10 +179,8 @@ func (g *GameState) isClickOnUI(x, y int) bool {
 	if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
 		return true
 	}
-	// Важно: клик по кнопке в инфо-панели НЕ считается общим UI-кликом,
-	// так как он обрабатывается самой панелью.
 	if g.infoPanel.IsVisible && (p.In(g.infoPanel.SelectButton.Rect) || p.In(g.infoPanel.CombineButton.Rect)) {
-		return true // Возвращаем true, чтобы основной обработчик его проигнорировал
+		return true
 	}
 	return false
 }
@@ -211,7 +218,6 @@ func (g *GameState) handlePauseClick() {
 }
 
 func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
-	// Сначала ищем башни, так как они чаще являются целью клика
 	for id, pos := range g.game.ECS.Positions {
 		if _, isTower := g.game.ECS.Towers[id]; isTower {
 			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
@@ -220,7 +226,6 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 			}
 		}
 	}
-	// Потом врагов
 	for id, pos := range g.game.ECS.Positions {
 		if _, isEnemy := g.game.ECS.Enemies[id]; isEnemy {
 			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
@@ -232,29 +237,21 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 	return 0, false
 }
 
-// handleGameClick - это во��становленная старая логика обработки кликов.
 func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
-	// При любом обычном клике сбрасываем ручной выбор
 	g.game.ClearManualSelection()
-
 	hex := utils.ScreenToHex(float64(x), float64(y))
 
 	if button == ebiten.MouseButtonLeft {
 		entityID, entityFound := g.findEntityAt(x, y)
 		if entityFound {
-			// Показываем инфо-панель и подсвечиваем башню в ЛЮБОЙ фазе
 			g.infoPanel.SetTarget(entityID)
 			g.game.SetHighlightedTower(entityID)
 		} else {
-			// Клик мимо всего - сбрасываем всё
 			g.infoPanel.Hide()
 			g.game.ClearAllSelections()
 		}
 	}
 
-	// --- Логика, зависящая от фазы (исполняется ПОСЛЕ общей логики) ---
-
-	// В остальных фазах проверяем клик правой кнопкой или клик по карте
 	if !g.hexMap.Contains(hex) {
 		g.game.ClearAllSelections()
 		return
@@ -267,14 +264,13 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 		return
 	}
 
-	// Разрешаем действия в фазах строительств�� и выбора
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		if button == ebiten.MouseButtonLeft {
 			if g.game.DebugTowerID != "" {
 				g.game.CreateDebugTower(hex, g.game.DebugTowerID)
-				g.game.DebugTowerID = "" // Сбрасываем режим отладки после установки
+				g.game.DebugTowerID = ""
 			} else {
-				g.game.PlaceTower(hex) // Эта функция сама проверит фазу
+				g.game.PlaceTower(hex)
 			}
 		} else if button == ebiten.MouseButtonRight {
 			g.game.RemoveTower(hex)
@@ -283,7 +279,6 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 }
 
 func (g *GameState) Draw(screen *ebiten.Image) {
-	// --- Отрисовка карты и статичных элементов ---
 	wallHexes, typeAHexes, typeBHexes := g.game.GetTowerHexesByType()
 	outlineColors := render.TowerOutlineColors{
 		WallColor:  config.TowerStrokeColor,
@@ -292,7 +287,6 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 	}
 	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, outlineColors, g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
 
-	// --- Новая отрисовка подсветки для всех выбранных башен ---
 	for _, tower := range g.game.ECS.Towers {
 		if tower.IsHighlighted || tower.IsManuallySelected {
 			screenX, screenY := g.renderer.HexToPixel(tower.Hex)
@@ -309,7 +303,6 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 		}
 	}
 
-	// --- Отрисовка UI ---
 	var stateColor color.Color
 	switch g.game.ECS.GameState.Phase {
 	case component.BuildState:
@@ -320,14 +313,12 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 		stateColor = config.SelectionStateColor
 	}
 	g.indicator.Draw(screen, stateColor)
+	g.waveIndicator.Draw(screen, g.game.Wave, g.game.TitleFontFace)
 	g.game.SpeedButton.Draw(screen)
 	g.game.PauseButton.Draw(screen)
 	g.infoPanel.Draw(screen, g.game.ECS)
 
-	ebitenutil.DebugPrint(screen, fmt.Sprintf("Wave: %d", g.game.Wave))
-
-	// --- Отрисовка уровня и опыта игрока ---
-	// Находим компонент игрока (предполагаем, что он один)
+	// --- Отрисовка уровня и опыта ��грока (НОВЫЙ СПОСОБ) ---
 	var playerState *component.PlayerStateComponent
 	for _, state := range g.game.ECS.PlayerState {
 		playerState = state
@@ -335,9 +326,7 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 	}
 
 	if playerState != nil {
-		levelStr := fmt.Sprintf("Lvl: %d (%d/%d)", playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
-		// Рисуем текст чуть ниже информации о волне
-		ebitenutil.DebugPrintAt(screen, levelStr, 0, 20)
+		g.playerLevelIndicator.Draw(screen, playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
 	}
 }
 

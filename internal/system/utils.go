@@ -50,9 +50,8 @@ func ApplyDamage(ecs *entity.ECS, entityID types.EntityID, damage int, attackTyp
 
 	// Добавляем или сбрасываем компонент "вспышки"
 	if isEnemy {
-		ecs.DamageFlashes[entityID] = &component.DamageFlash{
-			Timer:    0,
-			Duration: config.DamageFlashDuration,
+		ecs.DamageFlashes[entityID] = &component.DamageFlashComponent{
+			Timer:    config.DamageFlashDuration, // Начинаем с полной длительности и считаем до нуля
 		}
 	}
 }

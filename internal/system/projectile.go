@@ -26,6 +26,22 @@ func NewProjectileSystem(ecs *entity.ECS, eventDispatcher *event.Dispatcher, com
 	}
 }
 
+// OnEvent реализует интерфейс event.Listener
+func (s *ProjectileSystem) OnEvent(e event.Event) {
+	if e.Type == event.EnemyKilled {
+		deadEnemyID, ok := e.Data.(types.EntityID)
+		if !ok {
+			return
+		}
+		// Проходим по всем снарядам и удаляем те, что летят в мёртвого врага
+		for projID, proj := range s.ecs.Projectiles {
+			if proj.TargetID == deadEnemyID {
+				s.removeProjectile(projID)
+			}
+		}
+	}
+}
+
 func (s *ProjectileSystem) Update(deltaTime float64) {
 	for id, proj := range s.ecs.Projectiles {
 		pos := s.ecs.Positions[id]
@@ -115,20 +131,27 @@ func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *componen
 
 	// Проверяем, жив ли еще враг, чтобы обновить его радиус
 	if health, exists := s.ecs.Healths[proj.TargetID]; exists {
-		// TODO: Get enemy definition properly instead of hardcoding
-		def, ok := defs.EnemyLibrary["DEFAULT_ENEMY"]
+		// Получаем компонент врага, чтобы узнать его DefID
+		enemy, isEnemy := s.ecs.Enemies[proj.TargetID]
+		if !isEnemy {
+			return // Цель больше не враг
+		}
+
+		// Получаем правильное определение врага из библиотеки
+		def, ok := defs.EnemyLibrary[enemy.DefID]
 		if !ok {
-			return // or log error
+			return // Не удалось найти определение
 		}
 
 		healthf := float32(health.Value)
 		health_m := float32(def.Health)
 		if renderable, ok := s.ecs.Renderables[proj.TargetID]; ok {
+			// Используем правильный RadiusFactor из определения врага
 			newRadius := (0.6 + 0.4*(healthf/health_m)) * float32(config.HexSize*def.Visuals.RadiusFactor)
 			renderable.Radius = newRadius
 		}
 	} else {
-		// Враг был уничтожен, отправляем событие
+		// ��раг был уничтожен, отправляем событие
 		s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyRemovedFromGame, Data: proj.TargetID})
 	}
 }

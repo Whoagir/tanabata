@@ -2,6 +2,7 @@
 ├── assets
 │   ├── data
 │   │   ├── enemies.json
+│   │   ├── loot_tables.json
 │   │   ├── recipes.json
 │   │   └── towers.json
 │   └── fonts
@@ -25,6 +26,7 @@
 │   │   ├── manual_selection.go
 │   │   ├── movement.go
 │   │   ├── ore.go
+│   │   ├── player.go
 │   │   ├── projectile.go
 │   │   ├── render.go
 │   │   ├── selection.go
@@ -38,6 +40,7 @@
 │   ├── defs
 │   │   ├── enemies.go
 │   │   ├── loader.go
+│   │   ├── loot_tables.go
 │   │   ├── recipes.go
 │   │   ├── towers.go
 │   │   ├── types.go
@@ -56,12 +59,14 @@
 │   │   ├── pause_state.go
 │   │   └── state.go
 │   ├── system
+│   │   ├── area_attack_system.go
 │   │   ├── aura.go
 │   │   ├── combat.go
 │   │   ├── crafting.go
 │   │   ├── environmental_damage.go
 │   │   ├── movement.go
 │   │   ├── ore.go
+│   │   ├── player_system.go
 │   │   ├── projectile.go
 │   │   ├── render.go
 │   │   ├── state.go
@@ -75,9 +80,11 @@
 │   │   ├── indicator.go
 │   │   ├── info_panel.go
 │   │   ├── pause_button.go
-│   │   └── speed_button.go
+│   │   ├── speed_button.go
+│   │   └── wave_indicator.go
 │   └── utils
 │       ├── coords.go
+│       ├── prng.go
 │       └── union_find.go
 ├── pkg
 │   ├── hexmap
