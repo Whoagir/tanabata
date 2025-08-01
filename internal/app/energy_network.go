@@ -461,7 +461,13 @@ func (g *Game) hasActiveTowerBetween(hexA, hexB hexmap.Hex, allTowers map[hexmap
 	line := hexA.LineTo(hexB)
 	for i := 1; i < len(line)-1; i++ {
 		if id, exists := allTowers[line[i]]; exists && potentiallyActive[id] {
-			return true
+			// Проверяем тип башни, которая стоит на пути
+			towerOnPath := g.ECS.Towers[id]
+			towerOnPathDef := defs.TowerLibrary[towerOnPath.DefID]
+			// Линия блокируется ТОЛЬКО если на пути стоит другая башня типа Б (Miner)
+			if towerOnPathDef.Type == defs.TowerTypeMiner {
+				return true
+			}
 		}
 	}
 	return false
