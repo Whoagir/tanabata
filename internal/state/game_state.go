@@ -5,6 +5,7 @@ import (
 	game "go-tower-defense/internal/app"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/internal/ui"
 	"go-tower-defense/internal/utils"
@@ -29,12 +30,13 @@ type GameState struct {
 	waveIndicator        *ui.WaveIndicator
 	playerLevelIndicator *ui.PlayerLevelIndicator // <<< Новый индикатор уровня
 	infoPanel            *ui.InfoPanel
+	recipeBook           *ui.RecipeBook // <<< Книга рецептов
 	lastClickTime        time.Time
 	lastUpdateTime       time.Time
 	wasShiftPressed      bool
 }
 
-func NewGameState(sm *StateMachine) *GameState {
+func NewGameState(sm *StateMachine, recipes []defs.Recipe) *GameState {
 	hexMap := hexmap.NewHexMap()
 	gameLogic := game.NewGame(hexMap)
 
@@ -60,18 +62,31 @@ func NewGameState(sm *StateMachine) *GameState {
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
 	)
+	// Рассчитываем базовые координаты для индикатора уровня
+	playerLevelIndicatorX := float32(config.ScreenWidth - ui.XpBarWidth - config.IndicatorOffsetX + 10)
+	playerLevelIndicatorY := float32(config.IndicatorOffsetX + 28)
+
+	// Создаем индикатор волны с временными координатами (0,0), т.к. они будут обновляться в Draw
+	// Y координату можно задать сразу, она не будет меняться
+	waveIndicatorY := playerLevelIndicatorY + 71 // 78 (предыдущий отступ) - 7 (поднимаем)
 	waveIndicator := ui.NewWaveIndicator(
-		float32(config.IndicatorOffsetX+30),
-		float32(config.IndicatorOffsetX+15),
+		0, // X будет рассчитан в Draw
+		waveIndicatorY,
 		0,
 		config.BuildStateColor,
 	)
-	// Располагаем новый индикатор в правом верхнем углу, под остальными элементами
+
+	// Располагаем индикатор уровня
 	playerLevelIndicator := ui.NewPlayerLevelIndicator(
-		float32(config.ScreenWidth-ui.XpBarWidth-config.IndicatorOffsetX+10), // Сдвигаем правее
-		float32(config.IndicatorOffsetX+28),                                  // 33 -> 28 (сдвиг вверх на 5)
+		playerLevelIndicatorX,
+		playerLevelIndicatorY,
 	)
 	infoPanel := ui.NewInfoPanel(gameLogic.FontFace, gameLogic.FontFace, gameLogic.EventDispatcher)
+
+	// Создаем книгу рецептов
+	recipeBookX := float32(config.ScreenWidth-400) / 2
+	recipeBookY := float32(config.ScreenHeight-600) / 2
+	recipeBook := ui.NewRecipeBook(recipeBookX, recipeBookY, 400, 600, gameLogic.FontFace, recipes)
 
 	gs := &GameState{
 		sm:                   sm,
@@ -82,6 +97,7 @@ func NewGameState(sm *StateMachine) *GameState {
 		waveIndicator:        waveIndicator,
 		playerLevelIndicator: playerLevelIndicator,
 		infoPanel:            infoPanel,
+		recipeBook:           recipeBook, // <<< Добавляем книгу рецептов
 		lastClickTime:        time.Now(),
 		lastUpdateTime:       time.Now(),
 	}
@@ -94,6 +110,17 @@ func (g *GameState) Enter() {}
 func (g *GameState) Update(deltaTime float64) {
 	g.game.PauseButton.SetPaused(false)
 	g.infoPanel.Update(g.game.ECS)
+
+	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
+		g.recipeBook.Toggle()
+	}
+
+	if g.recipeBook.IsVisible {
+		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+			g.recipeBook.Toggle()
+		}
+		return // Если книга открыта, не обрабатываем другие нажатия
+	}
 
 	if g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		selectedCount := 0
@@ -313,6 +340,18 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 		stateColor = config.SelectionStateColor
 	}
 	g.indicator.Draw(screen, stateColor)
+
+	// --- Динамическое центрирование индикатора волны ---
+	// 1. Получаем ширину текста индикатора волны
+	waveTextBounds := g.waveIndicator.GetTextBounds(g.game.Wave, g.game.TitleFontFace)
+	waveTextWidth := waveTextBounds.Dx()
+
+	// 2. Вычисляем центральную точку индикатора уровня
+	levelIndicatorCenterX := g.playerLevelIndicator.X + (ui.XpBarWidth / 2)
+
+	// 3. Устанавливаем новую X-координату для индикатора волны
+	g.waveIndicator.X = levelIndicatorCenterX - float32(waveTextWidth/2)
+
 	g.waveIndicator.Draw(screen, g.game.Wave, g.game.TitleFontFace)
 	g.game.SpeedButton.Draw(screen)
 	g.game.PauseButton.Draw(screen)
@@ -327,6 +366,15 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 
 	if playerState != nil {
 		g.playerLevelIndicator.Draw(screen, playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
+	}
+
+	// Отрисовываем книгу рецептов поверх всего, если она видима
+	if g.recipeBook.IsVisible {
+		availableTowers := make(map[string]int)
+		for _, tower := range g.game.ECS.Towers {
+			availableTowers[tower.DefID]++
+		}
+		g.recipeBook.Draw(screen, availableTowers)
 	}
 }
 

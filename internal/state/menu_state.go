@@ -2,6 +2,7 @@
 package state
 
 import (
+	"go-tower-defense/internal/defs"
 	"image/color"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -10,11 +11,12 @@ import (
 
 // MenuState — состояние меню (заглушка)
 type MenuState struct {
-	sm *StateMachine
+	sm      *StateMachine
+	recipes []defs.Recipe
 }
 
-func NewMenuState(sm *StateMachine) *MenuState {
-	return &MenuState{sm: sm}
+func NewMenuState(sm *StateMachine, recipes []defs.Recipe) *MenuState {
+	return &MenuState{sm: sm, recipes: recipes}
 }
 
 func (m *MenuState) Enter() {
@@ -23,7 +25,7 @@ func (m *MenuState) Enter() {
 
 func (m *MenuState) Update(deltaTime float64) {
 	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
-		m.sm.SetState(NewGameState(m.sm))
+		m.sm.SetState(NewGameState(m.sm, m.recipes))
 	}
 }
 

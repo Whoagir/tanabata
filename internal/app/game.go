@@ -112,7 +112,7 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 	}
 
 	titleFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    fontSize + 14, // Большой шрифт для заголовков/индикаторов
+		Size:    fontSize + 18, // 11 + 18 = 29, было 11 + 14 = 25. Увеличение ~15%
 		DPI:     72,
 		Hinting: font.HintingFull,
 	})
@@ -194,24 +194,47 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 
 		// Обновляем или создаем боевой компонент
 		if outputDef.Combat != nil {
-			if combat, ok := g.ECS.Combats[clickedTowerID]; ok {
+			var combat *component.Combat
+			var combatExists bool
+			if combat, combatExists = g.ECS.Combats[clickedTowerID]; combatExists {
 				combat.FireRate = outputDef.Combat.FireRate
 				combat.Range = outputDef.Combat.Range
 				combat.ShotCost = outputDef.Combat.ShotCost
-				if outputDef.Combat.Attack != nil {
-					combat.Attack = *outputDef.Combat.Attack
-				}
 			} else {
-				g.ECS.Combats[clickedTowerID] = &component.Combat{
+				combat = &component.Combat{
 					FireRate: outputDef.Combat.FireRate,
 					Range:    outputDef.Combat.Range,
 					ShotCost: outputDef.Combat.ShotCost,
-					Attack:   *outputDef.Combat.Attack,
 				}
 			}
+
+			if outputDef.Combat.Attack != nil {
+				combat.Attack = *outputDef.Combat.Attack
+				// --- ИСПРАВЛЕНИЕ ---
+				// Проверяем, является ли новая атака вращающимся лучом
+				if outputDef.Combat.Attack.Type == defs.BehaviorRotatingBeam && outputDef.Combat.Attack.Params != nil {
+					// Если да, создаем или обновляем компонент луча
+					g.ECS.RotatingBeams[clickedTowerID] = &component.RotatingBeamComponent{
+						CurrentAngle:  0,
+						RotationSpeed: outputDef.Combat.Attack.Params.RotationSpeed,
+						ArcAngle:      outputDef.Combat.Attack.Params.ArcAngle,
+						Damage:        float64(outputDef.Combat.Damage),
+						DamageType:    string(outputDef.Combat.Attack.DamageType),
+						Range:         outputDef.Combat.Range,
+						LastHitTime:   make(map[types.EntityID]float64),
+					}
+				} else {
+					// Если новая башня - не маяк, удаляем старый компонент луча, если он был
+					delete(g.ECS.RotatingBeams, clickedTowerID)
+				}
+			}
+			if !combatExists {
+				g.ECS.Combats[clickedTowerID] = combat
+			}
 		} else {
-			// Если у новой башни нет боевых характеристик, удаляем компонент
+			// Если у новой башни нет боевых характеристик, удаляем компоненты
 			delete(g.ECS.Combats, clickedTowerID)
+			delete(g.ECS.RotatingBeams, clickedTowerID) // Также удаляем компонент луча
 		}
 
 		// Обновляем визуальный компонент
@@ -231,6 +254,7 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 			// Удаляем ненужные компоненты
 			delete(g.ECS.Combats, id)
 			delete(g.ECS.Auras, id)
+			delete(g.ECS.RotatingBeams, id) // И компонент луча на всякий случай
 			// Превращаем в стену
 			tower.DefID = "TOWER_WALL"
 			if renderable, ok := g.ECS.Renderables[id]; ok {

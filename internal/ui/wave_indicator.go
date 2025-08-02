@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"image"
 	"image/color"
 	"strings"
 
@@ -54,6 +55,13 @@ func toRoman(num int) string {
 		}
 	}
 	return roman.String()
+}
+
+// GetTextBounds вычисляет и возвращает границы для текста волны.
+func (i *WaveIndicator) GetTextBounds(waveNumber int, fontFace font.Face) image.Rectangle {
+	waveStr := toRoman(waveNumber)
+	bounds := text.BoundString(fontFace, waveStr)
+	return bounds
 }
 
 // Draw отрисовывает индикатор на экране.

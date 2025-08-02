@@ -62,9 +62,9 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	sm := state.NewStateMachine() // Создаём машину состояний
 	if startFromGame {
-		sm.SetState(state.NewGameState(sm)) // Устанавливаем состояние игры
+		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary)) // Устанавливаем состояние игры
 	} else {
-		sm.SetState(state.NewMenuState(sm)) // Устанавливаем состояние меню
+		sm.SetState(state.NewMenuState(sm, defs.RecipeLibrary)) // Устанавливаем состояние меню
 	}
 	app := &AppGame{
 		stateMachine:   sm,
