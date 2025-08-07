@@ -4,6 +4,7 @@ package system
 import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
@@ -25,7 +26,6 @@ func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
 	return &RenderSystemRL{
 		ecs:  ecs,
 		font: font,
-		// Камера будет установлена позже через SetCamera
 	}
 }
 
@@ -36,7 +36,6 @@ func (s *RenderSystemRL) SetCamera(camera *rl.Camera3D) {
 
 // Draw рисует все динамические сущности
 func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
-	// Проверяем, установлена л�� камера, прежде чем рисовать 3D
 	if s.camera == nil {
 		return
 	}
@@ -51,7 +50,6 @@ func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, 
 }
 
 func (s *RenderSystemRL) Update(deltaTime float64) {
-	// Обновляем таймеры лазеров и удаляем истекшие
 	for id, laser := range s.ecs.Lasers {
 		laser.Timer += deltaTime
 		if laser.Timer >= laser.Duration {
@@ -63,7 +61,12 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 // hexToWorld преобразует гекс в мировые 3D-координаты
 func (s *RenderSystemRL) hexToWorld(h hexmap.Hex) rl.Vector3 {
 	x, y := h.ToPixel(float64(config.HexSize))
-	return rl.NewVector3(float32(x), 0, float32(y))
+	return rl.NewVector3(float32(x*config.CoordScale), 0, float32(y*config.CoordScale))
+}
+
+// pixelToWorld преобразует пиксельные координаты в мировые 3D-координаты
+func (s *RenderSystemRL) pixelToWorld(p component.Position) rl.Vector3 {
+	return rl.NewVector3(float32(p.X*config.CoordScale), 0, float32(p.Y*config.CoordScale))
 }
 
 func (s *RenderSystemRL) drawLasers() {
@@ -75,11 +78,8 @@ func (s *RenderSystemRL) drawLasers() {
 		r, g, b, _ := laser.Color.RGBA()
 		lineColor := rl.NewColor(uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(alpha*255))
 
-		startHex := hexmap.PixelToHex(laser.FromX, laser.FromY, config.HexSize)
-		endHex := hexmap.PixelToHex(laser.ToX, laser.ToY, config.HexSize)
-
-		startPos := s.hexToWorld(startHex)
-		endPos := s.hexToWorld(endHex)
+		startPos := s.pixelToWorld(component.Position{X: laser.FromX, Y: laser.FromY})
+		endPos := s.pixelToWorld(component.Position{X: laser.ToX, Y: laser.ToY})
 
 		rl.DrawLine3D(startPos, endPos, lineColor)
 	}
@@ -88,19 +88,31 @@ func (s *RenderSystemRL) drawLasers() {
 func (s *RenderSystemRL) drawPulsingOres(gameTime float64) {
 	for id, ore := range s.ecs.Ores {
 		if pos, hasPos := s.ecs.Positions[id]; hasPos {
-			pulseRadius := ore.Radius * float32(1+0.1*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
+			worldPos := s.pixelToWorld(*pos)
+
+			scaledRadius := float32(ore.Radius * config.CoordScale)
+			pulseRadius := scaledRadius * float32(1+0.1*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
 			pulseAlpha := uint8(128 + 64*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
 			oreColor := config.OreColorRL
 			oreColor.A = pulseAlpha
 
-			worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
-			rl.DrawCylinder(worldPos, pulseRadius, pulseRadius, 0.1, 20, oreColor)
+			scaledHeight := float32(0.1 * config.CoordScale)
+			worldPos.Y = scaledHeight/2 + 2.0
+
+			rl.DrawCylinder(worldPos, pulseRadius, pulseRadius, scaledHeight, 20, oreColor)
 		}
 	}
 }
 
 func (s *RenderSystemRL) drawEntities() {
 	for id, renderable := range s.ecs.Renderables {
+		if _, isLine := s.ecs.LineRenders[id]; isLine {
+			continue
+		}
+		if _, isTower := s.ecs.Towers[id]; isTower {
+			s.drawEntity(id, renderable, nil)
+			continue
+		}
 		if pos, ok := s.ecs.Positions[id]; ok {
 			s.drawEntity(id, renderable, pos)
 		}
@@ -118,45 +130,86 @@ func (s *RenderSystemRL) drawEntity(id types.EntityID, renderable *component.Ren
 		finalColor = config.ProjectileColorSlowRL
 	}
 
-	worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
-	worldPos.Y = float32(renderable.Radius / 2)
+	scaledRadius := float32(renderable.Radius * config.CoordScale)
+
+	var worldPos rl.Vector3
+	if tower, isTower := s.ecs.Towers[id]; isTower {
+		worldPos = s.hexToWorld(tower.Hex)
+	} else if pos != nil {
+		worldPos = s.pixelToWorld(*pos)
+	} else {
+		return
+	}
 
 	if _, isEnemy := s.ecs.Enemies[id]; isEnemy {
-		rl.DrawSphere(worldPos, renderable.Radius, finalColor)
+		worldPos.Y = scaledRadius
+		rl.DrawSphere(worldPos, scaledRadius, finalColor)
 		if renderable.HasStroke {
-			rl.DrawSphereWires(worldPos, renderable.Radius, 8, 8, rl.White)
+			rl.DrawSphereWires(worldPos, scaledRadius, 8, 8, rl.White)
 		}
 	} else if tower, isTower := s.ecs.Towers[id]; isTower {
-		height := renderable.Radius * 2
-		worldPos.Y = height / 2
+		towerDef, ok := defs.TowerDefs[tower.DefID]
+		if !ok {
+			return
+		}
 
-		if tower.CraftingLevel >= 1 {
-			size := renderable.Radius * 2
+		height := s.GetTowerRenderHeight(tower, renderable)
+		startPos := rl.NewVector3(worldPos.X, 0, worldPos.Z)
+		endPos := rl.NewVector3(worldPos.X, height, worldPos.Z)
+
+		switch {
+		case towerDef.Type == defs.TowerTypeWall:
+			radius := scaledRadius * 1.8
+			// ИСПРАВЛЕНО: Используем DrawCylinderEx для точного позиционирования
+			rl.DrawCylinderEx(startPos, endPos, radius, radius, 6, finalColor)
+			if renderable.HasStroke {
+				rl.DrawCylinderWiresEx(startPos, endPos, radius, radius, 6, rl.White)
+			}
+
+		case towerDef.Type == defs.TowerTypeMiner:
+			radius := scaledRadius * 1.2
+			rl.DrawCylinderEx(startPos, endPos, radius, 0, 16, finalColor)
+			if renderable.HasStroke {
+				rl.DrawCylinderWiresEx(startPos, endPos, radius, 0, 16, rl.White)
+			}
+
+		case tower.CraftingLevel >= 1:
+			// Для куба оставляем старый метод, но корректируем Y
+			worldPos.Y = height / 2
+			size := scaledRadius * 2
 			rl.DrawCube(worldPos, size, height, size, finalColor)
 			if renderable.HasStroke {
 				rl.DrawCubeWires(worldPos, size, height, size, rl.White)
 			}
-		} else {
-			rl.DrawCylinder(worldPos, renderable.Radius, renderable.Radius, height, 12, finalColor)
+
+		default:
+			radius := scaledRadius * 1.2
+			// ИСПРАВЛЕНО: Используем DrawCylinderEx для точного позиционирования
+			rl.DrawCylinderEx(startPos, endPos, radius, radius, 24, finalColor)
 			if renderable.HasStroke {
-				rl.DrawCylinderWires(worldPos, renderable.Radius, renderable.Radius, height, 12, rl.White)
+				rl.DrawCylinderWiresEx(startPos, endPos, radius, radius, 24, rl.White)
 			}
 		}
 	} else {
-		rl.DrawSphere(worldPos, renderable.Radius, finalColor)
+		worldPos.Y = scaledRadius
+		rl.DrawSphere(worldPos, scaledRadius, finalColor)
 	}
 }
 
 func (s *RenderSystemRL) drawCombinationIndicators() {
 	for id := range s.ecs.Combinables {
-		if pos, ok := s.ecs.Positions[id]; ok {
+		if tower, ok := s.ecs.Towers[id]; ok {
 			if renderable, ok := s.ecs.Renderables[id]; ok {
-				worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
-				worldPos.Y = float32(renderable.Radius*2 + 2)
-				indicatorRadius := renderable.Radius / 2
+				worldPos := s.hexToWorld(tower.Hex)
+				height := s.GetTowerRenderHeight(tower, renderable)
 
-				rl.DrawSphere(worldPos, indicatorRadius, rl.Black)
-				rl.DrawSphereWires(worldPos, indicatorRadius+0.2, 6, 6, rl.White)
+				scaledTowerRadius := float32(renderable.Radius * config.CoordScale)
+				scaledIndicatorRadius := scaledTowerRadius / 2
+				indicatorOffset := float32(2.0 * config.CoordScale)
+				worldPos.Y = height + indicatorOffset + scaledIndicatorRadius
+
+				rl.DrawSphere(worldPos, scaledIndicatorRadius, rl.Black)
+				rl.DrawSphereWires(worldPos, scaledIndicatorRadius+float32(0.2*config.CoordScale), 6, 6, rl.White)
 			}
 		}
 	}
@@ -167,13 +220,42 @@ func (s *RenderSystemRL) drawLines(hiddenLineID types.EntityID) {
 		if id == hiddenLineID {
 			continue
 		}
-		startPosComp, ok1 := s.ecs.Positions[line.Tower1ID]
-		endPosComp, ok2 := s.ecs.Positions[line.Tower2ID]
-		if ok1 && ok2 {
-			startPos := s.hexToWorld(hexmap.PixelToHex(startPosComp.X, startPosComp.Y, config.HexSize))
-			endPos := s.hexToWorld(hexmap.PixelToHex(endPosComp.X, endPosComp.Y, config.HexSize))
-			rl.DrawLine3D(startPos, endPos, colorToRL(line.Color))
+		tower1, ok1 := s.ecs.Towers[line.Tower1ID]
+		render1, ok1r := s.ecs.Renderables[line.Tower1ID]
+		tower2, ok2 := s.ecs.Towers[line.Tower2ID]
+		render2, ok2r := s.ecs.Renderables[line.Tower2ID]
+
+		if ok1 && ok1r && ok2 && ok2r {
+			startPos := s.hexToWorld(tower1.Hex)
+			endPos := s.hexToWorld(tower2.Hex)
+
+			height1 := s.GetTowerRenderHeight(tower1, render1)
+			height2 := s.GetTowerRenderHeight(tower2, render2)
+
+			startPos.Y = height1
+			endPos.Y = height2
+
+			rl.DrawCapsule(startPos, endPos, 0.6, 8, 8, rl.Yellow)
 		}
+	}
+}
+
+func (s *RenderSystemRL) GetTowerRenderHeight(tower *component.Tower, renderable *component.Renderable) float32 {
+	scaledRadius := float32(renderable.Radius * config.CoordScale)
+	towerDef, ok := defs.TowerDefs[tower.DefID]
+	if !ok {
+		return scaledRadius * 4
+	}
+
+	switch {
+	case towerDef.Type == defs.TowerTypeWall:
+		return scaledRadius * 1.5
+	case towerDef.Type == defs.TowerTypeMiner:
+		return scaledRadius * 9.0
+	case tower.CraftingLevel >= 1:
+		return scaledRadius * 4.0
+	default:
+		return scaledRadius * 7.0
 	}
 }
 
@@ -181,7 +263,7 @@ func (s *RenderSystemRL) drawDraggingLine(isDragging bool, sourceTowerID types.E
 	if !isDragging || sourceTowerID == 0 {
 		return
 	}
-	sourcePosComp, ok := s.ecs.Positions[sourceTowerID]
+	sourceTower, ok := s.ecs.Towers[sourceTowerID]
 	if !ok {
 		return
 	}
@@ -190,9 +272,10 @@ func (s *RenderSystemRL) drawDraggingLine(isDragging bool, sourceTowerID types.E
 	t := -ray.Position.Y / ray.Direction.Y
 	hitPoint := rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
 
-	startPos := s.hexToWorld(hexmap.PixelToHex(sourcePosComp.X, sourcePosComp.Y, config.HexSize))
+	startPos := s.hexToWorld(sourceTower.Hex)
 
-	if rl.Vector3Distance(startPos, hitPoint) > 300 {
+	maxDragDist := float32(300 * config.CoordScale)
+	if rl.Vector3Distance(startPos, hitPoint) > maxDragDist {
 		cancelDrag()
 		return
 	}
@@ -202,7 +285,7 @@ func (s *RenderSystemRL) drawDraggingLine(isDragging bool, sourceTowerID types.E
 
 func (s *RenderSystemRL) drawText() {
 	for _, txt := range s.ecs.Texts {
-		worldPos := s.hexToWorld(hexmap.PixelToHex(txt.Position.X, txt.Position.Y, config.HexSize))
+		worldPos := s.pixelToWorld(txt.Position)
 		screenPos := rl.GetWorldToScreen(worldPos, *s.camera)
 		rl.DrawTextEx(s.font, txt.Value, screenPos, float32(s.font.BaseSize), 1.0, colorToRL(txt.Color))
 	}
@@ -213,27 +296,26 @@ func (s *RenderSystemRL) drawRotatingBeams() {
 		return
 	}
 	for id, beam := range s.ecs.RotatingBeams {
-		pos, ok := s.ecs.Positions[id]
-		if !ok {
-			continue
+		if tower, ok := s.ecs.Towers[id]; ok {
+			beamColor := rl.NewColor(255, 255, 102, 80)
+			worldPos := s.hexToWorld(tower.Hex)
+
+			scaledRange := float32(float64(beam.Range*config.HexSize) * config.CoordScale)
+
+			angle1 := beam.CurrentAngle - beam.ArcAngle/2
+			angle2 := beam.CurrentAngle + beam.ArcAngle/2
+
+			endX1 := worldPos.X + scaledRange*float32(math.Cos(angle1))
+			endZ1 := worldPos.Z + scaledRange*float32(math.Sin(angle1))
+			endX2 := worldPos.X + scaledRange*float32(math.Cos(angle2))
+			endZ2 := worldPos.Z + scaledRange*float32(math.Sin(angle2))
+
+			endPos1 := rl.NewVector3(endX1, worldPos.Y, endZ1)
+			endPos2 := rl.NewVector3(endX2, worldPos.Y, endZ2)
+
+			rl.DrawLine3D(worldPos, endPos1, beamColor)
+			rl.DrawLine3D(worldPos, endPos2, beamColor)
 		}
-
-		beamColor := rl.NewColor(255, 255, 102, 80)
-		worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
-
-		angle1 := beam.CurrentAngle - beam.ArcAngle/2
-		angle2 := beam.CurrentAngle + beam.ArcAngle/2
-
-		endX1 := worldPos.X + float32(float64(beam.Range*config.HexSize)*math.Cos(angle1))
-		endZ1 := worldPos.Z + float32(float64(beam.Range*config.HexSize)*math.Sin(angle1))
-		endX2 := worldPos.X + float32(float64(beam.Range*config.HexSize)*math.Cos(angle2))
-		endZ2 := worldPos.Z + float32(float64(beam.Range*config.HexSize)*math.Sin(angle2))
-
-		endPos1 := rl.NewVector3(endX1, worldPos.Y, endZ1)
-		endPos2 := rl.NewVector3(endX2, worldPos.Y, endZ2)
-
-		rl.DrawLine3D(worldPos, endPos1, beamColor)
-		rl.DrawLine3D(worldPos, endPos2, beamColor)
 	}
 }
 

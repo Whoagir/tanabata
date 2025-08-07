@@ -527,15 +527,13 @@ func (g *Game) rebuildEnergyLines(mstEdges []energyEdge) {
 }
 
 func (g *Game) createLine(edge energyEdge) {
-	posA := g.ECS.Positions[edge.Tower1ID]
-	posB := g.ECS.Positions[edge.Tower2ID]
+	// У башен нет компонента Position, их позиция определяется гексом.
+	// Поэтому мы не можем использовать g.ECS.Positions.
+	// Вместо этого, мы должны хранить ID башен и вычислять их позицию в системе рендеринга.
 	lineID := g.ECS.NewEntity()
 	g.ECS.LineRenders[lineID] = &component.LineRender{
-		StartX:   posA.X,
-		StartY:   posA.Y,
-		EndX:     posB.X,
-		EndY:     posB.Y,
-		Color:    config.LineColorRL, // Используем цвет из конфига
+		// StartX, StartY, EndX, EndY больше не нужны, так как мы используем ID
+		Color:    config.LineColorRL,
 		Tower1ID: edge.Tower1ID,
 		Tower2ID: edge.Tower2ID,
 	}
@@ -549,11 +547,9 @@ func (g *Game) clearAllLines() {
 
 func (g *Game) isOnOre(hex hexmap.Hex) bool {
 	for _, ore := range g.ECS.Ores {
-		oreHex := utils.ScreenToHex(ore.Position.X, ore.Position.Y)
-		// Руда считается источником энергии, только если она существует на этом гексе
-		// �� если у неё есть оставшийся запас.
+		// ИСПРАВЛЕНО: Используем правильную функцию для преобразования координат
+		oreHex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, float64(config.HexSize))
 		if oreHex == hex {
-			// Порог 0.1 соответствует порогу удаления в system/ore.go
 			return ore.CurrentReserve >= config.OreDepletionThreshold
 		}
 	}
@@ -913,7 +909,7 @@ func (g *Game) FindPowerSourcesForTower(startNode types.EntityID) []types.Entity
 		if towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex) {
 			// This tower is a miner on an ore vein, find the corresponding ore entity.
 			for oreID, ore := range g.ECS.Ores {
-				oreHex := utils.ScreenToHex(ore.Position.X, ore.Position.Y)
+				oreHex := hexmap.PixelToHex(ore.Position.X, ore.Position.Y, float64(config.HexSize)) // ИСПРАВЛЕНО
 				if oreHex == tower.Hex {
 					sources = append(sources, oreID)
 					break

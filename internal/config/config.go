@@ -14,6 +14,8 @@ const (
 	ScreenHeight = 993
 	// HexSize размер гекса в пикселях
 	HexSize = 20.0
+	// CoordScale масштабирует мировые координаты для рендеринга
+	CoordScale = 0.25
 	// MaxDeltaTime максимальное время кадра для предотвращения спирали смерти
 	MaxDeltaTime = 0.05
 	GridWidth       = 40   // Из нового (новая константа)

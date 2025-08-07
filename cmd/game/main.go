@@ -46,23 +46,22 @@ func main() {
 		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary, nil))
 	}
 
-	// --- Настройка 3D камеры ---
-	camera := rl.NewCamera3D(
-		rl.NewVector3(0, 0, 0), // Позиция будет установлена ниже
-		rl.NewVector3(0, 0, 0), // Target
-		rl.NewVector3(0, 1, 0), // Up
-		0,                      // Fovy будет установлен ниже
-		rl.CameraPerspective,   // Projection
-	)
-
-	// Позиции, цели и углы обзора для интерполяции
-	isoPos := rl.NewVector3(200, 250, 250)
-	topDownPos := rl.NewVector3(0, 400, 0.1)
+	// --- Настройка 3D камеры (как в map_viewer) ---
+	camera := rl.Camera3D{}
+	camera.Up = rl.NewVector3(0, 1, 0)
+	camera.Projection = rl.CameraPerspective
+	// Устанавливаем плоскости отсечения, чтобы видеть всю карту
+	camera.Fovy = 55.0 // Устанавливаем Fovy, чтобы избежать нулевого значения
+	
+	// Позиции, цели и углы обзора для интерполяции (как в map_viewer)
+	isoPos := rl.NewVector3(180, 250, 180)
+	topDownPos := rl.NewVector3(0, 300, 0.1)
 	isoTarget := rl.NewVector3(0, 0, 0)
 	topDownTarget := rl.NewVector3(0, 0, 0)
-	isoFovy := float32(45.0)
-	topDownFovy := float32(25.0)
+	isoFovy := float32(55.0)
+	topDownFovy := float32(35.0)
 	cameraAngleT := float32(0.5)
+
 
 	// Передаем камеру в GameState
 	if gs, ok := sm.Current().(*state.GameState); ok {
@@ -82,7 +81,7 @@ func main() {
 		}
 		lastUpdateTime = now
 
-		// --- Управление камерой ---
+		// --- Управление камерой (как в map_viewer) ---
 		if rl.IsKeyDown(rl.KeyQ) {
 			isoPos = rl.Vector3RotateByAxisAngle(isoPos, camera.Up, -rotationSpeed)
 		}

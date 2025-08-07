@@ -1,86 +1,65 @@
-// pkg/render/hex_renderer.go
 package render
 
 import (
-	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
-	"go-tower-defense/internal/system"
-	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// HexRendererRL - новая версия рендерера для Raylib
-type HexRendererRL struct {
-	hexMap        *hexmap.HexMap
-	hexSize       float32 // Используем float32 для Raylib
-	font          rl.Font
-	checkpointMap map[hexmap.Hex]int
-	EnergyVeins   map[hexmap.Hex]float64
+// HexRenderer отвечает за отрисовку гексагональной карты
+type HexRenderer struct {
+	HexMap *hexmap.HexMap
 }
 
-// NewHexRendererRL создает новый рендерер для Raylib
-func NewHexRendererRL(hexMap *hexmap.HexMap, energyVeins map[hexmap.Hex]float64, hexSize float32, font rl.Font) *HexRendererRL {
-	renderer := &HexRendererRL{
-		hexMap:        hexMap,
-		hexSize:       hexSize,
-		font:          font,
-		checkpointMap: make(map[hexmap.Hex]int),
-		EnergyVeins:   energyVeins,
-	}
-
-	for i, cp := range hexMap.Checkpoints {
-		renderer.checkpointMap[cp] = i + 1
-	}
-
-	return renderer
+// NewHexRenderer создает новый экземпляр HexRenderer
+func NewHexRenderer(hexMap *hexmap.HexMap) *HexRenderer {
+	return &HexRenderer{HexMap: hexMap}
 }
 
-// Draw отрисовывает карту и динамические объекты
-func (r *HexRendererRL) Draw(renderSystem *system.RenderSystemRL, gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
-	// Отрисовка гексов как 3D объектов
-	for h, tile := range r.hexMap.Tiles {
-		pos := r.HexToWorld(h)
-		radius := r.hexSize * 0.95 // Небольшой зазор между гексами
-		height := float32(1.0)     // Плоские призмы
-
-		var baseColor rl.Color
-		if _, isCheckpoint := r.checkpointMap[h]; isCheckpoint {
-			baseColor = config.CheckpointColorRL
-		} else if _, exists := r.EnergyVeins[h]; exists {
-			baseColor = config.OreColorRL
-		} else if !tile.Passable {
-			baseColor = config.ImpassableColorRL
-		} else {
-			baseColor = config.PassableColorRL
+// Draw рендерит всю карту
+func (r *HexRenderer) Draw() {
+	// Итерируемся по ключам карты (hexmap.Hex)
+	for hex := range r.HexMap.Tiles {
+		// Пропускаем вход и выход, чтобы нарисовать их отдельно
+		if hex == r.HexMap.Entry || hex == r.HexMap.Exit {
+			continue
 		}
-
-		// Рисуем "крышку" гекса
-		rl.DrawCylinder(pos, radius, radius, height, 6, baseColor)
-		// Рисуем контур
-		rl.DrawCylinderWires(pos, radius, radius, height, 6, config.StrokeColorRL)
+		r.drawHex(hex, config.PassableColorRL, config.StrokeColorRL)
 	}
 
-	// Вызываем систему рендеринга для динамических объектов (башни, враги и т.д.)
-	renderSystem.Draw(gameTime, isDragging, sourceTowerID, hiddenLineID, gameState, cancelDrag)
+	// Рисуем чекпоинты
+	for _, cp := range r.HexMap.Checkpoints {
+		r.drawHex(cp, config.CheckpointColorRL, config.StrokeColorRL)
+	}
+
+	// Рисуем вход и выход специальными цветами
+	r.drawHex(r.HexMap.Entry, config.EntryColorRL, config.StrokeColorRL)
+	r.drawHex(r.HexMap.Exit, config.ExitColorRL, config.StrokeColorRL)
 }
 
-// HexToWorld преобразует координаты гекса в мировые 3D-координаты
-func (r *HexRendererRL) HexToWorld(h hexmap.Hex) rl.Vector3 {
-	// Используем ту же логику, что и в ebiten, но для 3D
-	x, y := h.ToPixel(float64(r.hexSize))
-	// Y в 3D - это Z в 2D
-	return rl.NewVector3(float32(x), 0, float32(y))
+func (r *HexRenderer) drawHex(h hexmap.Hex, fillColor, lineColor rl.Color) {
+	// Draw hex using a 3D cylinder
+	hexCenter3D := hexToWorld(h)
+	// Используем CoordScale для определения толщины карты
+	mapThickness := float32(0.5 * config.CoordScale)
+	hexCenter3D.Y -= mapThickness / 2 // Смещаем карту вниз, чтобы поверхность была на Y=0
+
+	// ИСПРАВЛЕНО: Уменьшаем радиус заливки для создания зазора
+	fillRadius := float32((config.HexSize - 1.5) * config.CoordScale)
+	outlineRadius := float32(config.HexSize * config.CoordScale)
+
+	rl.DrawCylinder(hexCenter3D, fillRadius, fillRadius, mapThickness, 6, fillColor)
+	rl.DrawCylinderWires(hexCenter3D, outlineRadius, outlineRadius, mapThickness, 6, lineColor)
 }
 
-// WorldToHex преобразует мировые 3D-координаты в гекс
-func (r *HexRendererRL) WorldToHex(point rl.Vector3) hexmap.Hex {
-	// Обратное преобразование, игнорируя Y
-	return hexmap.PixelToHex(float64(point.X), float64(point.Z), float64(r.hexSize))
+func hexToWorld(h hexmap.Hex) rl.Vector3 {
+	x, y := h.ToPixel(float64(config.HexSize))
+	return rl.NewVector3(float32(x*config.CoordScale), 0, float32(y*config.CoordScale))
 }
 
-// Unload больше не требует выгрузки специфичных для рендерера ресурсов
-func (r *HexRendererRL) Unload() {
-	// Пусто, так как мы больше не создаем текстуры или модели в этом рендерере
+func (r *HexRenderer) drawLine(start, end hexmap.Hex, lineColor rl.Color) {
+	startPos := hexToWorld(start)
+	endPos := hexToWorld(end)
+	rl.DrawLine3D(startPos, endPos, lineColor)
 }

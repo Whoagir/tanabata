@@ -2,8 +2,8 @@
 package system
 
 import (
+	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/entity"
-	"go-tower-defense/internal/utils"
 	"math"
 )
 
@@ -24,7 +24,8 @@ func (s *MovementSystem) Update(deltaTime float64) {
 					continue
 				}
 				targetHex := path.Hexes[path.CurrentIndex]
-				tx, ty := utils.HexToScreen(targetHex)
+				// ИСПОЛЬЗУЕМ ToPixel, чтобы получить "сырые" координаты без смещения, как у карты
+				tx, ty := targetHex.ToPixel(float64(config.HexSize))
 
 				dx := tx - pos.X
 				dy := ty - pos.Y

@@ -6,7 +6,6 @@ import (
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/types"
-	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"log"
 	"math"
@@ -169,10 +168,10 @@ func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *componen
 
 	// 4. Создать сущность с компонентом Laser для визуализации
 	laserID := s.ecs.NewEntity()
-	towerPos := s.ecs.Positions[towerID]
+	towerX, towerY := tower.Hex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
 	s.ecs.Lasers[laserID] = &component.Laser{
-		FromX:    towerPos.X,
-		FromY:    towerPos.Y,
+		FromX:    towerX,
+		FromY:    towerY,
 		ToX:      targetPos.X,
 		ToY:      targetPos.Y,
 		Color:    getProjectileColorByAttackType(combat.Attack.DamageType),
@@ -221,7 +220,7 @@ func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *com
 	baseDamage := float64(towerDef.Combat.Damage)
 	finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
 	for _, enemyID := range targets {
-		s.createProjectile(towerID, enemyID, towerDef, finalDamage)
+		s.createProjectile(towerID, tower, enemyID, towerDef, finalDamage)
 	}
 	return true
 }
@@ -242,7 +241,7 @@ func (s *CombatSystem) findTargetsForSplitAttack(towerHex hexmap.Hex, rangeRadiu
 		if health, hasHealth := s.ecs.Healths[enemyID]; !hasHealth || health.Value <= 0 {
 			continue
 		}
-		enemyHex := utils.ScreenToHex(enemyPos.X, enemyPos.Y)
+		enemyHex := hexmap.PixelToHex(enemyPos.X, enemyPos.Y, float64(config.HexSize)) // ИСПРАВЛЕНО
 		distance := float64(towerHex.Distance(enemyHex))
 
 		if distance <= float64(rangeRadius) {
@@ -269,9 +268,10 @@ func (s *CombatSystem) findTargetsForSplitAttack(towerHex hexmap.Hex, rangeRadiu
 	return targets
 }
 
-func (s *CombatSystem) createProjectile(towerID, enemyID types.EntityID, towerDef *defs.TowerDefinition, damage int) {
+func (s *CombatSystem) createProjectile(towerID types.EntityID, tower *component.Tower, enemyID types.EntityID, towerDef *defs.TowerDefinition, damage int) {
 	projID := s.ecs.NewEntity()
-	towerPos := s.ecs.Positions[towerID]
+	towerX, towerY := tower.Hex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
+	towerPos := &component.Position{X: towerX, Y: towerY}
 
 	predictedPos := s.predictTargetPosition(enemyID, towerPos, config.ProjectileSpeed)
 	direction := calculateDirection(towerPos, &predictedPos)
@@ -411,7 +411,7 @@ func simulateEnemyMovement(startPos *component.Position, path *component.Path, s
 	currentIndex := path.CurrentIndex
 	for currentIndex < len(path.Hexes) && remainingTime > 0 {
 		targetHex := path.Hexes[currentIndex]
-		tx, ty := utils.HexToScreen(targetHex)
+		tx, ty := targetHex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
 		dx := tx - currentPos.X
 		dy := ty - currentPos.Y
 		distToNext := math.Sqrt(dx*dx + dy*dy)
@@ -448,10 +448,9 @@ func (s *CombatSystem) handleRotatingBeamAttack(towerID types.EntityID, tower *c
 	}
 
 	// Вращение уже произошло в Update. Здесь только логика урона.
-	towerPos := s.ecs.Positions[towerID]
-	if towerPos == nil {
-		return false
-	}
+	towerX, towerY := tower.Hex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
+	towerPos := &component.Position{X: towerX, Y: towerY}
+
 	enemiesInRange := s.findEnemiesInRadius(tower.Hex, beam.Range)
 	if len(enemiesInRange) == 0 {
 		return false
@@ -525,7 +524,7 @@ func (s *CombatSystem) findEnemiesInRadius(towerHex hexmap.Hex, rangeRadius int)
 		if health, hasHealth := s.ecs.Healths[enemyID]; !hasHealth || health.Value <= 0 {
 			continue
 		}
-		enemyHex := utils.ScreenToHex(enemyPos.X, enemyPos.Y)
+		enemyHex := hexmap.PixelToHex(enemyPos.X, enemyPos.Y, float64(config.HexSize)) // ИСПРАВЛЕНО
 		if towerHex.Distance(enemyHex) <= rangeRadius {
 			targets = append(targets, enemyID)
 		}

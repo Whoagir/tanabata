@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
-	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"image/color"
 	"math"
@@ -85,7 +84,7 @@ func (g *Game) generateOre() {
 		}
 	}
 
-	// Центр 3: Далеко (дистанция >= 10), подальше от первых двух (надежный метод)
+	// Центр 3: Далеко (дистанция >= 10), подальше от первых двух (надежн��й метод)
 	var centerCandidates3 []hexmap.Hex
 	for _, hex := range allHexes {
 		if !isTooCloseToCritical(hex) && centerHex.Distance(hex) >= 10 {
@@ -114,7 +113,7 @@ func (g *Game) generateOre() {
 	// Убедимся, что у нас есть 3 центра перед тем, как продолжить
 	if len(centers) < 3 {
 		// Если по какой-то причине третий центр не был найден, дублируем второй,
-		// чтобы избежать паники, но смещаем его.
+		// чтобы избежать пани��и, но смещаем его.
 		if len(centers) == 2 {
 			shiftedCenter := centers[1].Add(hexmap.Hex{Q: 1, R: 1})
 			centers = append(centers, shiftedCenter)
@@ -228,7 +227,7 @@ func (g *Game) generateOre() {
 
 	for hex, power := range energyVeins {
 		id := g.ECS.NewEntity()
-		px, py := utils.HexToScreen(hex)
+		px, py := hex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
 		g.ECS.Positions[id] = &component.Position{X: px, Y: py}
 		g.ECS.Ores[id] = &component.Ore{
 			Power:          power,
@@ -254,7 +253,7 @@ func generateEnergyCircles(area []hexmap.Hex, totalPower float64, hexSize float6
 
 	for remainingPower > 0 {
 		hex := area[rand.Intn(len(area))]
-		cx, cy := utils.HexToScreen(hex)
+		cx, cy := hex.ToPixel(float64(hexSize)) // ИСПРАВЛЕНО
 		// Add random jitter within the hex
 		cx += (rand.Float64()*2 - 1) * hexSize / 2
 		cy += (rand.Float64()*2 - 1) * hexSize / 2
@@ -283,7 +282,7 @@ func generateEnergyCircles(area []hexmap.Hex, totalPower float64, hexSize float6
 func (g *Game) getHexesInCircle(cx, cy, radius float64) []hexmap.Hex {
 	var hexes []hexmap.Hex
 	for hex := range g.HexMap.Tiles {
-		hx, hy := utils.HexToScreen(hex)
+		hx, hy := hex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
 		dx := hx - cx
 		dy := hy - cy
 		if math.Sqrt(dx*dx+dy*dy) < radius+config.HexSize {

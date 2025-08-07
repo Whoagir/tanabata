@@ -22,7 +22,7 @@ type GameState struct {
 	sm                   *StateMachine
 	game                 *app.Game
 	hexMap               *hexmap.HexMap
-	renderer             *render.HexRendererRL
+	renderer             *render.HexRenderer
 	indicator            *ui.StateIndicatorRL
 	waveIndicator        *ui.WaveIndicatorRL
 	playerLevelIndicator *ui.PlayerLevelIndicatorRL
@@ -37,7 +37,7 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 	hexMap := hexmap.NewHexMap()
 	font := rl.LoadFont("assets/fonts/arial.ttf")
 	gameLogic := app.NewGame(hexMap, font)
-	renderer := render.NewHexRendererRL(hexMap, gameLogic.GetOreHexes(), float32(config.HexSize), font)
+	renderer := render.NewHexRenderer(hexMap)
 
 	indicator := ui.NewStateIndicatorRL(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
@@ -52,7 +52,6 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 	)
 	infoPanel := ui.NewInfoPanelRL(font, gameLogic.EventDispatcher)
 
-	// Центрируем книгу рецептов
 	recipeBookWidth := float32(400)
 	recipeBookHeight := float32(600)
 	recipeBookX := (float32(config.ScreenWidth) - recipeBookWidth) / 2
@@ -168,7 +167,9 @@ func (g *GameState) getHexUnderCursor() hexmap.Hex {
 	t := -ray.Position.Y / ray.Direction.Y
 	if t > 0 {
 		hitPoint := rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
-		return g.renderer.WorldToHex(hitPoint)
+		px := hitPoint.X / float32(config.CoordScale)
+		py := hitPoint.Z / float32(config.CoordScale)
+		return hexmap.PixelToHex(float64(px), float64(py), float64(config.HexSize))
 	}
 	return hexmap.Hex{}
 }
@@ -274,15 +275,24 @@ func (g *GameState) Draw() {
 	if g.camera == nil {
 		return
 	}
-	g.renderer.Draw(g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
+	g.renderer.Draw()
+	// ИСПРАВЛЕНО: Добавлены недостающие аргументы
+	g.game.RenderSystem.Draw(g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
 
-	// Отрисовка выделения башен в 3D
-	for _, tower := range g.game.ECS.Towers {
+	// ИСПРАВЛЕНО: Получаем ID из ключа карты
+	for id, tower := range g.game.ECS.Towers {
 		if tower.IsHighlighted || tower.IsManuallySelected {
-			worldPos := g.renderer.HexToWorld(tower.Hex)
-			// Рисуем выделение чуть выше, чтобы было видно
-			highlightPos := rl.Vector3Add(worldPos, rl.NewVector3(0, 0.5, 0))
-			rl.DrawCylinderWires(highlightPos, float32(config.HexSize)*1.1, float32(config.HexSize)*1.1, 2.0, 6, config.HighlightColorRL)
+			x, y := tower.Hex.ToPixel(config.HexSize)
+			worldX := float32(x * config.CoordScale)
+			worldZ := float32(y * config.CoordScale)
+			
+			var height float32 = 2.0
+			if renderable, ok := g.game.ECS.Renderables[id]; ok { // Используем ID
+				height = g.game.RenderSystem.GetTowerRenderHeight(tower, renderable)
+			}
+
+			highlightPos := rl.NewVector3(worldX, height + 0.5, worldZ)
+			rl.DrawCylinderWires(highlightPos, float32(config.HexSize*config.CoordScale)*1.1, float32(config.HexSize*config.CoordScale)*1.1, 2.0, 6, config.HighlightColorRL)
 		}
 	}
 }
@@ -324,5 +334,4 @@ func (g *GameState) DrawUI() {
 }
 
 func (g *GameState) Exit() {
-	g.renderer.Unload()
 }
