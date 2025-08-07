@@ -2,131 +2,115 @@
 package ui
 
 import (
+	"fmt"
+	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
-	"image/color"
+	"strings"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"github.com/hajimehoshi/ebiten/v2/vector"
-	"golang.org/x/image/font"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// RecipeBook отображает окно с рецептами крафта.
-type RecipeBook struct {
-	IsVisible bool
-	X, Y      float32
-	Width     float32
-	Height    float32
-	fontFace  font.Face
-	recipes   []defs.Recipe
+// RecipeBookRL - версия книги рецептов для Raylib
+type RecipeBookRL struct {
+	IsVisible     bool
+	X, Y          float32
+	Width, Height float32
+	recipes       []*defs.Recipe
+	font          rl.Font
+	scrollOffset  float32
 }
 
-// NewRecipeBook создает новую книгу рецептов.
-func NewRecipeBook(x, y, width, height float32, fontFace font.Face, recipes []defs.Recipe) *RecipeBook {
-	return &RecipeBook{
+// NewRecipeBookRL создает новую книгу рецептов
+func NewRecipeBookRL(x, y, width, height float32, recipes []*defs.Recipe, font rl.Font) *RecipeBookRL {
+	return &RecipeBookRL{
 		IsVisible: false,
 		X:         x,
 		Y:         y,
 		Width:     width,
 		Height:    height,
-		fontFace:  fontFace,
 		recipes:   recipes,
+		font:      font,
 	}
 }
 
-// Toggle переключает видимость книги рецептов.
-func (rb *RecipeBook) Toggle() {
+// Toggle переключает видимость книги
+func (rb *RecipeBookRL) Toggle() {
 	rb.IsVisible = !rb.IsVisible
 }
 
-// Draw отрисовывает книгу рецептов, если она видима.
-func (rb *RecipeBook) Draw(screen *ebiten.Image, availableTowers map[string]int) {
+// Update обрабатывает ввод для прокрутки
+func (rb *RecipeBookRL) Update() {
+	if !rb.IsVisible {
+		return
+	}
+	// Прокрутка колесиком мыши
+	wheel := rl.GetMouseWheelMove()
+	rb.scrollOffset += wheel * 20 // Умножитель для скорости прокрутки
+
+	// Ограничение прокрутки
+	maxScroll := float32(len(rb.recipes))*config.RecipeEntryHeightRL - rb.Height + config.RecipePaddingRL*2
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if rb.scrollOffset > 0 {
+		rb.scrollOffset = 0
+	}
+	if rb.scrollOffset < -maxScroll {
+		rb.scrollOffset = -maxScroll
+	}
+}
+
+// Draw отрисовывает книгу рецептов
+func (rb *RecipeBookRL) Draw(availableTowers map[string]int) {
 	if !rb.IsVisible {
 		return
 	}
 
-	// --- Цвета ---
-	whiteColor := color.RGBA{255, 255, 255, 255}
-	grayColor := color.RGBA{100, 100, 100, 255}
-	
-	// --- Фон и рамка ---
-	bgColor := color.RGBA{R: 20, G: 20, B: 30, A: 230}
-	vector.DrawFilledRect(screen, rb.X, rb.Y, rb.Width, rb.Height, bgColor, false)
-	borderColor := color.RGBA{R: 70, G: 100, B: 120, A: 255}
-	vector.StrokeRect(screen, rb.X, rb.Y, rb.Width, rb.Height, 2, borderColor, false)
+	// Фон
+	rl.DrawRectangle(int32(rb.X), int32(rb.Y), int32(rb.Width), int32(rb.Height), config.RecipeBookBackgroundColorRL)
+	// Обводка
+	rl.DrawRectangleLines(int32(rb.X), int32(rb.Y), int32(rb.Width), int32(rb.Height), config.RecipeBookBorderColorRL)
 
-	// --- Заголовок ---
-	title := "Книга Рецептов"
-	titleBounds := text.BoundString(rb.fontFace, title)
-	titleX := rb.X + (rb.Width-float32(titleBounds.Dx()))/2
-	titleY := rb.Y + 30
-	text.Draw(screen, title, rb.fontFace, int(titleX), int(titleY), whiteColor)
+	// Заголовок
+	title := "Recipes"
+	titleWidth := rl.MeasureTextEx(rb.font, title, config.RecipeTitleFontSizeRL, 1.0).X
+	rl.DrawTextEx(rb.font, title, rl.NewVector2(rb.X+(rb.Width-titleWidth)/2, rb.Y+config.RecipePaddingRL), config.RecipeTitleFontSizeRL, 1.0, config.RecipeTitleColorRL)
 
-	// --- Отрисовка рецептов ---
-	lineHeight := float32(rb.fontFace.Metrics().Height.Ceil())
-	startY := titleY + lineHeight*2
-	
-	spaceWidth := text.BoundString(rb.fontFace, " ").Dx()
+	// Устанавливаем область отсечения, чтобы рецепты не выходили за пределы панели
+	rl.BeginScissorMode(int32(rb.X), int32(rb.Y+config.RecipeHeaderHeightRL), int32(rb.Width), int32(rb.Height-config.RecipeHeaderHeightRL))
+	defer rl.EndScissorMode()
 
-	for i, recipe := range rb.recipes {
-		// --- Этап 1: Подготовка данных ---
-		requiredTowers := make(map[string]int)
+	currentY := rb.Y + config.RecipeHeaderHeightRL + rb.scrollOffset
+
+	for _, recipe := range rb.recipes {
+		var inputs []string
+		canCraft := true
 		for _, input := range recipe.Inputs {
-			requiredTowers[input.ID]++
-		}
-
-		isCraftable := true
-		tempAvailable := make(map[string]int)
-		for k, v := range availableTowers {
-			tempAvailable[k] = v
-		}
-
-		for towerID, count := range requiredTowers {
-			if tempAvailable[towerID] < count {
-				isCraftable = false
-				break
+			towerDef, ok := defs.TowerDefs[input.ID]
+			if !ok {
+				continue
 			}
-			tempAvailable[towerID] -= count
-		}
-		
-		_, isOutputPresent := availableTowers[recipe.OutputID]
-
-		// --- Этап 2 и 3: Покомпонентная отрисовка ---
-		currentX := rb.X + 20
-		currentY := startY + float32(i)*lineHeight*1.5
-
-		// Отрисовка ингредиентов
-		for j, input := range recipe.Inputs {
-			ingredientColor := grayColor
-			if availableTowers[input.ID] > 0 {
-				ingredientColor = whiteColor
+			count, has := availableTowers[input.ID]
+			if !has || count < 1 {
+				canCraft = false
 			}
-			text.Draw(screen, input.ID, rb.fontFace, int(currentX), int(currentY), ingredientColor)
-			currentX += float32(text.BoundString(rb.fontFace, input.ID).Dx() + spaceWidth)
-
-			if j < len(recipe.Inputs)-1 {
-				plusColor := grayColor
-				if isCraftable {
-					plusColor = whiteColor
-				}
-				text.Draw(screen, "+", rb.fontFace, int(currentX), int(currentY), plusColor)
-				currentX += float32(text.BoundString(rb.fontFace, "+").Dx() + spaceWidth)
-			}
+			inputs = append(inputs, towerDef.Name)
 		}
 
-		// Отрисовка знака равенства
-		equalColor := grayColor
-		if isCraftable {
-			equalColor = whiteColor
+		outputDef, ok := defs.TowerDefs[recipe.OutputID]
+		if !ok {
+			continue
 		}
-		text.Draw(screen, "=", rb.fontFace, int(currentX), int(currentY), equalColor)
-		currentX += float32(text.BoundString(rb.fontFace, "=").Dx() + spaceWidth)
 
-		// Отрисовка результата
-		outputColor := grayColor
-		if isOutputPresent {
-			outputColor = whiteColor
+		inputText := strings.Join(inputs, " + ")
+		fullText := fmt.Sprintf("%s -> %s", inputText, outputDef.Name)
+
+		textColor := config.RecipeDefaultColorRL
+		if canCraft {
+			textColor = config.RecipeCanCraftColorRL
 		}
-		text.Draw(screen, recipe.OutputID, rb.fontFace, int(currentX), int(currentY), outputColor)
+
+		rl.DrawTextEx(rb.font, fullText, rl.NewVector2(rb.X+config.RecipePaddingRL, currentY), config.RecipeEntryFontSizeRL, 1.0, textColor)
+		currentY += config.RecipeEntryHeightRL
 	}
 }

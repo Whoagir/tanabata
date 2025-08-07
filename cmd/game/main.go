@@ -11,68 +11,116 @@ import (
 	_ "net/http/pprof"
 	"time"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// Vector3Lerp выполняет линейную интерполяцию между двумя векторами
+func Vector3Lerp(v1, v2 rl.Vector3, t float32) rl.Vector3 {
+	return rl.Vector3Add(v1, rl.Vector3Scale(rl.Vector3Subtract(v2, v1), t))
+}
+
 const startFromGame = true // true — начинать с игры, false — с меню
-
-type AppGame struct {
-	stateMachine   *state.StateMachine
-	lastUpdateTime time.Time
-}
-
-func (a *AppGame) Update() error {
-	now := time.Now()
-	deltaTime := now.Sub(a.lastUpdateTime).Seconds()
-	if deltaTime > config.MaxDeltaTime {
-		deltaTime = config.MaxDeltaTime
-	}
-	a.lastUpdateTime = now
-	a.stateMachine.Update(deltaTime)
-	return nil
-}
-
-func (a *AppGame) Draw(screen *ebiten.Image) {
-	a.stateMachine.Draw(screen)
-}
-
-func (a *AppGame) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return config.ScreenWidth, config.ScreenHeight
-}
 
 func main() {
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
-	// Load all game definitions
-	if err := defs.LoadTowerDefinitions("assets/data/towers.json"); err != nil {
-		log.Fatalf("Failed to load tower definitions: %v", err)
-	}
-	if err := defs.LoadEnemyDefinitions("assets/data/enemies.json"); err != nil {
-		log.Fatalf("Failed to load enemy definitions: %v", err)
-	}
-	if err := defs.LoadRecipes("assets/data/recipes.json"); err != nil {
-		log.Fatalf("Failed to load recipe definitions: %v", err)
-	}
-	if err := defs.LoadLootTables("assets/data/loot_tables.json"); err != nil {
-		log.Fatalf("Failed to load loot tables: %v", err)
+	// --- Инициализация Raylib ---
+	rl.InitWindow(config.ScreenWidth, config.ScreenHeight, "Go Tower Defense")
+	rl.SetTargetFPS(60)
+	defer rl.CloseWindow()
+
+	// --- Загрузка определений ---
+	if err := defs.LoadAll("assets/data/"); err != nil {
+		log.Fatalf("Failed to load definitions: %v", err)
 	}
 
+	// --- Инициализация игры ---
 	rand.Seed(time.Now().UnixNano())
-	sm := state.NewStateMachine() // Создаём машину состояний
+	sm := state.NewStateMachine()
 	if startFromGame {
-		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary)) // Устанавливаем состояние игры
+		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary, nil))
 	} else {
-		sm.SetState(state.NewMenuState(sm, defs.RecipeLibrary)) // Устанавливаем состояние меню
+		log.Println("Menu state is not implemented for Raylib yet. Starting game directly.")
+		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary, nil))
 	}
-	app := &AppGame{
-		stateMachine:   sm,
-		lastUpdateTime: time.Now(),
+
+	// --- Настройка 3D камеры ---
+	camera := rl.NewCamera3D(
+		rl.NewVector3(0, 0, 0), // Позиция будет установлена ниже
+		rl.NewVector3(0, 0, 0), // Target
+		rl.NewVector3(0, 1, 0), // Up
+		0,                      // Fovy будет установлен ниже
+		rl.CameraPerspective,   // Projection
+	)
+
+	// Позиции, цели и углы обзора для интерполяции
+	isoPos := rl.NewVector3(200, 250, 250)
+	topDownPos := rl.NewVector3(0, 400, 0.1)
+	isoTarget := rl.NewVector3(0, 0, 0)
+	topDownTarget := rl.NewVector3(0, 0, 0)
+	isoFovy := float32(45.0)
+	topDownFovy := float32(25.0)
+	cameraAngleT := float32(0.5)
+
+	// Передаем камеру в GameState
+	if gs, ok := sm.Current().(*state.GameState); ok {
+		gs.SetCamera(&camera)
 	}
-	ebiten.SetWindowSize(config.ScreenWidth, config.ScreenHeight)
-	ebiten.SetWindowTitle("Hexagonal Map")
-	if err := ebiten.RunGame(app); err != nil {
-		log.Fatal(err)
+
+	lastUpdateTime := time.Now()
+	rotationSpeed := float32(0.02)
+
+	// --- Главный цикл игры ---
+	for !rl.WindowShouldClose() {
+		// --- Обновление логики ---
+		now := time.Now()
+		deltaTime := now.Sub(lastUpdateTime).Seconds()
+		if deltaTime > config.MaxDeltaTime {
+			deltaTime = config.MaxDeltaTime
+		}
+		lastUpdateTime = now
+
+		// --- Управление камерой ---
+		if rl.IsKeyDown(rl.KeyQ) {
+			isoPos = rl.Vector3RotateByAxisAngle(isoPos, camera.Up, -rotationSpeed)
+		}
+		if rl.IsKeyDown(rl.KeyE) {
+			isoPos = rl.Vector3RotateByAxisAngle(isoPos, camera.Up, rotationSpeed)
+		}
+
+		wheel := rl.GetMouseWheelMove()
+		if wheel != 0 {
+			cameraAngleT += wheel * 0.05
+			if cameraAngleT > 0.99 {
+				cameraAngleT = 0.99
+			} else if cameraAngleT < 0.0 {
+				cameraAngleT = 0.0
+			}
+		}
+
+		camera.Position = Vector3Lerp(isoPos, topDownPos, cameraAngleT)
+		camera.Target = Vector3Lerp(isoTarget, topDownTarget, cameraAngleT)
+		camera.Fovy = isoFovy + (topDownFovy-isoFovy)*cameraAngleT
+
+		sm.Update(deltaTime)
+
+		// --- Отрисовка ---
+		rl.BeginDrawing()
+		rl.ClearBackground(config.BackgroundColorRL)
+
+		// 3D Сцена
+		rl.BeginMode3D(camera)
+		sm.Draw()
+		rl.EndMode3D()
+
+		// 2D UI (поверх 3D)
+		if uiDrawable, ok := sm.Current().(interface{ DrawUI() }); ok {
+			uiDrawable.DrawUI()
+		}
+		rl.DrawFPS(10, 10)
+
+		rl.EndDrawing()
 	}
 }

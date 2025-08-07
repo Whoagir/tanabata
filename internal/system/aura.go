@@ -33,7 +33,7 @@ func (s *AuraSystem) RecalculateAuras() {
 
 		// Найти все атакующие башни в радиусе.
 		for targetID, targetTower := range s.ecs.Towers {
-			targetDef, ok := defs.TowerLibrary[targetTower.DefID]
+			targetDef, ok := defs.TowerDefs[targetTower.DefID]
 			if !ok {
 				continue // Пропускаем, если определение не найдено
 			}

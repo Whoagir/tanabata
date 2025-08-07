@@ -2,7 +2,7 @@
 package state
 
 import (
-	game "go-tower-defense/internal/app"
+	"go-tower-defense/internal/app"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
@@ -11,82 +11,53 @@ import (
 	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"go-tower-defense/pkg/render"
-	"image"
 	"image/color"
-	"math"
 	"time"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // GameState — состояние игры
 type GameState struct {
 	sm                   *StateMachine
-	game                 *game.Game
+	game                 *app.Game
 	hexMap               *hexmap.HexMap
-	renderer             *render.HexRenderer
-	indicator            *ui.StateIndicator
-	waveIndicator        *ui.WaveIndicator
-	playerLevelIndicator *ui.PlayerLevelIndicator // <<< Новый индикатор уровня
-	infoPanel            *ui.InfoPanel
-	recipeBook           *ui.RecipeBook // <<< Книга рецептов
+	renderer             *render.HexRendererRL
+	indicator            *ui.StateIndicatorRL
+	waveIndicator        *ui.WaveIndicatorRL
+	playerLevelIndicator *ui.PlayerLevelIndicatorRL
+	infoPanel            *ui.InfoPanelRL
+	recipeBook           *ui.RecipeBookRL
 	lastClickTime        time.Time
-	lastUpdateTime       time.Time
-	wasShiftPressed      bool
+	camera               *rl.Camera3D
 }
 
-func NewGameState(sm *StateMachine, recipes []defs.Recipe) *GameState {
+// NewGameState создает новое состояние игры для Raylib
+func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, camera *rl.Camera3D) *GameState {
 	hexMap := hexmap.NewHexMap()
-	gameLogic := game.NewGame(hexMap)
+	font := rl.LoadFont("assets/fonts/arial.ttf")
+	gameLogic := app.NewGame(hexMap, font)
+	renderer := render.NewHexRendererRL(hexMap, gameLogic.GetOreHexes(), float32(config.HexSize), font)
 
-	mapColors := &render.MapColors{
-		BackgroundColor:     config.BackgroundColor,
-		PassableColor:       config.PassableColor,
-		ImpassableColor:     config.ImpassableColor,
-		EntryColor:          config.EntryColor,
-		ExitColor:           config.ExitColor,
-		TextDarkColor:       config.TextDarkColor,
-		TextLightColor:      config.TextLightColor,
-		CheckpointTextColor: color.RGBA{255, 255, 0, 255},
-		StrokeWidth:         float32(config.StrokeWidth),
-	}
-
-	offsetX := float64(config.ScreenWidth) / 2
-	offsetY := float64(config.ScreenHeight)/2 + config.MapCenterOffsetY
-	renderer := render.NewHexRenderer(hexMap, gameLogic.GetOreHexes(), config.HexSize, offsetX, offsetY, config.ScreenWidth, config.ScreenHeight, gameLogic.FontFace, mapColors)
-	renderer.RenderMapImage(gameLogic.GetAllTowerHexes())
-
-	indicator := ui.NewStateIndicator(
+	indicator := ui.NewStateIndicatorRL(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
 	)
-	// Рассчитываем базовые координаты для индикатора уровня
-	playerLevelIndicatorX := float32(config.ScreenWidth - ui.XpBarWidth - config.IndicatorOffsetX + 10)
-	playerLevelIndicatorY := float32(config.IndicatorOffsetX + 28)
-
-	// Создаем индикатор волны с временными координатами (0,0), т.к. они будут обновляться в Draw
-	// Y координату можно задать сразу, она не будет меняться
-	waveIndicatorY := playerLevelIndicatorY + 71 // 78 (предыдущий отступ) - 7 (поднимаем)
-	waveIndicator := ui.NewWaveIndicator(
-		0, // X будет рассчитан в Draw
-		waveIndicatorY,
-		0,
-		config.BuildStateColor,
+	waveIndicator := ui.NewWaveIndicatorRL(0, 0, font)
+	playerLevelIndicator := ui.NewPlayerLevelIndicatorRL(
+		float32(config.ScreenWidth-ui.XpBarWidth-config.IndicatorOffsetX+10),
+		float32(config.IndicatorOffsetX+28),
+		font,
 	)
+	infoPanel := ui.NewInfoPanelRL(font, gameLogic.EventDispatcher)
 
-	// Располагаем индикатор уровня
-	playerLevelIndicator := ui.NewPlayerLevelIndicator(
-		playerLevelIndicatorX,
-		playerLevelIndicatorY,
-	)
-	infoPanel := ui.NewInfoPanel(gameLogic.FontFace, gameLogic.FontFace, gameLogic.EventDispatcher)
-
-	// Создаем книгу рецептов
-	recipeBookX := float32(config.ScreenWidth-400) / 2
-	recipeBookY := float32(config.ScreenHeight-600) / 2
-	recipeBook := ui.NewRecipeBook(recipeBookX, recipeBookY, 400, 600, gameLogic.FontFace, recipes)
+	// Центрируем книгу рецептов
+	recipeBookWidth := float32(400)
+	recipeBookHeight := float32(600)
+	recipeBookX := (float32(config.ScreenWidth) - recipeBookWidth) / 2
+	recipeBookY := (float32(config.ScreenHeight) - recipeBookHeight) / 2
+	recipeBook := ui.NewRecipeBookRL(recipeBookX, recipeBookY, recipeBookWidth, recipeBookHeight, recipeLibrary.Recipes, font)
 
 	gs := &GameState{
 		sm:                   sm,
@@ -97,29 +68,41 @@ func NewGameState(sm *StateMachine, recipes []defs.Recipe) *GameState {
 		waveIndicator:        waveIndicator,
 		playerLevelIndicator: playerLevelIndicator,
 		infoPanel:            infoPanel,
-		recipeBook:           recipeBook, // <<< Добавляем книгу рецептов
+		recipeBook:           recipeBook,
 		lastClickTime:        time.Now(),
-		lastUpdateTime:       time.Now(),
+		camera:               camera,
 	}
 
 	return gs
 }
 
+func (g *GameState) SetCamera(camera *rl.Camera3D) {
+	g.camera = camera
+	if g.game != nil && g.game.RenderSystem != nil {
+		g.game.RenderSystem.SetCamera(camera)
+	}
+}
+
 func (g *GameState) Enter() {}
 
 func (g *GameState) Update(deltaTime float64) {
+	if g.camera == nil {
+		return
+	}
+
 	g.game.PauseButton.SetPaused(false)
 	g.infoPanel.Update(g.game.ECS)
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyR) {
+	if rl.IsKeyPressed(rl.KeyR) {
 		g.recipeBook.Toggle()
 	}
 
 	if g.recipeBook.IsVisible {
-		if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
+		g.recipeBook.Update()
+		if rl.IsKeyPressed(rl.KeyEscape) {
 			g.recipeBook.Toggle()
 		}
-		return // Если книга открыта, не обрабатываем другие нажатия
+		return
 	}
 
 	if g.game.ECS.GameState.Phase == component.TowerSelectionState {
@@ -129,7 +112,6 @@ func (g *GameState) Update(deltaTime float64) {
 				selectedCount++
 			}
 		}
-
 		if selectedCount == g.game.ECS.GameState.TowersToKeep {
 			g.game.FinalizeTowerSelection()
 			g.game.ECS.GameState.Phase = component.WaveState
@@ -137,126 +119,110 @@ func (g *GameState) Update(deltaTime float64) {
 		}
 	}
 
-	if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
-		g.sm.SetState(NewPauseState(g.sm, g))
+	if rl.IsKeyPressed(rl.KeyF9) {
 		return
 	}
 
 	if g.game.ECS.GameState.Phase == component.BuildState {
 		g.handleDebugKeys()
-		if inpututil.IsKeyJustPressed(ebiten.KeyU) {
+		if rl.IsKeyPressed(rl.KeyU) {
 			g.game.ToggleLineDragMode()
 		}
 	}
 
 	g.game.Update(deltaTime)
 
-	isShiftPressed := ebiten.IsKeyPressed(ebiten.KeyShiftLeft) || ebiten.IsKeyPressed(ebiten.KeyShiftRight)
+	isShiftPressed := rl.IsKeyDown(rl.KeyLeftShift) || rl.IsKeyDown(rl.KeyRightShift)
+	mousePos := rl.GetMousePosition()
 
 	if isShiftPressed {
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			x, y := ebiten.CursorPosition()
-			hex := utils.ScreenToHex(float64(x), float64(y))
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			hex := g.getHexUnderCursor()
 			g.game.HandleShiftClick(hex, true, false)
 		}
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
-			x, y := ebiten.CursorPosition()
-			hex := utils.ScreenToHex(float64(x), float64(y))
+		if rl.IsMouseButtonPressed(rl.MouseRightButton) {
+			hex := g.getHexUnderCursor()
 			g.game.HandleShiftClick(hex, false, true)
 		}
 	} else {
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			x, y := ebiten.CursorPosition()
-			if g.isClickOnUI(x, y) {
-				g.handleUIClick(x, y)
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			if g.isClickOnUI(mousePos) {
+				g.handleUIClick(mousePos)
 			} else {
-				g.handleGameClick(x, y, ebiten.MouseButtonLeft)
+				g.handleGameClick(rl.MouseLeftButton)
 			}
 			g.lastClickTime = time.Now()
 		}
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
-			x, y := ebiten.CursorPosition()
-			g.handleGameClick(x, y, ebiten.MouseButtonRight)
+		if rl.IsMouseButtonPressed(rl.MouseRightButton) {
+			g.handleGameClick(rl.MouseRightButton)
 			g.lastClickTime = time.Now()
 		}
 	}
 }
 
+func (g *GameState) getHexUnderCursor() hexmap.Hex {
+	if g.camera == nil {
+		return hexmap.Hex{}
+	}
+	ray := rl.GetMouseRay(rl.GetMousePosition(), *g.camera)
+	t := -ray.Position.Y / ray.Direction.Y
+	if t > 0 {
+		hitPoint := rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
+		return g.renderer.WorldToHex(hitPoint)
+	}
+	return hexmap.Hex{}
+}
+
 func (g *GameState) handleDebugKeys() {
-	if inpututil.IsKeyJustPressed(ebiten.Key1) {
+	if rl.IsKeyPressed(rl.KeyOne) {
 		g.game.DebugTowerID = "RANDOM_ATTACK"
 	}
-	if inpututil.IsKeyJustPressed(ebiten.Key2) {
+	if rl.IsKeyPressed(rl.KeyTwo) {
 		g.game.DebugTowerID = "TOWER_MINER"
 	}
-	if inpututil.IsKeyJustPressed(ebiten.Key3) {
+	if rl.IsKeyPressed(rl.KeyThree) {
 		g.game.DebugTowerID = "TOWER_WALL"
 	}
-	if inpututil.IsKeyJustPressed(ebiten.Key0) {
-		g.game.DebugTowerID = "TOWER_LIGHTHOUSE"
+	if rl.IsKeyPressed(rl.KeyZero) {
+		g.game.DebugTowerID = "TOWER_SILVER"
 	}
 }
 
-func (g *GameState) isClickOnUI(x, y int) bool {
-	p := image.Point{X: x, Y: y}
-	if g.isInsideSpeedButton(float32(x), float32(y)) || g.isInsidePauseButton(float32(x), float32(y)) {
+func (g *GameState) isClickOnUI(mousePos rl.Vector2) bool {
+	if g.game.SpeedButton.IsClicked(mousePos) || g.game.PauseButton.IsClicked(mousePos) {
 		return true
 	}
-	indicatorX, indicatorY, indicatorR := float64(g.indicator.X), float64(g.indicator.Y), float64(g.indicator.Radius)
-	if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
+	if g.indicator.IsClicked(mousePos) {
 		return true
 	}
-	if g.infoPanel.IsVisible && (p.In(g.infoPanel.SelectButton.Rect) || p.In(g.infoPanel.CombineButton.Rect)) {
+	if g.infoPanel.IsVisible && g.infoPanel.IsClicked(mousePos) {
 		return true
 	}
 	return false
 }
 
-func (g *GameState) handleUIClick(x, y int) {
-	if g.isInsideSpeedButton(float32(x), float32(y)) {
+func (g *GameState) handleUIClick(mousePos rl.Vector2) {
+	if g.game.SpeedButton.IsClicked(mousePos) {
 		g.game.HandleSpeedClick()
-	} else if g.isInsidePauseButton(float32(x), float32(y)) {
-		g.handlePauseClick()
-	} else {
-		indicatorX, indicatorY, indicatorR := float64(g.indicator.X), float64(g.indicator.Y), float64(g.indicator.Radius)
-		if (float64(x)-indicatorX)*(float64(x)-indicatorX)+(float64(y)-indicatorY)*(float64(y)-indicatorY) <= indicatorR*indicatorR {
-			g.game.HandleIndicatorClick()
-		}
+	} else if g.game.PauseButton.IsClicked(mousePos) {
+		g.game.HandlePauseClick()
+	} else if g.indicator.IsClicked(mousePos) {
+		g.indicator.HandleClick()
+		g.game.HandleIndicatorClick()
 	}
 }
 
-func (g *GameState) isInsidePauseButton(mx, my float32) bool {
-	button := g.game.PauseButton
-	dx := mx - button.X
-	dy := my - button.Y
-	return dx*dx+dy*dy <= button.Size*button.Size
-}
-
-func (g *GameState) isInsideSpeedButton(mx, my float32) bool {
-	button := g.game.SpeedButton
-	dx := mx - button.X
-	dy := my - button.Y
-	return dx*dx+dy*dy <= button.Size*button.Size
-}
-
-func (g *GameState) handlePauseClick() {
-	g.game.HandlePauseClick()
-	g.sm.SetState(NewPauseState(g.sm, g))
-}
-
-func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
-	for id, pos := range g.game.ECS.Positions {
-		if _, isTower := g.game.ECS.Towers[id]; isTower {
-			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
-			if dist < config.HexSize*0.5 {
-				return id, true
-			}
+func (g *GameState) findEntityAtCursor() (types.EntityID, bool) {
+	hex := g.getHexUnderCursor()
+	for id, t := range g.game.ECS.Towers {
+		if t.Hex == hex {
+			return id, true
 		}
 	}
-	for id, pos := range g.game.ECS.Positions {
-		if _, isEnemy := g.game.ECS.Enemies[id]; isEnemy {
-			dist := math.Hypot(pos.X-float64(x), pos.Y-float64(y))
-			if dist < config.HexSize*0.5 {
+	for id := range g.game.ECS.Enemies {
+		if pos, ok := g.game.ECS.Positions[id]; ok {
+			enemyHex := utils.ScreenToHex(pos.X, pos.Y)
+			if enemyHex == hex {
 				return id, true
 			}
 		}
@@ -264,12 +230,11 @@ func (g *GameState) findEntityAt(x, y int) (types.EntityID, bool) {
 	return 0, false
 }
 
-func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
-	g.game.ClearManualSelection()
-	hex := utils.ScreenToHex(float64(x), float64(y))
+func (g *GameState) handleGameClick(button rl.MouseButton) {
+	hex := g.getHexUnderCursor()
 
-	if button == ebiten.MouseButtonLeft {
-		entityID, entityFound := g.findEntityAt(x, y)
+	if button == rl.MouseLeftButton {
+		entityID, entityFound := g.findEntityAtCursor()
 		if entityFound {
 			g.infoPanel.SetTarget(entityID)
 			g.game.SetHighlightedTower(entityID)
@@ -285,52 +250,46 @@ func (g *GameState) handleGameClick(x, y int, button ebiten.MouseButton) {
 	}
 
 	if g.game.IsInLineDragMode() {
-		if button == ebiten.MouseButtonLeft {
-			g.game.HandleLineDragClick(hex, x, y)
+		if button == rl.MouseLeftButton {
+			// g.game.HandleLineDragClick(hex, x, y)
 		}
 		return
 	}
 
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
-		if button == ebiten.MouseButtonLeft {
+		if button == rl.MouseLeftButton {
 			if g.game.DebugTowerID != "" {
 				g.game.CreateDebugTower(hex, g.game.DebugTowerID)
 				g.game.DebugTowerID = ""
 			} else {
 				g.game.PlaceTower(hex)
 			}
-		} else if button == ebiten.MouseButtonRight {
+		} else if button == rl.MouseRightButton {
 			g.game.RemoveTower(hex)
 		}
 	}
 }
 
-func (g *GameState) Draw(screen *ebiten.Image) {
-	wallHexes, typeAHexes, typeBHexes := g.game.GetTowerHexesByType()
-	outlineColors := render.TowerOutlineColors{
-		WallColor:  config.TowerStrokeColor,
-		TypeAColor: config.TowerAStrokeColor,
-		TypeBColor: config.TowerBStrokeColor,
+func (g *GameState) Draw() {
+	if g.camera == nil {
+		return
 	}
-	g.renderer.Draw(screen, wallHexes, typeAHexes, typeBHexes, outlineColors, g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
+	g.renderer.Draw(g.game.RenderSystem, g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
 
+	// Отрисовка выделения башен в 3D
 	for _, tower := range g.game.ECS.Towers {
 		if tower.IsHighlighted || tower.IsManuallySelected {
-			screenX, screenY := g.renderer.HexToPixel(tower.Hex)
-			vertices, indices := g.renderer.GetHexPolygonVertices(screenX, screenY)
-			for i := 0; i < len(indices); i += 3 {
-				v0 := vertices[indices[i]]
-				v1 := vertices[indices[i+1]]
-				v2 := vertices[indices[i+2]]
-				screen.DrawTriangles([]ebiten.Vertex{v0, v1, v2}, []uint16{0, 1, 2}, render.GetSubImage(), &ebiten.DrawTrianglesOptions{
-					FillRule: ebiten.FillAll,
-					ColorM:   render.ColorToScale(config.HighlightColor),
-				})
-			}
+			worldPos := g.renderer.HexToWorld(tower.Hex)
+			// Рисуем выделение чуть выше, чтобы было видно
+			highlightPos := rl.Vector3Add(worldPos, rl.NewVector3(0, 0.5, 0))
+			rl.DrawCylinderWires(highlightPos, float32(config.HexSize)*1.1, float32(config.HexSize)*1.1, 2.0, 6, config.HighlightColorRL)
 		}
 	}
+}
 
-	var stateColor color.Color
+// DrawUI рисует все элементы интерфейса в 2D
+func (g *GameState) DrawUI() {
+	var stateColor color.RGBA
 	switch g.game.ECS.GameState.Phase {
 	case component.BuildState:
 		stateColor = config.BuildStateColor
@@ -339,43 +298,31 @@ func (g *GameState) Draw(screen *ebiten.Image) {
 	case component.TowerSelectionState:
 		stateColor = config.SelectionStateColor
 	}
-	g.indicator.Draw(screen, stateColor)
+	g.indicator.Draw(stateColor)
 
-	// --- Динамическое центрирование индикатора волны ---
-	// 1. Получаем ширину текста индикатора волны
-	waveTextBounds := g.waveIndicator.GetTextBounds(g.game.Wave, g.game.TitleFontFace)
-	waveTextWidth := waveTextBounds.Dx()
-
-	// 2. Вычисляем центральную точку индикатора уровня
+	waveTextWidth := g.waveIndicator.GetTextWidth(g.game.Wave)
 	levelIndicatorCenterX := g.playerLevelIndicator.X + (ui.XpBarWidth / 2)
+	g.waveIndicator.X = levelIndicatorCenterX - (waveTextWidth / 2)
+	g.waveIndicator.Y = g.playerLevelIndicator.Y + 25
+	g.waveIndicator.Draw(g.game.Wave)
 
-	// 3. Устанавливаем новую X-координату для индикатора волны
-	g.waveIndicator.X = levelIndicatorCenterX - float32(waveTextWidth/2)
+	g.game.SpeedButton.Draw()
+	g.game.PauseButton.Draw()
+	g.infoPanel.Draw(g.game.ECS)
 
-	g.waveIndicator.Draw(screen, g.game.Wave, g.game.TitleFontFace)
-	g.game.SpeedButton.Draw(screen)
-	g.game.PauseButton.Draw(screen)
-	g.infoPanel.Draw(screen, g.game.ECS)
-
-	// --- Отрисовка уровня и опыта ��грока (НОВЫЙ СПОСОБ) ---
-	var playerState *component.PlayerStateComponent
-	for _, state := range g.game.ECS.PlayerState {
-		playerState = state
-		break
+	if playerState, ok := g.game.ECS.PlayerState[g.game.PlayerID]; ok {
+		g.playerLevelIndicator.Draw(playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
 	}
 
-	if playerState != nil {
-		g.playerLevelIndicator.Draw(screen, playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
-	}
-
-	// Отрисовываем книгу рецептов поверх всего, если она видима
 	if g.recipeBook.IsVisible {
 		availableTowers := make(map[string]int)
 		for _, tower := range g.game.ECS.Towers {
 			availableTowers[tower.DefID]++
 		}
-		g.recipeBook.Draw(screen, availableTowers)
+		g.recipeBook.Draw(availableTowers)
 	}
 }
 
-func (g *GameState) Exit() {}
+func (g *GameState) Exit() {
+	g.renderer.Unload()
+}

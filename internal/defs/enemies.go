@@ -11,3 +11,6 @@ type EnemyDefinition struct {
 	MagicalArmor  int     `json:"magical_armor"`
 	Visuals       Visuals `json:"visuals"`
 }
+
+// EnemyDefs is the library of all enemy definitions, mapped by their ID.
+var EnemyDefs map[string]EnemyDefinition

@@ -27,7 +27,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	id := g.createTowerEntity(hex, towerID)
 	tower := g.ECS.Towers[id]
 	tower.IsTemporary = true
-	towerDef, ok := defs.TowerLibrary[tower.DefID]
+	towerDef, ok := defs.TowerDefs[tower.DefID]
 	if !ok {
 		// This should not happen if determineTowerID is correct
 		return false
@@ -75,7 +75,7 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 			g.towersBuilt--
 		}
 
-		towerDef, ok := defs.TowerLibrary[towerToRemove.DefID]
+		towerDef, ok := defs.TowerDefs[towerToRemove.DefID]
 		if !ok {
 			return false
 		}
@@ -150,7 +150,7 @@ func (g *Game) isPathBlockedBy(hex hexmap.Hex) bool {
 }
 
 func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.EntityID {
-	def, ok := defs.TowerLibrary[towerDefID]
+	def, ok := defs.TowerDefs[towerDefID]
 	if !ok {
 		log.Printf("Error: Tower definition not found for ID: %s", towerDefID)
 		return 0
@@ -245,10 +245,10 @@ func (g *Game) determineTowerID() string {
 
 	// Получаем соответствующую таблицу выпадения.
 	// Если для текущего уровня нет таблицы, пытаемся использовать таблицу более низкого уровня.
-	var lootTable defs.LootTable
+	var lootTable *defs.LootTable
 	found := false
 	for level := playerLevel; level >= 1; level-- {
-		if table, ok := defs.LootTableLibrary[level]; ok {
+		if table, ok := defs.LootTablesByLevel[level]; ok {
 			lootTable = table
 			found = true
 			break

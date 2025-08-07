@@ -9,79 +9,70 @@ import (
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/internal/types"
-	"image"
-	"image/color"
-	"log"
 	"math"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"github.com/hajimehoshi/ebiten/v2/vector"
-	"golang.org/x/image/font"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 const (
-	panelHeight     = 150
-	panelMargin     = 5
-	animationSpeed  = 10.0
-	lineHeight      = 20
-	columnSpacing   = 200
-	titleFontSize   = 18
-	regularFontSize = 14
+	panelHeightRL     = 150
+	panelMarginRL     = 5
+	animationSpeedRL  = 10.0
+	lineHeightRL      = 20
+	columnSpacingRL   = 200
+	titleFontSizeRL   = 18
+	regularFontSizeRL = 14
 )
 
-// Button представляет кликабельную кнопку в UI.
-type Button struct {
-	Rect image.Rectangle
+// ButtonRL представляет кликабельную кнопку в UI Raylib.
+type ButtonRL struct {
+	Rect rl.Rectangle
 	Text string
 }
 
-// InfoPanel displays information about a selected entity.
-type InfoPanel struct {
+// InfoPanelRL - версия InfoPanel для Raylib
+type InfoPanelRL struct {
 	IsVisible       bool
 	TargetEntity    types.EntityID
-	fontFace        font.Face
-	titleFontFace   font.Face
-	currentY        float64
-	targetY         float64
-	SelectButton    Button
-	CombineButton   Button
+	font            rl.Font
+	currentY        float32
+	targetY         float32
+	SelectButton    ButtonRL
+	CombineButton   ButtonRL
 	eventDispatcher *event.Dispatcher
 }
 
-// NewInfoPanel creates a new information panel.
-func NewInfoPanel(font font.Face, titleFont font.Face, dispatcher *event.Dispatcher) *InfoPanel {
-	return &InfoPanel{
+// NewInfoPanelRL создает новую информационную панель.
+func NewInfoPanelRL(font rl.Font, dispatcher *event.Dispatcher) *InfoPanelRL {
+	return &InfoPanelRL{
 		IsVisible:       false,
-		fontFace:        font,
-		titleFontFace:   titleFont,
+		font:            font,
 		currentY:        config.ScreenHeight,
 		targetY:         config.ScreenHeight,
 		eventDispatcher: dispatcher,
 	}
 }
 
-func (p *InfoPanel) SetTarget(entityID types.EntityID) {
+func (p *InfoPanelRL) SetTarget(entityID types.EntityID) {
 	p.TargetEntity = entityID
 	p.IsVisible = true
-	p.targetY = config.ScreenHeight - panelHeight
+	p.targetY = config.ScreenHeight - panelHeightRL
 }
 
-func (p *InfoPanel) Hide() {
+func (p *InfoPanelRL) Hide() {
 	p.targetY = config.ScreenHeight
 }
 
-func (p *InfoPanel) Update(ecs *entity.ECS) {
+func (p *InfoPanelRL) Update(ecs *entity.ECS) {
 	// Анимация панели
 	if p.currentY != p.targetY {
 		diff := p.targetY - p.currentY
-		if math.Abs(diff) < animationSpeed {
+		if float32(math.Abs(float64(diff))) < animationSpeedRL {
 			p.currentY = p.targetY
 		} else if diff > 0 {
-			p.currentY += animationSpeed
+			p.currentY += animationSpeedRL
 		} else {
-			p.currentY -= animationSpeed
+			p.currentY -= animationSpeedRL
 		}
 
 		if p.currentY >= config.ScreenHeight {
@@ -91,39 +82,37 @@ func (p *InfoPanel) Update(ecs *entity.ECS) {
 	}
 
 	// Обработка кликов по кнопкам
-	if p.IsVisible && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		cursorX, cursorY := ebiten.CursorPosition()
-		clickPoint := image.Point{X: cursorX, Y: cursorY}
-
-		// Клик по кнопке выбора
-		if clickPoint.In(p.SelectButton.Rect) {
+	if p.IsVisible && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		mousePos := rl.GetMousePosition()
+		if rl.CheckCollisionPointRec(mousePos, p.SelectButton.Rect) {
 			p.handleSelectClick(ecs)
 		}
-
-		// Клик по кнопке объединения
-		if clickPoint.In(p.CombineButton.Rect) {
+		if rl.CheckCollisionPointRec(mousePos, p.CombineButton.Rect) {
 			p.handleCombineClick(ecs)
 		}
 	}
 }
 
-func (p *InfoPanel) handleCombineClick(ecs *entity.ECS) {
+// IsClicked пров��ряет, был ли клик внутри одной из кнопок панели.
+func (p *InfoPanelRL) IsClicked(mousePos rl.Vector2) bool {
+	return rl.CheckCollisionPointRec(mousePos, p.SelectButton.Rect) ||
+		rl.CheckCollisionPointRec(mousePos, p.CombineButton.Rect)
+}
+
+func (p *InfoPanelRL) handleCombineClick(ecs *entity.ECS) {
 	if _, ok := ecs.Combinables[p.TargetEntity]; ok {
 		p.eventDispatcher.Dispatch(event.Event{
 			Type: event.CombineTowersRequest,
 			Data: p.TargetEntity,
 		})
-		log.Printf("CombineTowersRequest event dispatched for entity %d", p.TargetEntity)
-		p.Hide() // Скрываем панель после клика
+		p.Hide()
 	}
 }
 
-func (p *InfoPanel) handleSelectClick(ecs *entity.ECS) {
+func (p *InfoPanelRL) handleSelectClick(ecs *entity.ECS) {
 	if tower, ok := ecs.Towers[p.TargetEntity]; ok {
-		if towerDef, ok := defs.TowerLibrary[tower.DefID]; ok {
-			// Можно выбирать только временные атакующие башни
+		if towerDef, ok := defs.TowerDefs[tower.DefID]; ok {
 			if tower.IsTemporary && towerDef.Type != defs.TowerTypeMiner {
-				// Отправляем событие, вместо прямого изменения состояния
 				p.eventDispatcher.Dispatch(event.Event{
 					Type: event.ToggleTowerSelectionForSaveRequest,
 					Data: p.TargetEntity,
@@ -133,153 +122,144 @@ func (p *InfoPanel) handleSelectClick(ecs *entity.ECS) {
 	}
 }
 
-func (p *InfoPanel) Draw(screen *ebiten.Image, ecs *entity.ECS) {
+func (p *InfoPanelRL) Draw(ecs *entity.ECS) {
 	if !p.IsVisible && p.currentY >= config.ScreenHeight {
 		return
 	}
 
-	panelRect := image.Rect(
-		panelMargin,
-		int(p.currentY)+panelMargin,
-		config.ScreenWidth-panelMargin,
-		int(p.currentY)+panelHeight-panelMargin,
+	panelRect := rl.NewRectangle(
+		panelMarginRL,
+		p.currentY+panelMarginRL,
+		config.ScreenWidth-panelMarginRL*2,
+		panelHeightRL-panelMarginRL*2,
 	)
 
-	bgColor := color.RGBA{R: 25, G: 35, B: 45, A: 230}
-	vector.DrawFilledRect(screen, float32(panelRect.Min.X), float32(panelRect.Min.Y), float32(panelRect.Dx()), float32(panelRect.Dy()), bgColor, true)
-	borderColor := color.RGBA{R: 70, G: 130, B: 180, A: 255}
-	vector.StrokeRect(screen, float32(panelRect.Min.X), float32(panelRect.Min.Y), float32(panelRect.Dx()), float32(panelRect.Dy()), 2, borderColor, true)
+	rl.DrawRectangleRec(panelRect, config.InfoPanelBgColorRL)
+	rl.DrawRectangleLinesEx(panelRect, 2, config.InfoPanelBorderColorRL)
 
 	if p.TargetEntity == 0 {
 		return
 	}
 
-	p.drawEntityInfo(screen, ecs, panelRect.Min.X+15, panelRect.Min.Y+15)
+	p.drawEntityInfo(ecs, panelRect.X+15, panelRect.Y+15)
 
-	// Рисуем кнопки в зависимости от состояния игры
 	if ecs.GameState.Phase == component.TowerSelectionState {
 		if tower, ok := ecs.Towers[p.TargetEntity]; ok {
-			if towerDef, ok := defs.TowerLibrary[tower.DefID]; ok && tower.IsTemporary && towerDef.Type != defs.TowerTypeMiner {
-				p.drawSelectButton(screen, panelRect, tower.IsSelected)
+			if towerDef, ok := defs.TowerDefs[tower.DefID]; ok && tower.IsTemporary && towerDef.Type != defs.TowerTypeMiner {
+				p.drawSelectButton(panelRect, tower.IsSelected)
 			}
 		}
 	} else if ecs.GameState.Phase == component.WaveState {
 		if _, ok := ecs.Combinables[p.TargetEntity]; ok {
-			p.drawCombineButton(screen, panelRect)
+			p.drawCombineButton(panelRect)
 		}
 	}
 }
 
-func (p *InfoPanel) drawCombineButton(screen *ebiten.Image, panelRect image.Rectangle) {
-	btnWidth := 150
-	btnHeight := 40
-	// Смещаем кнопку "Объединить" влево, чтобы она не перекрывала другие кнопки
-	p.CombineButton.Rect = image.Rect(
-		panelRect.Max.X-btnWidth*2-40,
-		panelRect.Max.Y-btnHeight-20,
-		panelRect.Max.X-btnWidth-40,
-		panelRect.Max.Y-20,
+func (p *InfoPanelRL) drawCombineButton(panelRect rl.Rectangle) {
+	btnWidth := float32(150)
+	btnHeight := float32(40)
+	p.CombineButton.Rect = rl.NewRectangle(
+		panelRect.X+panelRect.Width-btnWidth*2-40,
+		panelRect.Y+panelRect.Height-btnHeight-20,
+		btnWidth,
+		btnHeight,
 	)
 	p.CombineButton.Text = "Объединить"
 
-	btnColor := color.RGBA{R: 180, G: 140, B: 20, A: 255} // Золотой цвет
-	vector.DrawFilledRect(screen, float32(p.CombineButton.Rect.Min.X), float32(p.CombineButton.Rect.Min.Y), float32(btnWidth), float32(btnHeight), btnColor, true)
-
-	textBounds := text.BoundString(p.fontFace, p.CombineButton.Text)
-	textX := p.CombineButton.Rect.Min.X + (btnWidth-textBounds.Dx())/2
-	textY := p.CombineButton.Rect.Min.Y + (btnHeight-textBounds.Dy())/2 - textBounds.Min.Y
-	text.Draw(screen, p.CombineButton.Text, p.fontFace, textX, textY, color.White)
+	rl.DrawRectangleRec(p.CombineButton.Rect, config.CombineButtonColorRL)
+	textPos := rl.NewVector2(
+		p.CombineButton.Rect.X+(p.CombineButton.Rect.Width-float32(rl.MeasureText(p.CombineButton.Text, regularFontSizeRL)))/2,
+		p.CombineButton.Rect.Y+(p.CombineButton.Rect.Height-regularFontSizeRL)/2,
+	)
+	rl.DrawTextEx(p.font, p.CombineButton.Text, textPos, regularFontSizeRL, 1.0, rl.White)
 }
 
-func (p *InfoPanel) drawSelectButton(screen *ebiten.Image, panelRect image.Rectangle, isSelected bool) {
-	btnWidth := 150
-	btnHeight := 40
-	p.SelectButton.Rect = image.Rect(
-		panelRect.Max.X-btnWidth-20,
-		panelRect.Max.Y-btnHeight-20,
-		panelRect.Max.X-20,
-		panelRect.Max.Y-20,
+func (p *InfoPanelRL) drawSelectButton(panelRect rl.Rectangle, isSelected bool) {
+	btnWidth := float32(150)
+	btnHeight := float32(40)
+	p.SelectButton.Rect = rl.NewRectangle(
+		panelRect.X+panelRect.Width-btnWidth-20,
+		panelRect.Y+panelRect.Height-btnHeight-20,
+		btnWidth,
+		btnHeight,
 	)
 
-	btnColor := color.RGBA{R: 100, G: 60, B: 60, A: 255}
+	btnColor := config.SelectButtonColorRL
 	p.SelectButton.Text = "Выбрать"
 	if isSelected {
-		btnColor = color.RGBA{R: 60, G: 120, B: 60, A: 255}
+		btnColor = config.SelectButtonActiveColorRL
 		p.SelectButton.Text = "Выбрано"
 	}
 
-	vector.DrawFilledRect(screen, float32(p.SelectButton.Rect.Min.X), float32(p.SelectButton.Rect.Min.Y), float32(btnWidth), float32(btnHeight), btnColor, true)
-
-	textBounds := text.BoundString(p.fontFace, p.SelectButton.Text)
-	textX := p.SelectButton.Rect.Min.X + (btnWidth-textBounds.Dx())/2
-	textY := p.SelectButton.Rect.Min.Y + (btnHeight-textBounds.Dy())/2 - textBounds.Min.Y
-	text.Draw(screen, p.SelectButton.Text, p.fontFace, textX, textY, color.White)
+	rl.DrawRectangleRec(p.SelectButton.Rect, btnColor)
+	textPos := rl.NewVector2(
+		p.SelectButton.Rect.X+(p.SelectButton.Rect.Width-float32(rl.MeasureText(p.SelectButton.Text, regularFontSizeRL)))/2,
+		p.SelectButton.Rect.Y+(p.SelectButton.Rect.Height-regularFontSizeRL)/2,
+	)
+	rl.DrawTextEx(p.font, p.SelectButton.Text, textPos, regularFontSizeRL, 1.0, rl.White)
 }
 
-func (p *InfoPanel) drawEntityInfo(screen *ebiten.Image, ecs *entity.ECS, startX, startY int) {
+func (p *InfoPanelRL) drawEntityInfo(ecs *entity.ECS, startX, startY float32) {
 	title := "Unknown Entity"
-	yPos := startY + titleFontSize
+	yPos := startY
 
 	if tower, ok := ecs.Towers[p.TargetEntity]; ok {
-		if towerDef, defOk := defs.TowerLibrary[tower.DefID]; defOk {
+		if towerDef, defOk := defs.TowerDefs[tower.DefID]; defOk {
 			title = towerDef.Name
-			text.Draw(screen, title, p.titleFontFace, startX, yPos, config.TextLightColor)
-			p.drawTowerInfo(screen, ecs, &towerDef, startX, yPos+lineHeight)
+			rl.DrawTextEx(p.font, title, rl.NewVector2(startX, yPos), titleFontSizeRL, 1.0, config.TextLightColorRL)
+			p.drawTowerInfo(ecs, &towerDef, startX, yPos+lineHeightRL)
 		}
 	} else if enemy, ok := ecs.Enemies[p.TargetEntity]; ok {
-		if enemyDef, defOk := defs.EnemyLibrary[enemy.DefID]; defOk {
+		if enemyDef, defOk := defs.EnemyDefs[enemy.DefID]; defOk {
 			title = enemyDef.Name
-			text.Draw(screen, title, p.titleFontFace, startX, yPos, config.TextLightColor)
-			p.drawEnemyInfo(screen, ecs, &enemyDef, startX, yPos+lineHeight)
+			rl.DrawTextEx(p.font, title, rl.NewVector2(startX, yPos), titleFontSizeRL, 1.0, config.TextLightColorRL)
+			p.drawEnemyInfo(ecs, &enemyDef, startX, yPos+lineHeightRL)
 		}
 	} else {
-		text.Draw(screen, title, p.titleFontFace, startX, yPos, config.TextLightColor)
+		rl.DrawTextEx(p.font, title, rl.NewVector2(startX, yPos), titleFontSizeRL, 1.0, config.TextLightColorRL)
 	}
 }
 
-func (p *InfoPanel) drawTowerInfo(screen *ebiten.Image, ecs *entity.ECS, towerDef *defs.TowerDefinition, startX, startY int) {
+func (p *InfoPanelRL) drawTowerInfo(ecs *entity.ECS, towerDef *defs.TowerDefinition, startX, startY float32) {
 	y := startY
 	tower, _ := ecs.Towers[p.TargetEntity]
 
-	// Отображаем уровень башни
-	text.Draw(screen, fmt.Sprintf("Level: %d", tower.Level), p.fontFace, startX, y, config.TextLightColor)
-	y += lineHeight
+	rl.DrawTextEx(p.font, fmt.Sprintf("Level: %d", tower.Level), rl.NewVector2(startX, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
+	y += lineHeightRL
 
 	if combat, ok := ecs.Combats[p.TargetEntity]; ok {
 		if towerDef.Combat != nil {
-			text.Draw(screen, fmt.Sprintf("Damage: %d", towerDef.Combat.Damage), p.fontFace, startX, y, config.TextLightColor)
-			y += lineHeight
-			text.Draw(screen, fmt.Sprintf("Fire Rate: %.2f/s", combat.FireRate), p.fontFace, startX, y, config.TextLightColor)
-			y += lineHeight
-			text.Draw(screen, fmt.Sprintf("Range: %d", combat.Range), p.fontFace, startX, y, config.TextLightColor)
-			y += lineHeight
-			text.Draw(screen, fmt.Sprintf("Damage Type: %s", towerDef.Combat.Attack.DamageType), p.fontFace, startX, y, config.TextLightColor)
+			rl.DrawTextEx(p.font, fmt.Sprintf("Damage: %d", towerDef.Combat.Damage), rl.NewVector2(startX, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
+			y += lineHeightRL
+			rl.DrawTextEx(p.font, fmt.Sprintf("Fire Rate: %.2f/s", combat.FireRate), rl.NewVector2(startX, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
+			y += lineHeightRL
+			rl.DrawTextEx(p.font, fmt.Sprintf("Range: %d", combat.Range), rl.NewVector2(startX, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
+			y += lineHeightRL
+			rl.DrawTextEx(p.font, fmt.Sprintf("Damage Type: %s", towerDef.Combat.Attack.DamageType), rl.NewVector2(startX, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
 		}
 	}
 }
 
-func (p *InfoPanel) drawEnemyInfo(screen *ebiten.Image, ecs *entity.ECS, enemyDef *defs.EnemyDefinition, startX, startY int) {
+func (p *InfoPanelRL) drawEnemyInfo(ecs *entity.ECS, enemyDef *defs.EnemyDefinition, startX, startY float32) {
 	y := startY
 	col1X := startX
-	col2X := startX + columnSpacing
+	col2X := startX + columnSpacingRL
 
-	// Health
 	if health, ok := ecs.Healths[p.TargetEntity]; ok {
 		healthStr := fmt.Sprintf("Health: %d / %d", health.Value, enemyDef.Health)
-		text.Draw(screen, healthStr, p.fontFace, col1X, y, config.TextLightColor)
+		rl.DrawTextEx(p.font, healthStr, rl.NewVector2(col1X, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
 	}
 
-	// Speed
 	if velocity, ok := ecs.Velocities[p.TargetEntity]; ok {
 		speedStr := fmt.Sprintf("Speed: %.2f", velocity.Speed)
-		text.Draw(screen, speedStr, p.fontFace, col2X, y, config.TextLightColor)
+		rl.DrawTextEx(p.font, speedStr, rl.NewVector2(col2X, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
 	}
-	y += lineHeight
+	y += lineHeightRL
 
-	// Armor
 	physArmorStr := fmt.Sprintf("Physical Armor: %d", enemyDef.PhysicalArmor)
-	text.Draw(screen, physArmorStr, p.fontFace, col1X, y, config.TextLightColor)
+	rl.DrawTextEx(p.font, physArmorStr, rl.NewVector2(col1X, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
 
 	magArmorStr := fmt.Sprintf("Magical Armor: %d", enemyDef.MagicalArmor)
-	text.Draw(screen, magArmorStr, p.fontFace, col2X, y, config.TextLightColor)
+	rl.DrawTextEx(p.font, magArmorStr, rl.NewVector2(col2X, y), regularFontSizeRL, 1.0, config.TextLightColorRL)
 }

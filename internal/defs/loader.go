@@ -5,94 +5,102 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
-// TowerLibrary is a map to hold all tower definitions, keyed by their ID.
-var TowerLibrary map[string]TowerDefinition
-
-// EnemyLibrary is a map to hold all enemy definitions, keyed by their ID.
-var EnemyLibrary map[string]EnemyDefinition
-
-// RecipeLibrary holds all the crafting recipes loaded from the config file.
-var RecipeLibrary []Recipe
-
-// LootTableLibrary holds all the loot tables, keyed by player level.
-var LootTableLibrary map[int]LootTable
-
-// LoadTowerDefinitions reads the tower configuration file and populates the TowerLibrary.
-func LoadTowerDefinitions(path string) error {
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("failed to read tower definitions file: %w", err)
+// LoadAll загружает все файлы определений из указанной директории.
+func LoadAll(dataDir string) error {
+	if err := LoadTowerDefinitions(filepath.Join(dataDir, "towers.json")); err != nil {
+		return fmt.Errorf("failed to load tower definitions: %w", err)
 	}
-
-	var towerDefs []TowerDefinition
-	if err := json.Unmarshal(file, &towerDefs); err != nil {
-		return fmt.Errorf("failed to unmarshal tower definitions: %w", err)
+	if err := LoadEnemyDefinitions(filepath.Join(dataDir, "enemies.json")); err != nil {
+		return fmt.Errorf("failed to load enemy definitions: %w", err)
 	}
-
-	TowerLibrary = make(map[string]TowerDefinition)
-	for _, def := range towerDefs {
-		TowerLibrary[def.ID] = def
+	if err := LoadRecipes(filepath.Join(dataDir, "recipes.json")); err != nil {
+		return fmt.Errorf("failed to load recipes: %w", err)
 	}
-
-	fmt.Printf("Loaded %d tower definitions\n", len(TowerLibrary))
+	if err := LoadLootTables(filepath.Join(dataDir, "loot_tables.json")); err != nil {
+		return fmt.Errorf("failed to load loot tables: %w", err)
+	}
+	// Загрузка волн может быть добавлена сюда же, если потребуется
+	// if err := LoadWaves(filepath.Join(dataDir, "waves.json")); err != nil {
+	// 	return fmt.Errorf("failed to load waves: %w", err)
+	// }
 	return nil
 }
 
-// LoadEnemyDefinitions reads the enemy configuration file and populates the EnemyLibrary.
-func LoadEnemyDefinitions(path string) error {
-	file, err := os.ReadFile(path)
+
+// LoadTowerDefinitions загружает определения башен из JSON-файла.
+func LoadTowerDefinitions(filename string) error {
+	file, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read enemy definitions file: %w", err)
+		return err
 	}
 
-	var enemyDefs []EnemyDefinition
-	if err := json.Unmarshal(file, &enemyDefs); err != nil {
-		return fmt.Errorf("failed to unmarshal enemy definitions: %w", err)
+	var towers []TowerDefinition
+	if err := json.Unmarshal(file, &towers); err != nil {
+		return err
 	}
 
-	EnemyLibrary = make(map[string]EnemyDefinition)
-	for _, def := range enemyDefs {
-		EnemyLibrary[def.ID] = def
+	TowerDefs = make(map[string]TowerDefinition)
+	for _, tower := range towers {
+		TowerDefs[tower.ID] = tower
 	}
-
-	fmt.Printf("Loaded %d enemy definitions\n", len(EnemyLibrary))
 	return nil
 }
 
-// LoadRecipes reads the recipe configuration file and populates the RecipeLibrary.
-func LoadRecipes(path string) error {
-	file, err := os.ReadFile(path)
+// LoadEnemyDefinitions загружает определения врагов из JSON-файла.
+func LoadEnemyDefinitions(filename string) error {
+	file, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read recipes file: %w", err)
+		return err
 	}
 
-	if err := json.Unmarshal(file, &RecipeLibrary); err != nil {
-		return fmt.Errorf("failed to unmarshal recipes: %w", err)
+	var enemies []EnemyDefinition
+	if err := json.Unmarshal(file, &enemies); err != nil {
+		return err
 	}
 
-	fmt.Printf("Loaded %d recipe definitions\n", len(RecipeLibrary))
+	EnemyDefs = make(map[string]EnemyDefinition)
+	for _, enemy := range enemies {
+		EnemyDefs[enemy.ID] = enemy
+	}
 	return nil
 }
 
-// LoadLootTables reads the loot table configuration file and populates the LootTableLibrary.
-func LoadLootTables(path string) error {
-	file, err := os.ReadFile(path)
+// LoadRecipes загружает рецепты крафта из JSON-файла.
+func LoadRecipes(filename string) error {
+	file, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read loot table file: %w", err)
+		return err
+	}
+
+	var recipes []*Recipe
+	if err := json.Unmarshal(file, &recipes); err != nil {
+		return err
+	}
+
+	RecipeLibrary = &CraftingRecipeLibrary{Recipes: recipes}
+	return nil
+}
+
+// LoadLootTables загружает таблицы лута из JSON-файла.
+func LoadLootTables(filename string) error {
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return err
 	}
 
 	var tables []LootTable
 	if err := json.Unmarshal(file, &tables); err != nil {
-		return fmt.Errorf("failed to unmarshal loot tables: %w", err)
+		return err
 	}
 
-	LootTableLibrary = make(map[int]LootTable)
-	for _, table := range tables {
-		LootTableLibrary[table.PlayerLevel] = table
+	LootTablesByLevel = make(map[int]*LootTable)
+	for i := range tables {
+		table := &tables[i]
+		table.prepare()
+		LootTablesByLevel[table.PlayerLevel] = table
 	}
-
-	fmt.Printf("Loaded %d loot table(s)\n", len(LootTableLibrary))
 	return nil
 }

@@ -27,8 +27,8 @@ func (s *EnvironmentalDamageSystem) Update(deltaTime float64) {
 		if !ok1 || !ok2 {
 			continue
 		}
-		def1, ok1 := defs.TowerLibrary[tower1.DefID]
-		def2, ok2 := defs.TowerLibrary[tower2.DefID]
+		def1, ok1 := defs.TowerDefs[tower1.DefID]
+		def2, ok2 := defs.TowerDefs[tower2.DefID]
 
 		if ok1 && ok2 && def1.Type == defs.TowerTypeMiner && def2.Type == defs.TowerTypeMiner {
 			for _, hex := range tower1.Hex.LineTo(tower2.Hex) {

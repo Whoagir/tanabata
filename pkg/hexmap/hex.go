@@ -3,7 +3,13 @@ package hexmap
 
 import (
 	"go-tower-defense/pkg/utils"
+	"math"
 )
+
+// Point представляет 2D точку.
+type Point struct {
+	X, Y float64
+}
 
 // Hex представляет гекс в осевых координатах (Q, R)
 type Hex struct {
@@ -29,6 +35,19 @@ func PixelToHex(x, y, hexSize float64) Hex {
 	q := (Sqrt3/3*x - 1.0/3*y) / hexSize
 	r := (2.0 / 3 * y) / hexSize
 	return axialRound(q, r)
+}
+
+// HexCorners вычисляет 6 угловых точек гекса.
+func HexCorners(size float64, h Hex) []Point {
+	corners := make([]Point, 6)
+	for i := 0; i < 6; i++ {
+		angle := 2.0 * math.Pi / 6 * (float64(i) + 0.5) // +0.5 для остроконечной ориентации
+		corners[i] = Point{
+			X: size * math.Cos(angle),
+			Y: size * math.Sin(angle),
+		}
+	}
+	return corners
 }
 
 // Neighbors возвращает существующих соседей гекса

@@ -12,3 +12,11 @@ type Recipe struct {
 	Inputs   []RecipeInput `json:"inputs"`    // List of tower DefIDs and their levels required for the craft.
 	OutputID string        `json:"output_id"` // Tower DefID of the resulting tower.
 }
+
+// CraftingRecipeLibrary holds all the crafting recipes.
+type CraftingRecipeLibrary struct {
+	Recipes []*Recipe
+}
+
+// RecipeLibrary is the global instance of the crafting recipe library.
+var RecipeLibrary *CraftingRecipeLibrary

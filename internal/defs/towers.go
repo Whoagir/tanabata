@@ -85,3 +85,6 @@ type LaserAttackParams struct {
 	SlowMultiplier float64 `json:"slow_multiplier"`
 	SlowDuration   float64 `json:"slow_duration"`
 }
+
+// TowerDefs is the library of all tower definitions, mapped by their ID.
+var TowerDefs map[string]TowerDefinition

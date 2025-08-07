@@ -46,8 +46,7 @@ func (s *CraftingSystem) RecalculateCombinations() {
 	}
 
 	// 3. Итерируем по всем рецептам
-	for i := range defs.RecipeLibrary {
-		recipe := &defs.RecipeLibrary[i]
+	for _, recipe := range defs.RecipeLibrary.Recipes {
 
 		// 4. Собираем требования для текущего рецепта
 		// Ключ - "ID-Уровень", значение - количество

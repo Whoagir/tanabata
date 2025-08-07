@@ -51,7 +51,7 @@ func (s *WaveSystem) ResetActiveEnemies() {
 }
 
 func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
-	def, ok := defs.EnemyLibrary[wave.EnemyID]
+	def, ok := defs.EnemyDefs[wave.EnemyID]
 	if !ok {
 		log.Printf("Error: Enemy definition not found for ID: %s", wave.EnemyID)
 		return

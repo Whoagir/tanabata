@@ -97,7 +97,7 @@ func (g *Game) addTowerToEnergyNetwork(newTowerID types.EntityID) {
 	if !exists {
 		return
 	}
-	newTowerDef, defExists := defs.TowerLibrary[newTower.DefID]
+	newTowerDef, defExists := defs.TowerDefs[newTower.DefID]
 	if !defExists || newTowerDef.Type == defs.TowerTypeWall {
 		return // Do nothing for walls or non-existent towers
 	}
@@ -137,15 +137,15 @@ func (g *Game) addTowerToEnergyNetwork(newTowerID types.EntityID) {
 // handleMinerIntercept checks if a new miner tower intercepts an existing miner-to-miner line.
 // If it does, it reroutes the line through the new tower. Returns true if an interception occurred.
 func (g *Game) handleMinerIntercept(newTowerID types.EntityID, newTower *component.Tower) bool {
-	newTowerDef := defs.TowerLibrary[newTower.DefID]
+	newTowerDef := defs.TowerDefs[newTower.DefID]
 	for lineID, line := range g.ECS.LineRenders {
 		t1, ok1 := g.ECS.Towers[line.Tower1ID]
 		t2, ok2 := g.ECS.Towers[line.Tower2ID]
 		if !ok1 || !ok2 {
 			continue
 		}
-		def1, ok1 := defs.TowerLibrary[t1.DefID]
-		def2, ok2 := defs.TowerLibrary[t2.DefID]
+		def1, ok1 := defs.TowerDefs[t1.DefID]
+		def2, ok2 := defs.TowerDefs[t2.DefID]
 
 		if !ok1 || !ok2 || def1.Type != defs.TowerTypeMiner || def2.Type != defs.TowerTypeMiner {
 			continue
@@ -180,12 +180,12 @@ func (g *Game) handleMinerIntercept(newTowerID types.EntityID, newTower *compone
 // findPossibleConnections finds and sorts all valid connections from a new tower to existing active towers.
 func (g *Game) findPossibleConnections(newTowerID types.EntityID, newTower *component.Tower) []energyEdge {
 	var connections []energyEdge
-	newTowerDef := defs.TowerLibrary[newTower.DefID]
+	newTowerDef := defs.TowerDefs[newTower.DefID]
 	for otherID, otherTower := range g.ECS.Towers {
 		if newTowerID == otherID || !otherTower.IsActive {
 			continue
 		}
-		otherTowerDef := defs.TowerLibrary[otherTower.DefID]
+		otherTowerDef := defs.TowerDefs[otherTower.DefID]
 
 		distance := newTower.Hex.Distance(otherTower.Hex)
 		isNeighbor := distance == 1
@@ -266,11 +266,11 @@ func (g *Game) expandNetworkFrom(startNode types.EntityID) {
 		currentID := queue[0]
 		queue = queue[1:]
 		currentTower := g.ECS.Towers[currentID]
-		currentTowerDef := defs.TowerLibrary[currentTower.DefID]
+		currentTowerDef := defs.TowerDefs[currentTower.DefID]
 
 		// Find all inactive neighbors
 		for otherID, otherTower := range g.ECS.Towers {
-			otherTowerDef, ok := defs.TowerLibrary[otherTower.DefID]
+			otherTowerDef, ok := defs.TowerDefs[otherTower.DefID]
 			if !ok {
 				continue
 			}
@@ -349,7 +349,7 @@ func (g *Game) updateTowerAppearance(id types.EntityID) {
 		return
 	}
 
-	def, ok := defs.TowerLibrary[tower.DefID]
+	def, ok := defs.TowerDefs[tower.DefID]
 	if !ok {
 		return // Definition not found, do nothing.
 	}
@@ -365,7 +365,7 @@ func (g *Game) updateTowerAppearance(id types.EntityID) {
 func (g *Game) collectEdgesForNewTower(newTower *component.Tower, allTowers map[hexmap.Hex]types.EntityID, potentiallyActive map[types.EntityID]bool) []energyEdge {
 	var edges []energyEdge
 	newTowerID := allTowers[newTower.Hex]
-	newTowerDef := defs.TowerLibrary[newTower.DefID]
+	newTowerDef := defs.TowerDefs[newTower.DefID]
 
 	for otherHex, otherID := range allTowers {
 		if newTowerID == otherID || !potentiallyActive[otherID] {
@@ -373,7 +373,7 @@ func (g *Game) collectEdgesForNewTower(newTower *component.Tower, allTowers map[
 		}
 
 		otherTower := g.ECS.Towers[otherID]
-		otherTowerDef := defs.TowerLibrary[otherTower.DefID]
+		otherTowerDef := defs.TowerDefs[otherTower.DefID]
 		distance := newTower.Hex.Distance(otherHex)
 
 		isNeighbor := distance == 1
@@ -410,7 +410,7 @@ func (g *Game) collectAndResetTowers() map[hexmap.Hex]types.EntityID {
 func (g *Game) getPotentiallyActiveTowers(allTowers map[hexmap.Hex]types.EntityID) map[types.EntityID]bool {
 	potentiallyActive := make(map[types.EntityID]bool)
 	for _, id := range allTowers {
-		towerDef, ok := defs.TowerLibrary[g.ECS.Towers[id].DefID]
+		towerDef, ok := defs.TowerDefs[g.ECS.Towers[id].DefID]
 		if ok && towerDef.Type != defs.TowerTypeWall {
 			potentiallyActive[id] = true
 		}
@@ -432,8 +432,8 @@ func (g *Game) collectPossibleEdges(allTowers map[hexmap.Hex]types.EntityID, pot
 			hexA, hexB := activeHexes[i], activeHexes[j]
 			idA, idB := allTowers[hexA], allTowers[hexB]
 			towerA, towerB := g.ECS.Towers[idA], g.ECS.Towers[idB]
-			defA := defs.TowerLibrary[towerA.DefID]
-			defB := defs.TowerLibrary[towerB.DefID]
+			defA := defs.TowerDefs[towerA.DefID]
+			defB := defs.TowerDefs[towerB.DefID]
 			distance := hexA.Distance(hexB)
 
 			isNeighbor := distance == 1
@@ -463,7 +463,7 @@ func (g *Game) hasActiveTowerBetween(hexA, hexB hexmap.Hex, allTowers map[hexmap
 		if id, exists := allTowers[line[i]]; exists && potentiallyActive[id] {
 			// Проверяем тип башни, которая стоит на пути
 			towerOnPath := g.ECS.Towers[id]
-			towerOnPathDef := defs.TowerLibrary[towerOnPath.DefID]
+			towerOnPathDef := defs.TowerDefs[towerOnPath.DefID]
 			// Линия блокируется ТОЛЬКО если на пути стоит другая башня типа Б (Miner)
 			if towerOnPathDef.Type == defs.TowerTypeMiner {
 				return true
@@ -495,7 +495,7 @@ func (g *Game) activateNetworkTowers(allTowers map[hexmap.Hex]types.EntityID, po
 	energySourceRoots := make(map[types.EntityID]bool)
 	for hex, id := range allTowers {
 		tower := g.ECS.Towers[id]
-		towerDef := defs.TowerLibrary[tower.DefID]
+		towerDef := defs.TowerDefs[tower.DefID]
 		if towerDef.Type == defs.TowerTypeMiner && g.isOnOre(hex) {
 			energySourceRoots[uf.Find(id)] = true
 		}
@@ -535,7 +535,7 @@ func (g *Game) createLine(edge energyEdge) {
 		StartY:   posA.Y,
 		EndX:     posB.X,
 		EndY:     posB.Y,
-		Color:    config.LineColor, // Используем цвет из конфига
+		Color:    config.LineColorRL, // Используем цвет из конфига
 		Tower1ID: edge.Tower1ID,
 		Tower2ID: edge.Tower2ID,
 	}
@@ -551,7 +551,7 @@ func (g *Game) isOnOre(hex hexmap.Hex) bool {
 	for _, ore := range g.ECS.Ores {
 		oreHex := utils.ScreenToHex(ore.Position.X, ore.Position.Y)
 		// Руда считается источником энергии, только если она существует на этом гексе
-		// И если у неё есть оставшийся запас.
+		// �� если у неё есть оставшийся запас.
 		if oreHex == hex {
 			// Порог 0.1 соответствует порогу удаления в system/ore.go
 			return ore.CurrentReserve >= config.OreDepletionThreshold
@@ -634,10 +634,10 @@ func (g *Game) findAllPossibleBridges() []energyEdge {
 
 	for _, activeID := range activeTowers {
 		activeTower := g.ECS.Towers[activeID]
-		activeTowerDef := defs.TowerLibrary[activeTower.DefID]
+		activeTowerDef := defs.TowerDefs[activeTower.DefID]
 		for _, inactiveID := range inactiveTowers {
 			inactiveTower := g.ECS.Towers[inactiveID]
-			inactiveTowerDef := defs.TowerLibrary[inactiveTower.DefID]
+			inactiveTowerDef := defs.TowerDefs[inactiveTower.DefID]
 
 			if g.isValidConnection(activeTower, inactiveTower) {
 				bridges = append(bridges, energyEdge{
@@ -729,8 +729,8 @@ func (g *Game) mergeActiveNetworks() {
 			}
 
 			tower1, tower2 := activeTowers[id1], activeTowers[id2]
-			def1 := defs.TowerLibrary[tower1.DefID]
-			def2 := defs.TowerLibrary[tower2.DefID]
+			def1 := defs.TowerDefs[tower1.DefID]
+			def2 := defs.TowerDefs[tower2.DefID]
 			if g.isValidConnection(tower1, tower2) {
 				bridgeEdges = append(bridgeEdges, energyEdge{
 					Tower1ID: id1,
@@ -758,8 +758,8 @@ func (g *Game) mergeActiveNetworks() {
 
 // isValidConnection checks if two towers can be connected according to game rules.
 func (g *Game) isValidConnection(tower1, tower2 *component.Tower) bool {
-	def1, ok1 := defs.TowerLibrary[tower1.DefID]
-	def2, ok2 := defs.TowerLibrary[tower2.DefID]
+	def1, ok1 := defs.TowerDefs[tower1.DefID]
+	def2, ok2 := defs.TowerDefs[tower2.DefID]
 	if !ok1 || !ok2 {
 		return false
 	}
@@ -782,7 +782,7 @@ func (g *Game) isValidConnection(tower1, tower2 *component.Tower) bool {
 func (g *Game) findPotentialNeighbors(removedTowerHex hexmap.Hex, removedTowerType defs.TowerType) []types.EntityID {
 	potentialNeighborIDs := []types.EntityID{}
 	for otherID, otherTower := range g.ECS.Towers {
-		otherTowerDef, ok := defs.TowerLibrary[otherTower.DefID]
+		otherTowerDef, ok := defs.TowerDefs[otherTower.DefID]
 		if !ok {
 			continue
 		}
@@ -809,7 +809,7 @@ func (g *Game) findPoweredTowers() map[types.EntityID]bool {
 
 	// Find all root energy sources and add them to the queue.
 	for id, tower := range g.ECS.Towers {
-		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		towerDef, ok := defs.TowerDefs[tower.DefID]
 		if !ok {
 			continue
 		}
@@ -909,7 +909,7 @@ func (g *Game) FindPowerSourcesForTower(startNode types.EntityID) []types.Entity
 		head++
 
 		tower := g.ECS.Towers[currentID]
-		towerDef := defs.TowerLibrary[tower.DefID]
+		towerDef := defs.TowerDefs[tower.DefID]
 		if towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex) {
 			// This tower is a miner on an ore vein, find the corresponding ore entity.
 			for oreID, ore := range g.ECS.Ores {

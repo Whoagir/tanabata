@@ -1,13 +1,11 @@
 // internal/state/state.go
 package state
 
-import "github.com/hajimehoshi/ebiten/v2"
-
 // State — интерфейс для всех состояний
 type State interface {
 	Enter()
 	Update(deltaTime float64)
-	Draw(screen *ebiten.Image)
+	Draw() // Убрали screen *ebiten.Image
 	Exit()
 }
 
@@ -19,6 +17,11 @@ type StateMachine struct {
 // NewStateMachine создаёт новую машину состояний без начального состояния
 func NewStateMachine() *StateMachine {
 	return &StateMachine{}
+}
+
+// Current возвращает текущее состояние.
+func (sm *StateMachine) Current() State {
+	return sm.current
 }
 
 // SetState устанавливает новое состояние
@@ -40,8 +43,8 @@ func (sm *StateMachine) Update(deltaTime float64) {
 }
 
 // Draw отрисовывает текущее состояние
-func (sm *StateMachine) Draw(screen *ebiten.Image) {
+func (sm *StateMachine) Draw() {
 	if sm.current != nil {
-		sm.current.Draw(screen)
+		sm.current.Draw()
 	}
 }

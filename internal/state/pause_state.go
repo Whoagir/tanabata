@@ -4,72 +4,52 @@ package state
 import (
 	"go-tower-defense/internal/config"
 	"image/color"
-	"time"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font/basicfont"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// PauseState — состояние паузы
 type PauseState struct {
-	sm        *StateMachine
-	gameState *GameState
+	stateMachine *StateMachine
+	previousState State
+	font rl.Font // Assuming a font is loaded and passed
 }
 
-func NewPauseState(sm *StateMachine, gameState *GameState) *PauseState {
-	return &PauseState{sm: sm, gameState: gameState}
-}
-
-func (p *PauseState) Enter() {
-	// Устанавливаем состояние кнопки как "на паузе" при входе
-	p.gameState.game.PauseButton.SetPaused(true)
-}
-
-func (p *PauseState) Update(deltaTime float64) {
-	// if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
-	// 	p.gameState.game.PauseButton.SetPaused(false)
-	// 	p.sm.SetState(p.gameState)
-	// 	return
-	// }
-	p.gameState.game.PauseButton.SetPaused(true)
-
-	if inpututil.IsKeyJustPressed(ebiten.KeyF9) {
-		p.sm.SetState(p.gameState)
-		return
-	}
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-		mx, my := ebiten.CursorPosition()
-		if p.isInsidePauseButton(float32(mx), float32(my)) {
-			if time.Since(p.gameState.game.PauseButton.LastToggleTime) >= time.Duration(config.ClickCooldown)*time.Millisecond {
-				// p.gameState.game.HandlePauseClick()
-				// if !p.gameState.game.PauseButton.IsPaused {
-				// 	p.sm.SetState(p.gameState)
-				// }
-				p.gameState.game.HandlePauseClick()
-				p.sm.SetState(p.gameState) // Переключаемся в GameState
-			}
-		}
+func NewPauseState(sm *StateMachine, prevState State, font rl.Font) *PauseState {
+	return &PauseState{
+		stateMachine:  sm,
+		previousState: prevState,
+		font: font,
 	}
 }
 
-func (p *PauseState) isInsidePauseButton(mx, my float32) bool {
-	button := p.gameState.game.PauseButton
-	dx := mx - button.X
-	dy := my - button.Y
-	return dx*dx+dy*dy <= button.Size*button.Size
+func (s *PauseState) Enter() {}
+
+func (s *PauseState) Update(deltaTime float64) {
+	if rl.IsKeyPressed(rl.KeyP) || rl.IsKeyPressed(rl.KeyEscape) {
+		s.stateMachine.SetState(s.previousState)
+	}
 }
 
-func (p *PauseState) Draw(screen *ebiten.Image) {
-	p.gameState.Draw(screen)
-	overlay := ebiten.NewImage(config.ScreenWidth, config.ScreenHeight)
-	overlay.Fill(color.RGBA{0, 0, 0, 64})
-	screen.DrawImage(overlay, nil)
-	text.Draw(screen, "Paused", basicfont.Face7x13, config.ScreenWidth/2-30, config.ScreenHeight/2, color.White)
-	p.gameState.game.PauseButton.Draw(screen)
+func (s *PauseState) Draw() {
+	// First, draw the previous state to have it in the background
+	if s.previousState != nil {
+		s.previousState.Draw()
+	}
+
+	// Then, draw a semi-transparent overlay
+	rl.DrawRectangle(0, 0, int32(config.ScreenWidth), int32(config.ScreenHeight), rl.NewColor(0, 0, 0, 128))
+
+	// Finally, draw the pause text
+	pauseText := "PAUSED"
+	fontSize := 40
+	textWidth := rl.MeasureText(pauseText, int32(fontSize))
+	rl.DrawText(pauseText, (int32(config.ScreenWidth)-textWidth)/2, int32(config.ScreenHeight)/2-20, int32(fontSize), rl.White)
 }
 
-func (p *PauseState) Exit() {
-	// Ничего не делаем при выходе
+func (s *PauseState) Exit() {}
+
+// Helper to convert color.RGBA to rl.Color
+func colorToRL(c color.Color) rl.Color {
+    r, g, b, a := c.RGBA()
+    return rl.NewColor(uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(a>>8))
 }

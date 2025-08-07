@@ -2,89 +2,35 @@
 package ui
 
 import (
-	"image"
-	"image/color"
-	"strings"
+	"fmt"
+	"go-tower-defense/internal/config"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// WaveIndicator отображает номер текущей волны.
-type WaveIndicator struct {
-	X, Y   float32
-	Radius float32
-	Color  color.Color
+// WaveIndicatorRL - версия индикатора волны для Raylib
+type WaveIndicatorRL struct {
+	X, Y float32
+	font rl.Font
 }
 
-// NewWaveIndicator создает новый индикатор волны.
-func NewWaveIndicator(x, y, radius float32, clr color.Color) *WaveIndicator {
-	return &WaveIndicator{
-		X:      x,
-		Y:      y,
-		Radius: radius,
-		Color:  clr,
+// NewWaveIndicatorRL создает новый индикатор волны
+func NewWaveIndicatorRL(x, y float32, font rl.Font) *WaveIndicatorRL {
+	return &WaveIndicatorRL{
+		X:    x,
+		Y:    y,
+		font: font,
 	}
 }
 
-// toRoman конвертирует целое число в римское.
-func toRoman(num int) string {
-	if num <= 0 {
-		return "N/A"
-	}
-	// Простая реализация для чисел до 3999
-	val := []int{
-		1000, 900, 500, 400,
-		100, 90, 50, 40,
-		10, 9, 5, 4,
-		1,
-	}
-	syb := []string{
-		"M", "CM", "D", "CD",
-		"C", "XC", "L", "XL",
-		"X", "IX", "V", "IV",
-		"I",
-	}
-
-	var roman strings.Builder
-	for i := 0; i < len(val); i++ {
-		for num >= val[i] {
-			roman.WriteString(syb[i])
-			num -= val[i]
-		}
-	}
-	return roman.String()
+// Draw отрисовывает индикатор волны
+func (i *WaveIndicatorRL) Draw(waveNumber int) {
+	waveText := fmt.Sprintf("Wave: %d", waveNumber)
+	rl.DrawTextEx(i.font, waveText, rl.NewVector2(i.X, i.Y), config.WaveIndicatorFontSizeRL, 1.0, config.WaveIndicatorColorRL)
 }
 
-// GetTextBounds вычисляет и возвращает границы для текста волны.
-func (i *WaveIndicator) GetTextBounds(waveNumber int, fontFace font.Face) image.Rectangle {
-	waveStr := toRoman(waveNumber)
-	bounds := text.BoundString(fontFace, waveStr)
-	return bounds
-}
-
-// Draw отрисовывает индикатор на экране.
-func (i *WaveIndicator) Draw(screen *ebiten.Image, waveNumber int, fontFace font.Face) {
-	waveStr := toRoman(waveNumber)
-	x := int(i.X)
-	y := int(i.Y)
-
-	// Цвета
-	strokeColor := color.White
-	fillColor := color.RGBA{70, 130, 180, 255} // Синий цвет, как у индикатора фазы
-
-	// Рисуем обводку (смещаем на 1 пиксель в 8 направлениях)
-	text.Draw(screen, waveStr, fontFace, x-1, y, strokeColor)
-	text.Draw(screen, waveStr, fontFace, x+1, y, strokeColor)
-	text.Draw(screen, waveStr, fontFace, x, y-1, strokeColor)
-	text.Draw(screen, waveStr, fontFace, x, y+1, strokeColor)
-	text.Draw(screen, waveStr, fontFace, x-1, y-1, strokeColor)
-	text.Draw(screen, waveStr, fontFace, x+1, y-1, strokeColor)
-	text.Draw(screen, waveStr, fontFace, x-1, y+1, strokeColor)
-	text.Draw(screen, waveStr, fontFace, x+1, y+1, strokeColor)
-
-	// Рисуем основной текст, немного "ужирняя" его
-	text.Draw(screen, waveStr, fontFace, x, y, fillColor)
-	text.Draw(screen, waveStr, fontFace, x+1, y, fillColor) // Смещаем на 1 пиксель вправо для жирности
+// GetTextWidth возвращает ширину текста для указанного номера волны
+func (i *WaveIndicatorRL) GetTextWidth(waveNumber int) float32 {
+	waveText := fmt.Sprintf("Wave: %d", waveNumber)
+	return rl.MeasureTextEx(i.font, waveText, config.WaveIndicatorFontSizeRL, 1.0).X
 }

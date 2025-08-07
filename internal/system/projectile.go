@@ -138,7 +138,7 @@ func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *componen
 		}
 
 		// Получаем правильное определение врага из библиотеки
-		def, ok := defs.EnemyLibrary[enemy.DefID]
+		def, ok := defs.EnemyDefs[enemy.DefID]
 		if !ok {
 			return // Не удалось найти определение
 		}

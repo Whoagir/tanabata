@@ -8,12 +8,13 @@ import (
 	"go-tower-defense/internal/types"
 	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
-	"image/color"
 	"log"
 	"math"
 	"math/rand"
 	"sort"
 	"time"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // CombatSystem управляет атакой башен
@@ -53,7 +54,7 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		towerDef, ok := defs.TowerDefs[tower.DefID]
 		if !ok {
 			log.Printf("CombatSystem: Could not find tower definition for ID %s", tower.DefID)
 			continue
@@ -342,7 +343,7 @@ func (s *CombatSystem) calculateLineDegradationMultiplier(path []types.EntityID)
 	attackerCount := 0
 	for _, towerID := range path {
 		if tower, ok := s.ecs.Towers[towerID]; ok {
-			if towerDef, ok := defs.TowerLibrary[tower.DefID]; ok {
+			if towerDef, ok := defs.TowerDefs[tower.DefID]; ok {
 				if towerDef.Type != defs.TowerTypeMiner && towerDef.Type != defs.TowerTypeWall {
 					attackerCount++
 				}
@@ -352,20 +353,20 @@ func (s *CombatSystem) calculateLineDegradationMultiplier(path []types.EntityID)
 	return math.Pow(config.LineDegradationFactor, float64(attackerCount))
 }
 
-func getProjectileColorByAttackType(attackType defs.AttackDamageType) color.RGBA {
+func getProjectileColorByAttackType(attackType defs.AttackDamageType) rl.Color {
 	switch attackType {
 	case defs.AttackPhysical:
-		return config.ProjectileColorPhysical
+		return config.ProjectileColorPhysicalRL
 	case defs.AttackMagical:
-		return config.ProjectileColorMagical
+		return config.ProjectileColorMagicalRL
 	case defs.AttackPure:
-		return config.ProjectileColorPure
+		return config.ProjectileColorPureRL
 	case defs.AttackSlow:
-		return config.ProjectileColorSlow
+		return config.ProjectileColorSlowRL
 	case defs.AttackPoison:
-		return config.ProjectileColorPoison
+		return config.ProjectileColorPoisonRL
 	default:
-		return config.ProjectileColorPure // По умолчанию чистый урон
+		return config.ProjectileColorPureRL // По умолчанию чистый урон
 	}
 }
 

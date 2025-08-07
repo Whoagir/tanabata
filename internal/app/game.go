@@ -12,13 +12,11 @@ import (
 	"go-tower-defense/internal/ui"
 	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
 
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // LineDragDebugInfo holds information for on-screen debugging.
@@ -36,7 +34,7 @@ type Game struct {
 	BaseHealth                int
 	ECS                       *entity.ECS
 	MovementSystem            *system.MovementSystem
-	RenderSystem              *system.RenderSystem
+	RenderSystem              *system.RenderSystemRL // Изменено
 	WaveSystem                *system.WaveSystem
 	CombatSystem              *system.CombatSystem
 	ProjectileSystem          *system.ProjectileSystem
@@ -45,19 +43,17 @@ type Game struct {
 	AuraSystem                *system.AuraSystem
 	StatusEffectSystem        *system.StatusEffectSystem
 	EnvironmentalDamageSystem *system.EnvironmentalDamageSystem
-	VisualEffectSystem        *system.VisualEffectSystem // Новая система
-	CraftingSystem            *system.CraftingSystem     // Система крафта
-	PlayerSystem              *system.PlayerSystem       // <<< Новая система
-	AreaAttackSystem          *system.AreaAttackSystem   // <<< Система для атаки по области
+	VisualEffectSystem        *system.VisualEffectSystem
+	CraftingSystem            *system.CraftingSystem
+	PlayerSystem              *system.PlayerSystem
+	AreaAttackSystem          *system.AreaAttackSystem
 	EventDispatcher           *event.Dispatcher
-	FontFace                  font.Face
-	SmallFontFace             font.Face
-	TitleFontFace             font.Face
-	Rng                       *utils.PRNGService // <<< Наш новый сервис PRNG
-	towersBuilt               int                // Счет��ик для текущей фазы строительства
-	SpeedButton               *ui.SpeedButton
+	Font                      rl.Font // Изменено
+	Rng                       *utils.PRNGService
+	towersBuilt               int
+	SpeedButton               *ui.SpeedButtonRL // Изменено
 	SpeedMultiplier           float64
-	PauseButton               *ui.PauseButton
+	PauseButton               *ui.PauseButtonRL // Изменено
 	DebugTowerID              string
 	DebugInfo                 *LineDragDebugInfo
 
@@ -76,48 +72,13 @@ type Game struct {
 	isLineDragging       bool
 	dragSourceTowerID    types.EntityID
 	dragOriginalParentID types.EntityID
+	PlayerID             types.EntityID // ID сущности игрока
 }
 
 // NewGame initializes a new game instance.
-func NewGame(hexMap *hexmap.HexMap) *Game {
+func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 	if hexMap == nil {
 		panic("hexMap cannot be nil")
-	}
-
-	fontData, err := ioutil.ReadFile("assets/fonts/arial.ttf")
-	if err != nil {
-		log.Fatal(err)
-	}
-	tt, err := opentype.Parse(fontData)
-	if err != nil {
-		log.Fatal(err)
-	}
-	const fontSize = 11
-	face, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    fontSize,
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	smallFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    fontSize - 3, // Меньший шрифт для подписей
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	titleFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    fontSize + 18, // 11 + 18 = 29, было 11 + 14 = 25. Увеличение ~15%
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	ecs := entity.NewECS()
@@ -131,45 +92,40 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 		WaveSystem:      system.NewWaveSystem(ecs, hexMap, eventDispatcher),
 		OreSystem:       system.NewOreSystem(ecs, eventDispatcher),
 		EventDispatcher: eventDispatcher,
-		FontFace:        face,
-		SmallFontFace:   smallFace,
-		TitleFontFace:   titleFace,
-		Rng:             utils.NewPRNGService(0), // Инициализируем PRNG
+		Font:            font,
+		Rng:             utils.NewPRNGService(0),
 		towersBuilt:     0,
 		gameTime:        0.0,
 		DebugTowerID:    "",
 	}
-	g.RenderSystem = system.NewRenderSystem(ecs, tt)
+	g.RenderSystem = system.NewRenderSystemRL(ecs, font)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
-	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem) // Передаем CombatSystem
+	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
 	g.AuraSystem = system.NewAuraSystem(ecs)
 	g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)
 	g.EnvironmentalDamageSystem = system.NewEnvironmentalDamageSystem(ecs)
-	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs)   // Инициализация
-	g.CraftingSystem = system.NewCraftingSystem(ecs) // Инициализация системы крафта
-	g.PlayerSystem = system.NewPlayerSystem(ecs)     // Инициализация системы игрока
-	g.AreaAttackSystem = system.NewAreaAttackSystem(ecs) // Инициализация системы атаки по области
+	g.VisualEffectSystem = system.NewVisualEffectSystem(ecs)
+	g.CraftingSystem = system.NewCraftingSystem(ecs)
+	g.PlayerSystem = system.NewPlayerSystem(ecs)
+	g.AreaAttackSystem = system.NewAreaAttackSystem(ecs)
 	g.generateOre()
 	g.initUI()
 
-	// Создаем слушателя и подписываем его на события
 	listener := &GameEventListener{game: g}
 	eventDispatcher.Subscribe(event.OreDepleted, listener)
 	eventDispatcher.Subscribe(event.WaveEnded, listener)
 	eventDispatcher.Subscribe(event.CombineTowersRequest, listener)
 	eventDispatcher.Subscribe(event.ToggleTowerSelectionForSaveRequest, listener)
 
-	// Подписываем систему крафта на события
 	eventDispatcher.Subscribe(event.TowerPlaced, g.CraftingSystem)
 	eventDispatcher.Subscribe(event.TowerRemoved, g.CraftingSystem)
 
-	// Подписываем систему игрока на события
 	eventDispatcher.Subscribe(event.EnemyKilled, g.PlayerSystem)
 	eventDispatcher.Subscribe(event.EnemyKilled, g.ProjectileSystem)
 
 	g.placeInitialStones()
-	g.createPlayerEntity() // <<< Создаем сущность игрока
+	g.createPlayerEntity()
 
 	return g
 }
@@ -178,21 +134,18 @@ func NewGame(hexMap *hexmap.HexMap) *Game {
 func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 	combinable, ok := g.ECS.Combinables[clickedTowerID]
 	if !ok || len(combinable.PossibleCrafts) == 0 {
-		return // У башни нет доступных крафтов
+		return
 	}
 
-	// ВРЕМЕННАЯ ЗАГЛУШКА: выполняем первый доступный крафт.
 	craftToPerform := combinable.PossibleCrafts[0]
 	recipe := craftToPerform.Recipe
 	combination := craftToPerform.Combination
 
-	// 1. Превращаем целевую (кликнутую) башню в результирующую башню
-	outputDef := defs.TowerLibrary[recipe.OutputID]
+	outputDef := defs.TowerDefs[recipe.OutputID]
 	if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
 		tower.DefID = recipe.OutputID
 		tower.CraftingLevel = outputDef.CraftingLevel
 
-		// Обновляем или создаем боевой компонент
 		if outputDef.Combat != nil {
 			var combat *component.Combat
 			var combatExists bool
@@ -210,10 +163,7 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 
 			if outputDef.Combat.Attack != nil {
 				combat.Attack = *outputDef.Combat.Attack
-				// --- ИСПРАВЛЕНИЕ ---
-				// Проверяем, является ли новая атака вращающимся лучом
 				if outputDef.Combat.Attack.Type == defs.BehaviorRotatingBeam && outputDef.Combat.Attack.Params != nil {
-					// Если да, создаем или обновляем компонент луча
 					g.ECS.RotatingBeams[clickedTowerID] = &component.RotatingBeamComponent{
 						CurrentAngle:  0,
 						RotationSpeed: outputDef.Combat.Attack.Params.RotationSpeed,
@@ -224,7 +174,6 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 						LastHitTime:   make(map[types.EntityID]float64),
 					}
 				} else {
-					// Если новая башня - не маяк, удаляем старый компонент луча, если он был
 					delete(g.ECS.RotatingBeams, clickedTowerID)
 				}
 			}
@@ -232,30 +181,25 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 				g.ECS.Combats[clickedTowerID] = combat
 			}
 		} else {
-			// Если у новой башни нет боевых характеристик, удаляем компоненты
 			delete(g.ECS.Combats, clickedTowerID)
-			delete(g.ECS.RotatingBeams, clickedTowerID) // Также удаляем компонент луча
+			delete(g.ECS.RotatingBeams, clickedTowerID)
 		}
 
-		// Обновляем визуальный компонент
 		if renderable, ok := g.ECS.Renderables[clickedTowerID]; ok {
 			renderable.Color = outputDef.Visuals.Color
 			renderable.Radius = float32(config.HexSize * outputDef.Visuals.RadiusFactor)
 		}
 	}
 
-	// 2. Превращаем остальные башни из комбинации в стены
-	wallDef := defs.TowerLibrary["TOWER_WALL"]
+	wallDef := defs.TowerDefs["TOWER_WALL"]
 	for _, id := range combination {
 		if id == clickedTowerID {
-			continue // Пропускаем саму целевую башню
+			continue
 		}
 		if tower, ok := g.ECS.Towers[id]; ok {
-			// Удаляем ненужные компоненты
 			delete(g.ECS.Combats, id)
 			delete(g.ECS.Auras, id)
-			delete(g.ECS.RotatingBeams, id) // И компонент луча на всякий случай
-			// Превращаем в стену
+			delete(g.ECS.RotatingBeams, id)
 			tower.DefID = "TOWER_WALL"
 			if renderable, ok := g.ECS.Renderables[id]; ok {
 				renderable.Color = wallDef.Visuals.Color
@@ -264,7 +208,6 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 		}
 	}
 
-	// 3. Пересчитываем состояние игры, так как состав башен кардинально изменился
 	g.CraftingSystem.RecalculateCombinations()
 	g.AuraSystem.RecalculateAuras()
 	g.rebuildEnergyNetwork()
@@ -272,7 +215,6 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 
 // FindPathToPowerSource находит кратчайший путь от атакующей башни до ближайшего
 // источника энергии (башни-добытчика на активной руде).
-// Возвращает срез ID башен, составляющих путь.
 func (g *Game) FindPathToPowerSource(startNode types.EntityID) []types.EntityID {
 	if _, exists := g.ECS.Towers[startNode]; !exists {
 		return nil
@@ -285,20 +227,19 @@ func (g *Game) FindPathToPowerSource(startNode types.EntityID) []types.EntityID 
 
 	var pathEnd types.EntityID
 
-	// BFS для поиска ближайшего источника
 	head := 0
 	for head < len(queue) {
 		currentID := queue[head]
 		head++
 
 		tower := g.ECS.Towers[currentID]
-		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		towerDef, ok := defs.TowerDefs[tower.DefID]
 		if !ok {
 			continue
 		}
 		if towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex) {
 			pathEnd = currentID
-			break // Найден ближайший источник, выходим
+			break
 		}
 
 		if neighbors, ok := adj[currentID]; ok {
@@ -312,18 +253,15 @@ func (g *Game) FindPathToPowerSource(startNode types.EntityID) []types.EntityID 
 		}
 	}
 
-	// Если источник не найден, возвращаем nil
 	if pathEnd == 0 {
 		return nil
 	}
 
-	// Восстанавливаем путь от источника до атакующей башни
 	path := []types.EntityID{}
 	for curr := pathEnd; curr != 0; curr = parent[curr] {
 		path = append(path, curr)
 	}
 
-	// Разворачиваем путь, чтобы он шел от атакующей башни к источнику
 	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
 		path[i], path[j] = path[j], path[i]
 	}
@@ -340,24 +278,12 @@ type GameEventListener struct {
 func (l *GameEventListener) OnEvent(e event.Event) {
 	switch e.Type {
 	case event.OreDepleted:
-		// log.Printf("[Log] Game: Received OreDepleted event for ore %d. Re-evaluating power grid.\n", e.Data.(types.EntityID))
-
-		// 1. Определить новый набор запитанных башен от оставшихся источников руды.
 		poweredSet := l.game.findPoweredTowers()
-
-		// 2. Обновить статус IsActive для всех башен.
 		for id, tower := range l.game.ECS.Towers {
-			if _, isPowered := poweredSet[id]; isPowered {
-				tower.IsActive = true
-			} else {
-				tower.IsActive = false
-			}
+			_, isPowered := poweredSet[id]
+			tower.IsActive = isPowered
 		}
-
-		// 3. Удалить линии, которые теперь подключены к неактивным башням.
 		l.game.cleanupOrphanedLines()
-
-		// 4. Обновить визуальное представление всех башен (цвет).
 		l.game.updateAllTowerAppearances()
 	case event.WaveEnded:
 		l.game.StateSystem.SwitchToBuildState()
@@ -376,7 +302,6 @@ func (l *GameEventListener) OnEvent(e event.Event) {
 func (g *Game) placeInitialStones() {
 	center := hexmap.Hex{Q: 0, R: 0}
 	for _, checkpoint := range g.HexMap.Checkpoints {
-		// --- Place stones towards the center ---
 		dirIn := center.Subtract(checkpoint).Direction()
 		for i := 1; i <= 2; i++ {
 			hexToPlace := checkpoint.Add(dirIn.Scale(i))
@@ -385,14 +310,12 @@ func (g *Game) placeInitialStones() {
 			}
 		}
 
-		// --- Place stones towards the edge ---
 		dirOut := checkpoint.Subtract(center).Direction()
 		for i := 1; ; i++ {
 			hexToPlace := checkpoint.Add(dirOut.Scale(i))
 			if g.canPlaceWall(hexToPlace) {
 				g.createPermanentWall(hexToPlace)
 			} else {
-				// Stop if we hit the edge of the map, an invalid tile, or a path blockage
 				break
 			}
 		}
@@ -406,7 +329,7 @@ func (g *Game) Update(deltaTime float64) {
 	g.ECS.GameTime = g.gameTime
 
 	g.RenderSystem.Update(dt)
-	g.VisualEffectSystem.Update(dt) // Обновление новой системы
+	g.VisualEffectSystem.Update(dt)
 
 	if g.ECS.GameState.Phase == component.WaveState {
 		g.StatusEffectSystem.Update(dt)
@@ -418,10 +341,6 @@ func (g *Game) Update(deltaTime float64) {
 		g.EnvironmentalDamageSystem.Update(dt)
 		g.cleanupDestroyedEntities()
 	}
-	// OreSystem должен обновляться ПОСЛЕ всех систем, которые могут изменить
-	// состояние руды (CombatSystem) или состояние игры (WaveSystem).
-	// Это гарантирует, что удаление руды и перестройка сети произойдут
-	// на основе самых актуальных данных за этот кадр.
 	g.OreSystem.Update()
 }
 
@@ -435,46 +354,47 @@ func (g *Game) StartWave() {
 // --- Private Helper Functions ---
 
 func (g *Game) initUI() {
-	g.SpeedButton = ui.NewSpeedButton(
+	speedButtonStates := []rl.Color{
+		config.SpeedButtonPlayColorRL,
+		config.SpeedButtonFastColorRL,
+		config.SpeedButtonSuperColorRL,
+	}
+	g.SpeedButton = ui.NewSpeedButtonRL(
 		float32(config.ScreenWidth-config.SpeedButtonOffsetX),
 		float32(config.SpeedButtonY),
 		float32(config.SpeedButtonSize),
-		config.SpeedButtonColors,
+		speedButtonStates,
 	)
 	g.SpeedMultiplier = 1.0
 
-	g.PauseButton = ui.NewPauseButton(
+	g.PauseButton = ui.NewPauseButtonRL(
 		float32(config.ScreenWidth-config.IndicatorOffsetX-90),
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
-		config.BuildStateColor,
-		config.WaveStateColor,
+		config.PauseButtonPlayColorRL,
+		config.PauseButtonPauseColorRL,
 	)
 }
 
 func (g *Game) cleanupDestroyedEntities() {
-	for id := range g.ECS.Enemies { // Итерируем только по врагам
-		// Условие 1: Враг дошел до конца пути
+	for id := range g.ECS.Enemies {
 		path, hasPath := g.ECS.Paths[id]
 		reachedEnd := hasPath && path.CurrentIndex >= len(path.Hexes)
 
-		// Условие 2: У врага закончилось здоровье
 		health, hasHealth := g.ECS.Healths[id]
 		noHealth := hasHealth && health.Value <= 0
 
 		if noHealth {
-			// Генерируем событие УБИЙСТВА только если у врага кончилось здоровье
 			g.EventDispatcher.Dispatch(event.Event{Type: event.EnemyKilled, Data: id})
 		}
 
 		if reachedEnd || noHealth {
-			// Удаляем все компоненты сущности
 			delete(g.ECS.Positions, id)
 			delete(g.ECS.Velocities, id)
 			delete(g.ECS.Paths, id)
 			delete(g.ECS.Healths, id)
 			delete(g.ECS.Renderables, id)
-			delete(g.ECS.Enemies, id) // Удаляем из списка врагов
+			delete(g.ECS.Enemies, id)
 			g.EventDispatcher.Dispatch(event.Event{Type: event.EnemyRemovedFromGame, Data: id})
 		}
 	}
@@ -505,7 +425,7 @@ func (g *Game) ClearProjectiles() {
 func (g *Game) HandleIndicatorClick() {
 	if g.ECS.GameState.Phase == component.BuildState {
 		g.StateSystem.SwitchToWaveState()
-		g.ClearAllSelections() // <-- Сбрасываем выбор при ручном старте волны
+		g.ClearAllSelections()
 	} else {
 		g.StateSystem.SwitchToBuildState()
 	}
@@ -513,14 +433,7 @@ func (g *Game) HandleIndicatorClick() {
 
 func (g *Game) HandleSpeedClick() {
 	g.SpeedButton.ToggleState()
-	switch g.SpeedButton.CurrentState {
-	case 0:
-		g.SpeedMultiplier = 1.0
-	case 1:
-		g.SpeedMultiplier = 2.0
-	case 2:
-		g.SpeedMultiplier = 4.0
-	}
+	g.SpeedMultiplier = math.Pow(2, float64(g.SpeedButton.CurrentState))
 }
 
 func (g *Game) HandlePauseClick() {
@@ -532,13 +445,11 @@ func (g *Game) GetTowerHexesByType() ([]hexmap.Hex, []hexmap.Hex, []hexmap.Hex) 
 	var wallHexes, typeAHexes, typeBHexes []hexmap.Hex
 
 	for _, tower := range g.ECS.Towers {
-		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		towerDef, ok := defs.TowerDefs[tower.DefID]
 		if !ok {
 			continue
 		}
-		// Башни типа A - все, кроме стен и добытчиков
 		isTypeA := towerDef.Type != defs.TowerTypeWall && towerDef.Type != defs.TowerTypeMiner
-		// Башни типа B - только добытчики
 		isTypeB := towerDef.Type == defs.TowerTypeMiner
 
 		if towerDef.Type == defs.TowerTypeWall {
@@ -584,7 +495,6 @@ func (g *Game) GetGameTime() float64 {
 }
 
 // ToggleTowerSelectionForSave инвертирует состояние IsSelected для башни.
-// Используется UI для отметки башен, которые нужно сохранить.
 func (g *Game) ToggleTowerSelectionForSave(id types.EntityID) {
 	if tower, ok := g.ECS.Towers[id]; ok {
 		tower.IsSelected = !tower.IsSelected
@@ -593,14 +503,12 @@ func (g *Game) ToggleTowerSelectionForSave(id types.EntityID) {
 
 // SetHighlightedTower устанавливает башню, которая должна быть подсвечена для UI.
 func (g *Game) SetHighlightedTower(id types.EntityID) {
-	// Снимаем подсветку со старой башни
 	if g.highlightedTower != 0 {
 		if tower, ok := g.ECS.Towers[g.highlightedTower]; ok {
 			tower.IsHighlighted = false
 		}
 	}
 
-	// Устанавливаем новую подсвеченную башню
 	g.highlightedTower = id
 	if id != 0 {
 		if tower, ok := g.ECS.Towers[id]; ok {
@@ -612,7 +520,6 @@ func (g *Game) SetHighlightedTower(id types.EntityID) {
 func (g *Game) GetOreHexes() map[hexmap.Hex]float64 {
 	oreHexes := make(map[hexmap.Hex]float64)
 	for _, ore := range g.ECS.Ores {
-		// Используем новую утилиту для корректного преобразования
 		hex := utils.ScreenToHex(ore.Position.X, ore.Position.Y)
 		oreHexes[hex] = ore.Power
 	}
@@ -621,12 +528,9 @@ func (g *Game) GetOreHexes() map[hexmap.Hex]float64 {
 
 // --- Функции для режима перетаскивания линий ---
 
-// ClearAllSelections сбрасывает все виды выбора (ручной и одиночный).
 func (g *Game) ClearAllSelections() {
-	// Сбрасываем подсветку
 	g.SetHighlightedTower(0)
 
-	// Сбрасываем ручной выбор
 	if len(g.manuallySelectedTowers) > 0 {
 		for _, towerID := range g.manuallySelectedTowers {
 			if tower, ok := g.ECS.Towers[towerID]; ok {
@@ -636,39 +540,33 @@ func (g *Game) ClearAllSelections() {
 		g.manuallySelectedTowers = []types.EntityID{}
 	}
 
-	// Пересчитываем комбинации, так как ручной выбор сброшен
 	g.CraftingSystem.RecalculateCombinations()
 }
 
-// IsInLineDragMode возвращает true, если игра в режиме перетаскивания линий.
 func (g *Game) IsInLineDragMode() bool {
 	return g.isLineDragging
 }
 
-// ClearManualSelection сбрасывает текущий ручной выбор башен.
 func (g *Game) ClearManualSelection() {
 	if len(g.manuallySelectedTowers) == 0 {
-		return // Нечего сбрасывать
+		return
 	}
 	for _, towerID := range g.manuallySelectedTowers {
 		if tower, ok := g.ECS.Towers[towerID]; ok {
-			tower.IsManuallySelected = false // Используем новое поле
+			tower.IsManuallySelected = false
 		}
 	}
 	g.manuallySelectedTowers = []types.EntityID{}
 	g.CraftingSystem.RecalculateCombinations()
 }
 
-// HandleShiftClick обрабатывает клики мыши, когда зажата клавиша Shift.
 func (g *Game) HandleShiftClick(hex hexmap.Hex, isLeftClick, isRightClick bool) {
-	// Эта логика работает только если мы кликнули на башню
 	clickedTowerID, clickedOnTower := g.getTowerAt(hex)
 	if !clickedOnTower {
 		return
 	}
 
 	if isLeftClick {
-		// Проверяем, есть ли башня уже в списке
 		foundIndex := -1
 		for i, id := range g.manuallySelectedTowers {
 			if id == clickedTowerID {
@@ -678,18 +576,15 @@ func (g *Game) HandleShiftClick(hex hexmap.Hex, isLeftClick, isRightClick bool) 
 		}
 
 		if foundIndex != -1 {
-			// Если нашли, удаляем и добавляем в конец, чтобы сделать ее "последней"
 			g.manuallySelectedTowers = append(g.manuallySelectedTowers[:foundIndex], g.manuallySelectedTowers[foundIndex+1:]...)
 			g.manuallySelectedTowers = append(g.manuallySelectedTowers, clickedTowerID)
 		} else {
-			// Если не нашли, просто добавляем
 			g.manuallySelectedTowers = append(g.manuallySelectedTowers, clickedTowerID)
 			if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
-				tower.IsManuallySelected = true // Используем новое поле
+				tower.IsManuallySelected = true
 			}
 		}
 	} else if isRightClick {
-		// Удаляем башню из списка
 		foundIndex := -1
 		for i, id := range g.manuallySelectedTowers {
 			if id == clickedTowerID {
@@ -699,49 +594,40 @@ func (g *Game) HandleShiftClick(hex hexmap.Hex, isLeftClick, isRightClick bool) 
 		}
 		if foundIndex != -1 {
 			if tower, ok := g.ECS.Towers[clickedTowerID]; ok {
-				tower.IsManuallySelected = false // Используем новое поле
+				tower.IsManuallySelected = false
 			}
 			g.manuallySelectedTowers = append(g.manuallySelectedTowers[:foundIndex], g.manuallySelectedTowers[foundIndex+1:]...)
 		}
 	}
-	// После любого изменения в ручном выборе, нужно пересчитать комбинации
 	g.CraftingSystem.RecalculateCombinations()
 	log.Printf("Manual selection updated. Count: %d, IDs: %v", len(g.manuallySelectedTowers), g.manuallySelectedTowers)
 }
 
-// ToggleLineDragMode переключает режим перетаскивания линий.
 func (g *Game) ToggleLineDragMode() {
 	g.isLineDragging = !g.isLineDragging
-
-	// Если выключаем режим, сбрасываем все
 	if !g.isLineDragging {
-		g.CancelLineDrag() // Используем уже существующую логику сброса
+		g.CancelLineDrag()
 	}
 }
 
-// HandleLineDragClick обрабатывает клик в режиме перетаскивания.
 func (g *Game) HandleLineDragClick(hex hexmap.Hex, x, y int) {
-	// Если мы еще не начали тащить линию
 	if g.dragSourceTowerID == 0 {
 		g.startLineDrag(hex, x, y)
 		return
 	}
-
-	// Если мы уже тащим линию и кликнули на цель
 	g.finishLineDrag(hex)
 }
 
-// finishLineDrag завершает процесс перетаскивания линии на целевой гекс.
 func (g *Game) finishLineDrag(targetHex hexmap.Hex) {
-	defer g.CancelLineDrag() // В любом случае выходим из режима перетаскивания
+	defer g.CancelLineDrag()
 
 	targetID, ok := g.getTowerAt(targetHex)
 	if !ok {
-		return // Цели нет
+		return
 	}
 
 	if targetID == g.dragSourceTowerID || targetID == g.dragOriginalParentID {
-		return // Нельзя подключиться к самому себе или к своему бывшему родителю
+		return
 	}
 
 	if g.isValidNewConnection(g.dragSourceTowerID, targetID, g.dragOriginalParentID) {
@@ -749,22 +635,18 @@ func (g *Game) finishLineDrag(targetHex hexmap.Hex) {
 	}
 }
 
-// isValidNewConnection проверяет, можно ли создать новую связь.
 func (g *Game) isValidNewConnection(sourceID, targetID, originalParentID types.EntityID) bool {
 	sourceTower := g.ECS.Towers[sourceID]
 	targetTower := g.ECS.Towers[targetID]
 
-	// 1. Проверка на расстояние и тип
 	if !g.isValidConnection(sourceTower, targetTower) {
 		return false
 	}
 
-	// --- Создаем временный граф, отсоединив перетаскиваемую башню ---
 	adj := g.buildAdjacencyList()
 	adj[sourceID] = removeElement(adj[sourceID], originalParentID)
 	adj[originalParentID] = removeElement(adj[originalParentID], sourceID)
 
-	// 2. Проверка на циклы: можно ли из новой цели достичь источника ДО создания новой связи?
 	queue := []types.EntityID{targetID}
 	visited := map[types.EntityID]bool{targetID: true}
 	head := 0
@@ -773,7 +655,7 @@ func (g *Game) isValidNewConnection(sourceID, targetID, originalParentID types.E
 		head++
 
 		if current == sourceID {
-			return false // Цикл найден!
+			return false
 		}
 
 		for _, neighbor := range adj[current] {
@@ -784,26 +666,20 @@ func (g *Game) isValidNewConnection(sourceID, targetID, originalParentID types.E
 		}
 	}
 
-	// 3. Проверка на "выключение" графа: добавляем новую связь и проверяем питание
 	adj[sourceID] = append(adj[sourceID], targetID)
 	adj[targetID] = append(adj[targetID], sourceID)
 
 	poweredSet := g.findPoweredTowersWithAdj(adj)
-	if _, isPowered := poweredSet[sourceID]; !isPowered {
-		return false // Башня теряет питание, подключение невалидно
-	}
-
-	return true
+	_, isPowered := poweredSet[sourceID]
+	return isPowered
 }
 
-// findPoweredTowersWithAdj находит все запитанные башни, используя предоставленный список смежности.
 func (g *Game) findPoweredTowersWithAdj(adj map[types.EntityID][]types.EntityID) map[types.EntityID]struct{} {
 	poweredSet := make(map[types.EntityID]struct{})
 	queue := []types.EntityID{}
 
-	// Начинаем с корневых башен (добытчики на руде)
 	for id, tower := range g.ECS.Towers {
-		towerDef, ok := defs.TowerLibrary[tower.DefID]
+		towerDef, ok := defs.TowerDefs[tower.DefID]
 		if !ok {
 			continue
 		}
@@ -813,7 +689,6 @@ func (g *Game) findPoweredTowersWithAdj(adj map[types.EntityID][]types.EntityID)
 		}
 	}
 
-	// BFS для поиска всех достижимых (запитанных) башен
 	head := 0
 	for head < len(queue) {
 		currentID := queue[head]
@@ -832,18 +707,15 @@ func (g *Game) findPoweredTowersWithAdj(adj map[types.EntityID][]types.EntityID)
 	return poweredSet
 }
 
-// reconnectTower выполняет фактическое переподключение башни.
 func (g *Game) reconnectTower(sourceID, targetID, originalParentID types.EntityID) {
-	// 1. Удалить старую (скрытую) линию
 	if g.hiddenLineID != 0 {
 		delete(g.ECS.LineRenders, g.hiddenLineID)
 	}
 
-	// 2. Создать новую линию
 	sourceTower := g.ECS.Towers[sourceID]
 	targetTower := g.ECS.Towers[targetID]
-	sourceDef := defs.TowerLibrary[sourceTower.DefID]
-	targetDef := defs.TowerLibrary[targetTower.DefID]
+	sourceDef := defs.TowerDefs[sourceTower.DefID]
+	targetDef := defs.TowerDefs[targetTower.DefID]
 	g.createLine(energyEdge{
 		Tower1ID: sourceID,
 		Tower2ID: targetID,
@@ -852,12 +724,10 @@ func (g *Game) reconnectTower(sourceID, targetID, originalParentID types.EntityI
 		Distance: float64(sourceTower.Hex.Distance(targetTower.Hex)),
 	})
 
-	// 3. Обновить состояние (на всякий случай)
 	g.cleanupOrphanedLines()
 	g.updateAllTowerAppearances()
 }
 
-// removeElement удаляет элемент из среза.
 func removeElement(slice []types.EntityID, element types.EntityID) []types.EntityID {
 	result := []types.EntityID{}
 	for _, item := range slice {
@@ -868,53 +738,44 @@ func removeElement(slice []types.EntityID, element types.EntityID) []types.Entit
 	return result
 }
 
-// startLineDrag начинает процесс перетаскивания линии от башни на указанном гексе.
 func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
-	g.DebugInfo = nil // Сбрасываем отладку при каждом клике
+	g.DebugInfo = nil
 
 	sourceID, ok := g.getTowerAt(hex)
 	if !ok {
-		return // На гексе нет башни
+		return
 	}
 
-	// Нельзя перетаскивать от корневых добытчиков
 	tower := g.ECS.Towers[sourceID]
-	towerDef := defs.TowerLibrary[tower.DefID]
+	towerDef := defs.TowerDefs[tower.DefID]
 	isRootMiner := towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex)
 	if isRootMiner {
 		return
 	}
 
-	// Получаем все существующие соединения для этой башни
 	adj := g.buildAdjacencyList()
 	connections, ok := adj[sourceID]
 	if !ok || len(connections) == 0 {
-		return // Нет линий для перетаскивания
+		return
 	}
 
-	// Находим позицию центра исходной башни
 	sourcePos, ok := g.ECS.Positions[sourceID]
 	if !ok {
-		return // У башни нет позиции (не должно случиться)
+		return
 	}
 
-	// Вычисляем угол клика относительно центра башни
 	clickAngle := math.Atan2(float64(y)-sourcePos.Y, float64(x)-sourcePos.X)
 
 	var bestMatchID types.EntityID
-	minAngleDiff := math.Pi // Максимально возможная разница в углах
+	minAngleDiff := math.Pi
 
-	// Ищем линию, угол которой наиболее близок к углу клика
 	for _, neighborID := range connections {
 		neighborPos, ok := g.ECS.Positions[neighborID]
 		if !ok {
 			continue
 		}
 
-		// Угол от исходной башни до соседа
 		lineAngle := math.Atan2(neighborPos.Y-sourcePos.Y, neighborPos.X-sourcePos.X)
-
-		// Вычисляем абсолютную разницу углов, учитывая "переход" через 2*Pi
 		angleDiff := math.Abs(clickAngle - lineAngle)
 		if angleDiff > math.Pi {
 			angleDiff = 2*math.Pi - angleDiff
@@ -926,23 +787,19 @@ func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
 		}
 	}
 
-	// Проверяем, что клик был достаточно близок к направлению одной из линий
-	// (Pi / 3.5 ~ 51.4 градуса, чуть меньше 60-градусного сектора для надежности)
 	if bestMatchID != 0 && minAngleDiff < math.Pi/3.5 {
 		targetID := bestMatchID
 		lineID, isConnected := g.getLineBetweenTowers(sourceID, targetID)
 		if !isConnected {
-			return // Не должно произойти, но на всякий случай
+			return
 		}
 
-		// Начинаем перетаскивание
 		g.dragSourceTowerID = sourceID
 		g.dragOriginalParentID = targetID
 		g.hiddenLineID = lineID
 	}
 }
 
-// getLineBetweenTowers ищет линию, соединяющую две башни, и возвращает ее ID.
 func (g *Game) getLineBetweenTowers(tower1ID, tower2ID types.EntityID) (types.EntityID, bool) {
 	for id, line := range g.ECS.LineRenders {
 		if (line.Tower1ID == tower1ID && line.Tower2ID == tower2ID) ||
@@ -953,7 +810,6 @@ func (g *Game) getLineBetweenTowers(tower1ID, tower2ID types.EntityID) (types.En
 	return 0, false
 }
 
-// getTowerAt возвращает ID башни на указанном гексе.
 func (g *Game) getTowerAt(hex hexmap.Hex) (types.EntityID, bool) {
 	for id, tower := range g.ECS.Towers {
 		if tower.Hex == hex {
@@ -979,62 +835,47 @@ func (g *Game) CancelLineDrag() {
 	g.isLineDragging = false
 	g.dragSourceTowerID = 0
 	g.dragOriginalParentID = 0
-	g.hiddenLineID = 0 // "Показываем" линию обратно
+	g.hiddenLineID = 0
 	g.DebugInfo = nil
 }
 
-// FinalizeTowerSelection обрабатывает окончание фазы выбора башен.
 func (g *Game) FinalizeTowerSelection() {
 	towersToConvertToWalls := []hexmap.Hex{}
 	idsToRemove := []types.EntityID{}
 
-	// Сначала собираем информацию, не изменяя срез во время итерации
 	for id, tower := range g.ECS.Towers {
 		if !tower.IsTemporary {
 			continue
 		}
 
 		if tower.IsSelected {
-			// Башня выбрана, делаем ее постоянной
 			tower.IsTemporary = false
 		} else {
-			// Башня не выбрана, помечаем ее для удаления и запоминаем ее местоположение
 			idsToRemove = append(idsToRemove, id)
 			towersToConvertToWalls = append(towersToConvertToWalls, tower.Hex)
 		}
 	}
 
-	// Удаляем все помеченные башни
 	for _, id := range idsToRemove {
 		g.deleteTowerEntity(id)
 	}
 
-	// Теперь создаем стены на месте удаленных башен
 	for _, hex := range towersToConvertToWalls {
 		g.createPermanentWall(hex)
 	}
 
-	// Сбрасываем счетчик построенных башен для следующей фазы
 	g.towersBuilt = 0
-
-	// Сбрасываем любой выбор, чтобы в начале волны не было подсветки
 	g.ClearAllSelections()
-
-	// Полностью пересчитываем состояние всех систем, зависящих от набора башен
 	g.rebuildEnergyNetwork()
 	g.AuraSystem.RecalculateAuras()
 	g.CraftingSystem.RecalculateCombinations()
 }
 
-// CreateDebugTower places a tower for debugging purposes, bypassing normal game rules.
 func (g *Game) CreateDebugTower(hex hexmap.Hex, towerDefID string) {
-	// Используем canPlaceWall, так как он проверяет базовые вещи (не на пути, не на другой башне),
-	// но не проверяет лимит башен или фазу игры.
 	if !g.canPlaceWall(hex) {
 		return
 	}
 
-	// Если это запрос на случайную атакующую башню
 	if towerDefID == "RANDOM_ATTACK" {
 		attackerIDs := []string{"TA", "TE", "TO", "DE", "NI", "NU", "PO", "PA", "PE"}
 		towerDefID = attackerIDs[rand.Intn(len(attackerIDs))]
@@ -1042,27 +883,25 @@ func (g *Game) CreateDebugTower(hex hexmap.Hex, towerDefID string) {
 
 	id := g.createTowerEntity(hex, towerDefID)
 	if id == 0 {
-		return // Не удалось создать сущность
+		return
 	}
 
 	tower := g.ECS.Towers[id]
-	tower.IsTemporary = false // Отладочные башни всегда постоянные
-	tower.IsSelected = false  // И не требуют выбора
+	tower.IsTemporary = false
+	tower.IsSelected = false
 
 	tile := g.HexMap.Tiles[hex]
 	g.HexMap.Tiles[hex] = hexmap.Tile{Passable: false, CanPlaceTower: tile.CanPlaceTower}
 
-	// Сразу добавляем в сеть и пересчитываем все, что нужно
 	g.addTowerToEnergyNetwork(id)
 	g.AuraSystem.RecalculateAuras()
 	g.EventDispatcher.Dispatch(event.Event{Type: event.TowerPlaced, Data: hex})
 }
 
-// createPlayerEntity создает сущность для игрока и добавляет ей начальные компоненты.
 func (g *Game) createPlayerEntity() {
-	playerID := g.ECS.NewEntity()
+	g.PlayerID = g.ECS.NewEntity()
 	initialLevel := 1
-	g.ECS.PlayerState[playerID] = &component.PlayerStateComponent{
+	g.ECS.PlayerState[g.PlayerID] = &component.PlayerStateComponent{
 		Level:         initialLevel,
 		CurrentXP:     0,
 		XPToNextLevel: config.CalculateXPForNextLevel(initialLevel),

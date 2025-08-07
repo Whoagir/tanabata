@@ -6,256 +6,209 @@ import (
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/types"
+	"go-tower-defense/pkg/hexmap"
 	"image/color"
-	"log"
 	"math"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"github.com/hajimehoshi/ebiten/v2/vector"
-	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// RenderSystem рисует сущности
-type RenderSystem struct {
-	ecs        *entity.ECS
-	fontFace   font.Face
-	uiFontFace font.Face
+// RenderSystemRL - новая система рендеринга для Raylib
+type RenderSystemRL struct {
+	ecs    *entity.ECS
+	font   rl.Font
+	camera *rl.Camera3D
 }
 
-func NewRenderSystem(ecs *entity.ECS, tt *opentype.Font) *RenderSystem {
-	fontFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    11,
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatalf("failed to create font face: %v", err)
-	}
-
-	uiFontFace, err := opentype.NewFace(tt, &opentype.FaceOptions{
-		Size:    24, // Larger font size for UI
-		DPI:     72,
-		Hinting: font.HintingFull,
-	})
-	if err != nil {
-		log.Fatalf("failed to create UI font face: %v", err)
-	}
-
-	return &RenderSystem{ecs: ecs, fontFace: fontFace, uiFontFace: uiFontFace}
-}
-
-func (s *RenderSystem) Draw(screen *ebiten.Image, gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
-	s.drawPulsingOres(screen, gameTime)
-	s.drawEntities(screen, gameTime)
-	s.drawLines(screen, hiddenLineID) // Передаем ID скрытой линии
-	s.drawLasers(screen)
-	s.drawRotatingBeams(screen) // <<< РИСУЕМ ЛУЧИ
-	s.drawDraggingLine(screen, isDragging, sourceTowerID, cancelDrag)
-	s.drawText(screen)
-	s.drawCombinationIndicators(screen) // Рисуем индикаторы последними
-
-	// Рисуем UI для режима перетаскивания
-	if gameState == component.BuildState {
-		s.drawDragModeIndicator(screen, isDragging)
+// NewRenderSystemRL создает новую систему рендеринга
+func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
+	return &RenderSystemRL{
+		ecs:  ecs,
+		font: font,
+		// Камера будет установлена позже через SetCamera
 	}
 }
 
-func (s *RenderSystem) Update(deltaTime float64) {
+// SetCamera устанавливает камеру для системы рендеринга.
+func (s *RenderSystemRL) SetCamera(camera *rl.Camera3D) {
+	s.camera = camera
+}
+
+// Draw рисует все динамические сущности
+func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
+	// Проверяем, установлена л�� камера, прежде чем рисовать 3D
+	if s.camera == nil {
+		return
+	}
+	s.drawPulsingOres(gameTime)
+	s.drawEntities()
+	s.drawLines(hiddenLineID)
+	s.drawLasers()
+	s.drawRotatingBeams()
+	s.drawDraggingLine(isDragging, sourceTowerID, cancelDrag)
+	s.drawText()
+	s.drawCombinationIndicators()
+}
+
+func (s *RenderSystemRL) Update(deltaTime float64) {
 	// Обновляем таймеры лазеров и удаляем истекшие
 	for id, laser := range s.ecs.Lasers {
 		laser.Timer += deltaTime
 		if laser.Timer >= laser.Duration {
 			delete(s.ecs.Lasers, id)
-			delete(s.ecs.Renderables, id) // Также удаляем Renderable компонент
 		}
 	}
 }
 
-func (s *RenderSystem) drawLasers(screen *ebiten.Image) {
+// hexToWorld преобразует гекс в мировые 3D-координаты
+func (s *RenderSystemRL) hexToWorld(h hexmap.Hex) rl.Vector3 {
+	x, y := h.ToPixel(float64(config.HexSize))
+	return rl.NewVector3(float32(x), 0, float32(y))
+}
+
+func (s *RenderSystemRL) drawLasers() {
 	for _, laser := range s.ecs.Lasers {
-		// Вычисляем альфа-канал для эффекта затухания
 		alpha := 1.0 - (laser.Timer / laser.Duration)
 		if alpha < 0 {
 			alpha = 0
 		}
-		// Преобразуем цвет в RGBA, чтобы можно было изменить альфа
 		r, g, b, _ := laser.Color.RGBA()
-		lineColor := color.RGBA{
-			R: uint8(r >> 8),
-			G: uint8(g >> 8),
-			B: uint8(b >> 8),
-			A: uint8(alpha * 255),
-		}
-		vector.StrokeLine(screen, float32(laser.FromX), float32(laser.FromY), float32(laser.ToX), float32(laser.ToY), 2, lineColor, true)
+		lineColor := rl.NewColor(uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(alpha*255))
+
+		startHex := hexmap.PixelToHex(laser.FromX, laser.FromY, config.HexSize)
+		endHex := hexmap.PixelToHex(laser.ToX, laser.ToY, config.HexSize)
+
+		startPos := s.hexToWorld(startHex)
+		endPos := s.hexToWorld(endHex)
+
+		rl.DrawLine3D(startPos, endPos, lineColor)
 	}
 }
 
-func (s *RenderSystem) drawDragModeIndicator(screen *ebiten.Image, isDragging bool) {
-	const (
-		char = "U"
-		x    = 25
-		y    = 45
-	)
-	var mainColor color.Color
-	outlineColor := color.White
-
-	if isDragging {
-		mainColor = config.WaveStateColor // Red when active
-	} else {
-		mainColor = config.BuildStateColor // Blue when inactive
-	}
-
-	// 1. Draw outline for the text
-	outlineOffsets := []struct{ dx, dy int }{
-		{-2, -2}, {0, -2}, {2, -2},
-		{-2, 0}, {2, 0},
-		{-2, 2}, {0, 2}, {2, 2},
-	}
-	for _, offset := range outlineOffsets {
-		text.Draw(screen, char, s.uiFontFace, x+offset.dx, y+offset.dy, outlineColor)
-	}
-
-	// 2. Draw main text (bold)
-	boldOffsets := []struct{ dx, dy int }{
-		{-1, -1}, {0, -1}, {1, -1},
-		{-1, 0}, {0, 0}, {1, 0},
-		{-1, 1}, {0, 1}, {1, 1},
-	}
-	for _, offset := range boldOffsets {
-		text.Draw(screen, char, s.uiFontFace, x+offset.dx, y+offset.dy, mainColor)
-	}
-
-	if !isDragging {
-		// 3. Draw a horizontal line through the "U"
-		bounds := text.BoundString(s.uiFontFace, char)
-		lineY := float32(y + (bounds.Min.Y+bounds.Max.Y)/2)
-		startX := float32(x + bounds.Min.X - 5)
-		endX := float32(x + bounds.Max.X + 5)
-
-		// Draw outline for the line
-		vector.StrokeLine(screen, startX, lineY, endX, lineY, 6, outlineColor, true)
-		// Draw main line
-		vector.StrokeLine(screen, startX, lineY, endX, lineY, 4, mainColor, true)
-	}
-}
-
-func (s *RenderSystem) drawPulsingOres(screen *ebiten.Image, gameTime float64) {
+func (s *RenderSystemRL) drawPulsingOres(gameTime float64) {
 	for id, ore := range s.ecs.Ores {
 		if pos, hasPos := s.ecs.Positions[id]; hasPos {
 			pulseRadius := ore.Radius * float32(1+0.1*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
 			pulseAlpha := uint8(128 + 64*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
-			oreColor := ore.Color
+			oreColor := config.OreColorRL
 			oreColor.A = pulseAlpha
-			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), pulseRadius, oreColor, true)
+
+			worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
+			rl.DrawCylinder(worldPos, pulseRadius, pulseRadius, 0.1, 20, oreColor)
 		}
 	}
 }
 
-func (s *RenderSystem) drawEntities(screen *ebiten.Image, gameTime float64) {
+func (s *RenderSystemRL) drawEntities() {
 	for id, renderable := range s.ecs.Renderables {
 		if pos, ok := s.ecs.Positions[id]; ok {
-			s.drawEntity(screen, id, renderable, pos, gameTime)
+			s.drawEntity(id, renderable, pos)
 		}
 	}
 }
 
-func (s *RenderSystem) drawEntity(screen *ebiten.Image, id types.EntityID, renderable *component.Renderable, pos *component.Position, gameTime float64) { //+
-	finalColor := renderable.Color //+
+func (s *RenderSystemRL) drawEntity(id types.EntityID, renderable *component.Renderable, pos *component.Position) {
+	finalColor := colorToRL(renderable.Color)
 
-	// Приоритет 1: Урон (красный) //-
-	if _, ok := s.ecs.DamageFlashes[id]; ok { //+
-		finalColor = config.EnemyDamageColor //+
-	} else if _, ok := s.ecs.PoisonEffects[id]; ok { // Приоритет 2: Отравление (зеленый)
-		finalColor = config.ProjectileColorPoison
-	} else if _, ok := s.ecs.SlowEffects[id]; ok { // Приоритет 3: Замедление (белый)
-		finalColor = config.ProjectileColorSlow //+
-	} //+
+	if _, ok := s.ecs.DamageFlashes[id]; ok {
+		finalColor = config.EnemyDamageColorRL
+	} else if _, ok := s.ecs.PoisonEffects[id]; ok {
+		finalColor = config.ProjectileColorPoisonRL
+	} else if _, ok := s.ecs.SlowEffects[id]; ok {
+		finalColor = config.ProjectileColorSlowRL
+	}
 
-	// Проверяем, является ли сущность башней c уровнем крафта 1 или выше
-	if tower, isTower := s.ecs.Towers[id]; isTower && tower.CraftingLevel >= 1 {
-		// Рисуем квадрат
-		size := renderable.Radius * 2 // Используем радиус для определения размера
-		halfSize := size / 2
-		vector.DrawFilledRect(screen, float32(pos.X)-halfSize, float32(pos.Y)-halfSize, size, size, finalColor, true)
+	worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
+	worldPos.Y = float32(renderable.Radius / 2)
+
+	if _, isEnemy := s.ecs.Enemies[id]; isEnemy {
+		rl.DrawSphere(worldPos, renderable.Radius, finalColor)
 		if renderable.HasStroke {
-			vector.StrokeRect(screen, float32(pos.X)-halfSize, float32(pos.Y)-halfSize, size, size, 1, color.White, true)
+			rl.DrawSphereWires(worldPos, renderable.Radius, 8, 8, rl.White)
+		}
+	} else if tower, isTower := s.ecs.Towers[id]; isTower {
+		height := renderable.Radius * 2
+		worldPos.Y = height / 2
+
+		if tower.CraftingLevel >= 1 {
+			size := renderable.Radius * 2
+			rl.DrawCube(worldPos, size, height, size, finalColor)
+			if renderable.HasStroke {
+				rl.DrawCubeWires(worldPos, size, height, size, rl.White)
+			}
+		} else {
+			rl.DrawCylinder(worldPos, renderable.Radius, renderable.Radius, height, 12, finalColor)
+			if renderable.HasStroke {
+				rl.DrawCylinderWires(worldPos, renderable.Radius, renderable.Radius, height, 12, rl.White)
+			}
 		}
 	} else {
-		// Рисуем круг для всех остальных сущностей
-		if renderable.HasStroke { //+
-			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
-			vector.StrokeCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, 1, color.White, true) //+
-		} else { //+
-			vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), renderable.Radius, finalColor, true) //+
-		} //+
+		rl.DrawSphere(worldPos, renderable.Radius, finalColor)
 	}
-} //+
+}
 
-func (s *RenderSystem) drawCombinationIndicators(screen *ebiten.Image) {
-	// Итерируем по всем башням, у которых есть компонент Combinable.
-	// Это гарантирует, что каждая башня, готовая к крафту, получит индикатор.
+func (s *RenderSystemRL) drawCombinationIndicators() {
 	for id := range s.ecs.Combinables {
 		if pos, ok := s.ecs.Positions[id]; ok {
 			if renderable, ok := s.ecs.Renderables[id]; ok {
+				worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
+				worldPos.Y = float32(renderable.Radius*2 + 2)
 				indicatorRadius := renderable.Radius / 2
-				indicatorColor := color.RGBA{R: 0, G: 0, B: 0, A: 255}     // Черный цвет
-				outlineColor := color.RGBA{R: 255, G: 255, B: 255, A: 255} // Белый цвет
 
-				// Рисуем сначала обводку, потом сам круг
-				vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), indicatorRadius+1, outlineColor, true)
-				vector.DrawFilledCircle(screen, float32(pos.X), float32(pos.Y), indicatorRadius, indicatorColor, true)
+				rl.DrawSphere(worldPos, indicatorRadius, rl.Black)
+				rl.DrawSphereWires(worldPos, indicatorRadius+0.2, 6, 6, rl.White)
 			}
 		}
 	}
 }
 
-func (s *RenderSystem) drawLines(screen *ebiten.Image, hiddenLineID types.EntityID) {
+func (s *RenderSystemRL) drawLines(hiddenLineID types.EntityID) {
 	for id, line := range s.ecs.LineRenders {
-		// Не рисуем линию, если она скрыта
 		if id == hiddenLineID {
 			continue
 		}
-		startPos := s.ecs.Positions[line.Tower1ID]
-		endPos := s.ecs.Positions[line.Tower2ID]
-		if startPos != nil && endPos != nil {
-			vector.StrokeLine(screen, float32(startPos.X), float32(startPos.Y), float32(endPos.X), float32(endPos.Y), float32(config.StrokeWidth), line.Color, true)
+		startPosComp, ok1 := s.ecs.Positions[line.Tower1ID]
+		endPosComp, ok2 := s.ecs.Positions[line.Tower2ID]
+		if ok1 && ok2 {
+			startPos := s.hexToWorld(hexmap.PixelToHex(startPosComp.X, startPosComp.Y, config.HexSize))
+			endPos := s.hexToWorld(hexmap.PixelToHex(endPosComp.X, endPosComp.Y, config.HexSize))
+			rl.DrawLine3D(startPos, endPos, colorToRL(line.Color))
 		}
 	}
 }
 
-func (s *RenderSystem) drawDraggingLine(screen *ebiten.Image, isDragging bool, sourceTowerID types.EntityID, cancelDrag func()) {
+func (s *RenderSystemRL) drawDraggingLine(isDragging bool, sourceTowerID types.EntityID, cancelDrag func()) {
 	if !isDragging || sourceTowerID == 0 {
 		return
 	}
-
-	sourcePos, ok := s.ecs.Positions[sourceTowerID]
+	sourcePosComp, ok := s.ecs.Positions[sourceTowerID]
 	if !ok {
 		return
 	}
 
-	mx, my := ebiten.CursorPosition()
+	ray := rl.GetMouseRay(rl.GetMousePosition(), *s.camera)
+	t := -ray.Position.Y / ray.Direction.Y
+	hitPoint := rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
 
-	// Проверка на разрыв связи
-	dx := float64(mx) - sourcePos.X
-	dy := float64(my) - sourcePos.Y
-	if math.Sqrt(dx*dx+dy*dy) > 300 {
+	startPos := s.hexToWorld(hexmap.PixelToHex(sourcePosComp.X, sourcePosComp.Y, config.HexSize))
+
+	if rl.Vector3Distance(startPos, hitPoint) > 300 {
 		cancelDrag()
 		return
 	}
 
-	// Рисуем пунктирную линию до курсора
-	vector.StrokeLine(screen, float32(sourcePos.X), float32(sourcePos.Y), float32(mx), float32(my), 2, color.RGBA{255, 255, 0, 255}, true)
+	rl.DrawLine3D(startPos, hitPoint, rl.Yellow)
 }
 
-func (s *RenderSystem) drawText(screen *ebiten.Image) {
+func (s *RenderSystemRL) drawText() {
 	for _, txt := range s.ecs.Texts {
-		text.Draw(screen, txt.Value, s.fontFace, int(txt.Position.X), int(txt.Position.Y), txt.Color)
+		worldPos := s.hexToWorld(hexmap.PixelToHex(txt.Position.X, txt.Position.Y, config.HexSize))
+		screenPos := rl.GetWorldToScreen(worldPos, *s.camera)
+		rl.DrawTextEx(s.font, txt.Value, screenPos, float32(s.font.BaseSize), 1.0, colorToRL(txt.Color))
 	}
 }
 
-func (s *RenderSystem) drawRotatingBeams(screen *ebiten.Image) {
+func (s *RenderSystemRL) drawRotatingBeams() {
 	if s.ecs.GameState.Phase != component.WaveState {
 		return
 	}
@@ -265,24 +218,27 @@ func (s *RenderSystem) drawRotatingBeams(screen *ebiten.Image) {
 			continue
 		}
 
-		// Цвет луча с альфа-каналом для полупрозрачности
-		beamColor := color.RGBA{R: 255, G: 255, B: 102, A: 80}
+		beamColor := rl.NewColor(255, 255, 102, 80)
+		worldPos := s.hexToWorld(hexmap.PixelToHex(pos.X, pos.Y, config.HexSize))
 
-		// Углы для границ сектора
 		angle1 := beam.CurrentAngle - beam.ArcAngle/2
 		angle2 := beam.CurrentAngle + beam.ArcAngle/2
 
-		// Координаты конечных точек линий
-		endX1 := float32(pos.X + float64(beam.Range*config.HexSize)*math.Cos(angle1))
-		endY1 := float32(pos.Y + float64(beam.Range*config.HexSize)*math.Sin(angle1))
-		endX2 := float32(pos.X + float64(beam.Range*config.HexSize)*math.Cos(angle2))
-		endY2 := float32(pos.Y + float64(beam.Range*config.HexSize)*math.Sin(angle2))
+		endX1 := worldPos.X + float32(float64(beam.Range*config.HexSize)*math.Cos(angle1))
+		endZ1 := worldPos.Z + float32(float64(beam.Range*config.HexSize)*math.Sin(angle1))
+		endX2 := worldPos.X + float32(float64(beam.Range*config.HexSize)*math.Cos(angle2))
+		endZ2 := worldPos.Z + float32(float64(beam.Range*config.HexSize)*math.Sin(angle2))
 
-		// Рисуем две линии, образующие сектор
-		vector.StrokeLine(screen, float32(pos.X), float32(pos.Y), endX1, endY1, 2, beamColor, true)
-		vector.StrokeLine(screen, float32(pos.X), float32(pos.Y), endX2, endY2, 2, beamColor, true)
+		endPos1 := rl.NewVector3(endX1, worldPos.Y, endZ1)
+		endPos2 := rl.NewVector3(endX2, worldPos.Y, endZ2)
 
-		// Можно так��е нарисовать дугу, соединяющую концы, для лучшей визуализации
-		// (это более сложная отрисовка, пока ограничимся линиями)
+		rl.DrawLine3D(worldPos, endPos1, beamColor)
+		rl.DrawLine3D(worldPos, endPos2, beamColor)
 	}
+}
+
+// colorToRL преобразует стандартный color.Color в rl.Color
+func colorToRL(c color.Color) rl.Color {
+	r, g, b, a := c.RGBA()
+	return rl.NewColor(uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(a>>8))
 }

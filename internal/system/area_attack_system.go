@@ -48,7 +48,7 @@ func (s *AreaAttackSystem) Update(deltaTime float64) {
 
 		// --- Создание визуального эффекта ---
 		effectID := s.ecs.NewEntity()
-		towerDef := defs.TowerLibrary[tower.DefID]
+		towerDef := defs.TowerDefs[tower.DefID]
 		s.ecs.Positions[effectID] = towerPos // Эффект в той же позиции, что и башня
 		s.ecs.Renderables[effectID] = &component.Renderable{
 			Color:     towerDef.Visuals.Color,
