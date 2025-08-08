@@ -99,6 +99,7 @@ var (
 	RecipeCanCraftColorRL       = rl.White
 	InfoPanelBorderColorRL      = rl.LightGray
 	CheckpointColorRL           = rl.NewColor(255, 215, 0, 255) // Золотой для чекпоинтов
+	OreHexBackgroundColorRL     = rl.NewColor(45, 45, 45, 255)   // Темно-серый для фона гекса с рудой
 	StrokeColorRL               = rl.NewColor(100, 100, 100, 255) // Цвет обводки гексов
 	CombineButtonColorRL        = rl.NewColor(0, 121, 241, 255) // Синий
 	SelectButtonColorRL         = rl.NewColor(40, 167, 69, 255) // Зеленый
@@ -112,8 +113,9 @@ var (
 	ProjectileColorPoisonRL   = rl.NewColor(124, 252, 0, 255)   // Ядовито-салатовый
 
 	// Цвета сущностей (из нового + добавлено из старого)
-	OreColorRL         = rl.NewColor(100, 180, 255, 128) // Светло-синий для руды
+	OreColorRL         = rl.NewColor(70, 130, 180, 128) // Более темный синий для руды
 	EnemyDamageColorRL = rl.White                        // Белый для вспышки урона
+	TowerWireColorRL   = rl.NewColor(80, 80, 80, 255)    // Темно-серый для обводки башен
 
 	// Добавлено из старого (адаптировано для Raylib)
 	PassableColorRL       = rl.NewColor(70, 100, 120, 220)
@@ -142,7 +144,7 @@ const (
 	MapCenterOffsetY = -50 // Из нового; в старом -57
 
 	// Боевые параметры (из нового + добавлено из старого)
-	ProjectileSpeed       = 500.0  // Из нового; в старом 200.0
+	ProjectileSpeed       = 200.0  // Из нового; в старом 200.0
 	ProjectileRadius      = 5.0    // Из нового и старого
 	OreBonusLowThreshold  = 100.0  // Из нового; в старом 10.0
 	OreBonusHighThreshold = 1000.0 // Из нового; в старом 75.0

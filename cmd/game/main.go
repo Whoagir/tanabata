@@ -54,7 +54,7 @@ func main() {
 	camera.Fovy = 55.0 // Устанавливаем Fovy, чтобы избежать нулевого значения
 
 	// Позиции, цели и углы обзора для интерполяции (как в map_viewer)
-	isoPos := rl.NewVector3(180, 250, 180)
+	isoPos := rl.NewVector3(144, 200, 144) // Приближено на 20% (было 180, 250, 180)
 	topDownPos := rl.NewVector3(0, 425, 0.1)
 	isoTarget := rl.NewVector3(0, 0, 0)
 	topDownTarget := rl.NewVector3(0, 0, 0)

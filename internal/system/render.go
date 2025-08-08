@@ -63,8 +63,8 @@ func (s *RenderSystemRL) pregenerateTowerModels() {
 			mesh = rl.GenMeshCube(1.0, 1.0, 1.0)
 			wireMesh = rl.GenMeshCube(1.0, 1.0, 1.0)
 		default: // Обычные атакующие башни
-			mesh = rl.GenMeshCylinder(1.0, 1.0, 24)
-			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 24)
+			mesh = rl.GenMeshCylinder(1.0, 1.0, 9)
+			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 9)
 		}
 
 		model := rl.LoadModelFromMesh(mesh)
@@ -179,14 +179,20 @@ func (s *RenderSystemRL) drawEntities() {
 func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderData, scaledRadius float32, color rl.Color, hasStroke bool) {
 	towerDef, _ := defs.TowerDefs[tower.DefID]
 
+	// Новые множители размера
+	baseWidthMultiplier := float32(1.32)      // 1.2 * 1.1
+	attackTowerHeightMultiplier := float32(1.326) // 1.56 * 0.85
+	minerTowerHeightMultiplier := float32(1.56)   // 1.2 * 1.3 (остается без изменений)
+	wallHeightMultiplier := float32(1.68)     // 1.2 * 1.4 (остается без изменений)
+
 	// Особый случай для майнеров: рисуем динамически, чтобы получить конус
 	if towerDef.Type == defs.TowerTypeMiner {
 		startPos := rl.NewVector3(data.WorldPos.X, 0, data.WorldPos.Z)
-		endPos := rl.NewVector3(data.WorldPos.X, data.Height, data.WorldPos.Z)
-		radius := scaledRadius * 1.2
-		rl.DrawCylinderEx(startPos, endPos, radius, 0, 16, color)
+		endPos := rl.NewVector3(data.WorldPos.X, data.Height*minerTowerHeightMultiplier, data.WorldPos.Z)
+		radius := scaledRadius * 1.2 * baseWidthMultiplier
+		rl.DrawCylinderEx(startPos, endPos, radius, 0, 9, color)
 		if hasStroke {
-			rl.DrawCylinderWiresEx(startPos, endPos, radius, 0, 16, rl.White)
+			rl.DrawCylinderWiresEx(startPos, endPos, radius, 0, 9, config.TowerWireColorRL)
 		}
 		return
 	}
@@ -198,27 +204,25 @@ func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderDat
 	}
 	wireModel, _ := s.towerWireModels[tower.DefID]
 
-	// ИСПРАВЛЕНО: Позиция Y должна быть на земле (WorldPos.Y), а не в центре башни.
 	position := data.WorldPos
 	var scale rl.Vector3
 
 	// Логика масштабирования в зависимости от типа
 	switch {
 	case towerDef.Type == defs.TowerTypeWall:
-		radius := scaledRadius * 1.8
-		scale = rl.NewVector3(radius, data.Height, radius)
+		radius := scaledRadius * 1.8 * baseWidthMultiplier
+		scale = rl.NewVector3(radius, data.Height*wallHeightMultiplier, radius)
 	case tower.CraftingLevel >= 1:
-		size := scaledRadius * 2
-		scale = rl.NewVector3(size, data.Height, size)
+		size := scaledRadius * 2 * baseWidthMultiplier
+		scale = rl.NewVector3(size, data.Height*attackTowerHeightMultiplier, size)
 	default:
-		radius := scaledRadius * 1.2
-		scale = rl.NewVector3(radius, data.Height, radius)
+		radius := scaledRadius * 1.2 * baseWidthMultiplier
+		scale = rl.NewVector3(radius, data.Height*attackTowerHeightMultiplier, radius)
 	}
 
-	// ИСПРАВЛЕНО: Модель рисуется из ее начала координат (основания), а не центра.
 	rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, scale, color)
 	if hasStroke {
-		rl.DrawModelWiresEx(wireModel, position, rl.NewVector3(0, 1, 0), 0, scale, rl.White)
+		rl.DrawModelWiresEx(wireModel, position, rl.NewVector3(0, 1, 0), 0, scale, config.TowerWireColorRL)
 	}
 }
 

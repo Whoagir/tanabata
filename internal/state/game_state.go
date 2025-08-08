@@ -37,7 +37,24 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 	hexMap := hexmap.NewHexMap()
 	font := rl.LoadFont("assets/fonts/arial.ttf")
 	gameLogic := app.NewGame(hexMap, font)
-	renderer := render.NewHexRenderer(hexMap)
+
+	// Собираем информацию о цветах для руды перед созданием рендерера
+	oreHexColors := make(map[hexmap.Hex]rl.Color)
+	specialHexes := make(map[hexmap.Hex]struct{})
+	specialHexes[hexMap.Entry] = struct{}{}
+	specialHexes[hexMap.Exit] = struct{}{}
+	for _, cp := range hexMap.Checkpoints {
+		specialHexes[cp] = struct{}{}
+	}
+
+	for _, oreComp := range gameLogic.ECS.Ores {
+		hex := hexmap.PixelToHex(oreComp.Position.X, oreComp.Position.Y, config.HexSize)
+		if _, isSpecial := specialHexes[hex]; !isSpecial {
+			oreHexColors[hex] = config.OreHexBackgroundColorRL
+		}
+	}
+
+	renderer := render.NewHexRenderer(hexMap, oreHexColors)
 
 	indicator := ui.NewStateIndicatorRL(
 		float32(config.ScreenWidth-config.IndicatorOffsetX),

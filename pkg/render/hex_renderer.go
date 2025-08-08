@@ -13,10 +13,11 @@ type HexRenderer struct {
 	hexMap         *hexmap.HexMap
 	hexFillModel   rl.Model
 	hexOutlineModel rl.Model
+	customColors   map[hexmap.Hex]rl.Color
 }
 
 // NewHexRenderer создает новый экземпляр HexRenderer и генерирует модели гексов.
-func NewHexRenderer(hexMap *hexmap.HexMap) *HexRenderer {
+func NewHexRenderer(hexMap *hexmap.HexMap, customColors map[hexmap.Hex]rl.Color) *HexRenderer {
 	// Параметры для генерации
 	mapThickness := float32(1.0)
 	fillRadius := float32((config.HexSize - 1.5) * config.CoordScale)
@@ -34,33 +35,37 @@ func NewHexRenderer(hexMap *hexmap.HexMap) *HexRenderer {
 		hexMap:         hexMap,
 		hexFillModel:   fillModel,
 		hexOutlineModel: outlineModel,
+		customColors:   customColors,
 	}
 }
 
 // Draw рендерит всю карту, используя предварительно созданные модели.
 func (r *HexRenderer) Draw() {
-	// Рисуем все гексы, кроме входа, выхода и чекпоинтов
+	// Рисуем все гексы
 	for hex := range r.hexMap.Tiles {
-		isSpecial := hex == r.hexMap.Entry || hex == r.hexMap.Exit
+		var color rl.Color
+		// Приоритет цветов: чекпоинты > вход/выход > руда > по умолчанию
+		isCheckpoint := false
 		for _, cp := range r.hexMap.Checkpoints {
 			if hex == cp {
-				isSpecial = true
+				isCheckpoint = true
 				break
 			}
 		}
-		if !isSpecial {
-			r.drawHexModel(hex, config.PassableColorRL)
+
+		if isCheckpoint {
+			color = config.CheckpointColorRL
+		} else if hex == r.hexMap.Entry {
+			color = config.EntryColorRL
+		} else if hex == r.hexMap.Exit {
+			color = config.ExitColorRL
+		} else if customColor, ok := r.customColors[hex]; ok {
+			color = customColor
+		} else {
+			color = config.PassableColorRL // Цвет по умолчанию
 		}
+		r.drawHexModel(hex, color)
 	}
-
-	// Рисуем чекпоинты
-	for _, cp := range r.hexMap.Checkpoints {
-		r.drawHexModel(cp, config.CheckpointColorRL)
-	}
-
-	// Рисуем вход и выход
-	r.drawHexModel(r.hexMap.Entry, config.EntryColorRL)
-	r.drawHexModel(r.hexMap.Exit, config.ExitColorRL)
 }
 
 // drawHexModel рисует один гекс, используя общие модели.
