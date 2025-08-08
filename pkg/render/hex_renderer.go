@@ -63,3 +63,7 @@ func (r *HexRenderer) drawLine(start, end hexmap.Hex, lineColor rl.Color) {
 	endPos := hexToWorld(end)
 	rl.DrawLine3D(startPos, endPos, lineColor)
 }
+
+func (r *HexRenderer) Cleanup() {
+	// Пока что нечего очищать
+}

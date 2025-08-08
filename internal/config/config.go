@@ -46,6 +46,7 @@ const (
 	EnergyTransferRadius    = 3
 	OrePerHexMin            = 15
 	OrePerHexMax            = 75
+	LineHeight              = 5.0 // Высота линии энергии
 )
 
 // Цвета для Ebiten (останутся для справки или если где-то еще используются)
