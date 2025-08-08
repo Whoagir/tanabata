@@ -7,63 +7,114 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// HexRenderer отвечает за отрисовку гексагональной карты
+// HexRenderer отвечает за отрисовку гексагональной карты.
+// Он предварительно генерирует модели для каждого типа гексов для оптимизации.
 type HexRenderer struct {
-	HexMap *hexmap.HexMap
+	passableModel   rl.Model
+	checkpointModel rl.Model
+	entryModel      rl.Model
+	exitModel       rl.Model
+	outlineModel    rl.Model
 }
 
-// NewHexRenderer создает новый экземпляр HexRenderer
+// NewHexRenderer создает новый экземпляр HexRenderer и генерирует модели карты.
 func NewHexRenderer(hexMap *hexmap.HexMap) *HexRenderer {
-	return &HexRenderer{HexMap: hexMap}
-}
+	// Разделяем гексы по типам
+	passableHexes := []hexmap.Hex{}
+	checkpointHexes := make(map[hexmap.Hex]bool)
+	for _, cp := range hexMap.Checkpoints {
+		checkpointHexes[cp] = true
+	}
 
-// Draw рендерит всю карту
-func (r *HexRenderer) Draw() {
-	// Итерируемся по ключам карты (hexmap.Hex)
-	for hex := range r.HexMap.Tiles {
-		// Пропускаем вход и выход, чтобы нарисовать их отдельно
-		if hex == r.HexMap.Entry || hex == r.HexMap.Exit {
+	for hex := range hexMap.Tiles {
+		if hex == hexMap.Entry || hex == hexMap.Exit || checkpointHexes[hex] {
 			continue
 		}
-		r.drawHex(hex, config.PassableColorRL, config.StrokeColorRL)
+		passableHexes = append(passableHexes, hex)
 	}
 
-	// Рисуем чекпоинты
-	for _, cp := range r.HexMap.Checkpoints {
-		r.drawHex(cp, config.CheckpointColorRL, config.StrokeColorRL)
-	}
-
-	// Рисуем вход и выход специальными цветами
-	r.drawHex(r.HexMap.Entry, config.EntryColorRL, config.StrokeColorRL)
-	r.drawHex(r.HexMap.Exit, config.ExitColorRL, config.StrokeColorRL)
-}
-
-func (r *HexRenderer) drawHex(h hexmap.Hex, fillColor, lineColor rl.Color) {
-	// Draw hex using a 3D cylinder
-	hexCenter3D := hexToWorld(h)
-	// Используем CoordScale для определения толщины карты
+	// Параметры для генерации
 	mapThickness := float32(0.5 * config.CoordScale)
-	hexCenter3D.Y -= mapThickness / 2 // Смещаем карту вниз, чтобы поверхность была на Y=0
-
-	// ИСПРАВЛЕНО: Уменьшаем радиус заливки для создания зазора
 	fillRadius := float32((config.HexSize - 1.5) * config.CoordScale)
 	outlineRadius := float32(config.HexSize * config.CoordScale)
 
-	rl.DrawCylinder(hexCenter3D, fillRadius, fillRadius, mapThickness, 6, fillColor)
-	rl.DrawCylinderWires(hexCenter3D, outlineRadius, outlineRadius, mapThickness, 6, lineColor)
+	// Создаем объединенные модели для каждого типа
+	passableMesh := createCombinedMesh(passableHexes, fillRadius, mapThickness)
+	checkpointMesh := createCombinedMesh(hexMap.Checkpoints, fillRadius, mapThickness)
+	entryMesh := createCombinedMesh([]hexmap.Hex{hexMap.Entry}, fillRadius, mapThickness)
+	exitMesh := createCombinedMesh([]hexmap.Hex{hexMap.Exit}, fillRadius, mapThickness)
+	outlineMesh := createCombinedMesh(mapsToSlice(hexMap.Tiles), outlineRadius, mapThickness)
+
+	return &HexRenderer{
+		passableModel:   rl.LoadModelFromMesh(passableMesh),
+		checkpointModel: rl.LoadModelFromMesh(checkpointMesh),
+		entryModel:      rl.LoadModelFromMesh(entryMesh),
+		exitModel:       rl.LoadModelFromMesh(exitMesh),
+		outlineModel:    rl.LoadModelFromMesh(outlineMesh),
+	}
 }
 
+// Draw рендерит всю карту, используя предварительно созданные модели.
+func (r *HexRenderer) Draw() {
+	// Позиция (0,0,0) и масштаб 1.0, так как все трансформации уже "запечены" в модели
+	origin := rl.NewVector3(0, 0, 0)
+	rl.DrawModel(r.passableModel, origin, 1.0, config.PassableColorRL)
+	rl.DrawModel(r.checkpointModel, origin, 1.0, config.CheckpointColorRL)
+	rl.DrawModel(r.entryModel, origin, 1.0, config.EntryColorRL)
+	rl.DrawModel(r.exitModel, origin, 1.0, config.ExitColorRL)
+	rl.DrawModelWires(r.outlineModel, origin, 1.0, config.StrokeColorRL)
+}
+
+// Cleanup выгружает модели из памяти.
+func (r *HexRenderer) Cleanup() {
+	rl.UnloadModel(r.passableModel)
+	rl.UnloadModel(r.checkpointModel)
+	rl.UnloadModel(r.entryModel)
+	rl.UnloadModel(r.exitModel)
+	rl.UnloadModel(r.outlineModel)
+}
+
+// createCombinedMesh создает один большой меш из множества гексов.
+func createCombinedMesh(hexes []hexmap.Hex, radius, height float32) rl.Mesh {
+	if len(hexes) == 0 {
+		return rl.Mesh{} // Возвращаем пустой меш, если нет гексов
+	}
+
+	allMeshes := make([]*rl.Mesh, len(hexes))
+	for i, h := range hexes {
+		// Создаем меш для одного гекса
+		hexMesh := rl.GenMeshCylinder(radius, height, 6)
+
+		// Применяем поворот в 30 градусов, чтобы выровнять с сеткой
+		rotation := rl.MatrixRotate(rl.NewVector3(0, 1, 0), 30*rl.Deg2rad)
+		// Применяем смещение в мировые координаты
+		translation := rl.MatrixTranslate(
+			float32(h.ToPixel(float64(config.HexSize)).X*config.CoordScale),
+			-height/2, // Смещаем карту вниз, чтобы поверхность была на Y=0
+			float32(h.ToPixel(float64(config.HexSize)).Y*config.CoordScale),
+		)
+		transform := rl.MatrixMultiply(rotation, translation)
+
+		// Трансформируем вершины меша
+		rl.MeshTransform(hexMesh, transform)
+		allMeshes[i] = &hexMesh
+	}
+
+	// Объединяем все меши в один
+	return rl.MergeMeshes(allMeshes)
+}
+
+// hexToWorld преобразует координаты гекса в мировые 3D координаты.
 func hexToWorld(h hexmap.Hex) rl.Vector3 {
 	x, y := h.ToPixel(float64(config.HexSize))
 	return rl.NewVector3(float32(x*config.CoordScale), 0, float32(y*config.CoordScale))
 }
 
-func (r *HexRenderer) drawLine(start, end hexmap.Hex, lineColor rl.Color) {
-	startPos := hexToWorld(start)
-	endPos := hexToWorld(end)
-	rl.DrawLine3D(startPos, endPos, lineColor)
-}
-
-func (r *HexRenderer) Cleanup() {
-	// Пока что нечего очищать
+// mapsToSlice преобразует map[hexmap.Hex]struct{} в срез []hexmap.Hex
+func mapsToSlice(m map[hexmap.Hex]struct{}) []hexmap.Hex {
+	s := make([]hexmap.Hex, 0, len(m))
+	for k := range m {
+		s = append(s, k)
+	}
+	return s
 }

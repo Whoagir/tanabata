@@ -22,21 +22,39 @@ type CachedRenderData struct {
 	IsOnScreen bool
 }
 
-// RenderSystemRL - оптимизированная система рендеринга
+// RenderSystemRL - оптим��зированная система рендеринга
 type RenderSystemRL struct {
-	ecs         *entity.ECS
-	font        rl.Font
-	camera      *rl.Camera3D
-	renderCache map[types.EntityID]*CachedRenderData
-	frustum     [6]rl.Vector4 // Плоскости для frustum culling
+	ecs            *entity.ECS
+	font           rl.Font
+	camera         *rl.Camera3D
+	renderCache    map[types.EntityID]*CachedRenderData
+	frustum        [6]rl.Vector4 // Плоскости для frustum culling
+	wallModel      rl.Model
+	wallModelWires rl.Model
 }
 
 // NewRenderSystemRL создает новую оптимизированную систему рендеринга
 func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
+	// Создаем меш для стены (шестиугольная призма)
+	// Параметры подобраны так, чтобы соответствовать старому виду
+	mesh := rl.GenMeshCylinder(1.0, 1.0, 6)
+	model := rl.LoadModelFromMesh(mesh)
+
+	// Создаем отдельную модель для контура
+	meshWires := rl.GenMeshCylinder(1.0, 1.0, 6)
+	modelWires := rl.LoadModelFromMesh(meshWires)
+
+	// Применяем поворот в 30 градусов один раз при создании
+	rotation := rl.MatrixRotate(rl.NewVector3(0, 1, 0), 30*rl.Deg2rad)
+	model.Transform = rl.MatrixMultiply(model.Transform, rotation)
+	modelWires.Transform = rl.MatrixMultiply(modelWires.Transform, rotation)
+
 	return &RenderSystemRL{
-		ecs:         ecs,
-		font:        font,
-		renderCache: make(map[types.EntityID]*CachedRenderData),
+		ecs:            ecs,
+		font:           font,
+		renderCache:    make(map[types.EntityID]*CachedRenderData),
+		wallModel:      model,
+		wallModelWires: modelWires,
 	}
 }
 
@@ -153,10 +171,14 @@ func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderDat
 	switch {
 	case towerDef.Type == defs.TowerTypeWall:
 		radius := scaledRadius * 1.8
-		rl.DrawCylinderEx(startPos, endPos, radius, radius, 6, color)
+		position := rl.NewVector3(data.WorldPos.X, data.Height/2, data.WorldPos.Z)
+		scale := rl.NewVector3(radius, data.Height/2, radius) // Масштабируем по XZ и Y
+
+		rl.DrawModelEx(s.wallModel, position, rl.NewVector3(0, 0, 0), 0, scale, color)
 		if hasStroke {
-			rl.DrawCylinderWiresEx(startPos, endPos, radius, radius, 6, rl.White)
+			rl.DrawModelWiresEx(s.wallModelWires, position, rl.NewVector3(0, 0, 0), 0, scale, rl.White)
 		}
+
 	case towerDef.Type == defs.TowerTypeMiner:
 		radius := scaledRadius * 1.2
 		rl.DrawCylinderEx(startPos, endPos, radius, 0, 16, color)
