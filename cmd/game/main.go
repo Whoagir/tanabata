@@ -52,16 +52,15 @@ func main() {
 	camera.Projection = rl.CameraPerspective
 	// Устанавливаем плоскости отсечения, чтобы видеть всю карту
 	camera.Fovy = 55.0 // Устанавливаем Fovy, чтобы избежать нулевого значения
-	
+
 	// Позиции, цели и углы обзора для интерполяции (как в map_viewer)
 	isoPos := rl.NewVector3(180, 250, 180)
-	topDownPos := rl.NewVector3(0, 300, 0.1)
+	topDownPos := rl.NewVector3(0, 425, 0.1)
 	isoTarget := rl.NewVector3(0, 0, 0)
 	topDownTarget := rl.NewVector3(0, 0, 0)
 	isoFovy := float32(55.0)
 	topDownFovy := float32(35.0)
 	cameraAngleT := float32(0.5)
-
 
 	// Передаем камеру в GameState
 	if gs, ok := sm.Current().(*state.GameState); ok {
@@ -121,5 +120,10 @@ func main() {
 		rl.DrawFPS(10, 10)
 
 		rl.EndDrawing()
+	}
+
+	// --- Очистка перед выходом ---
+	if cleanable, ok := sm.Current().(interface{ Cleanup() }); ok {
+		cleanable.Cleanup()
 	}
 }

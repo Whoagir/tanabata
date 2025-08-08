@@ -22,39 +22,56 @@ type CachedRenderData struct {
 	IsOnScreen bool
 }
 
-// RenderSystemRL - оптим��зированная система рендеринга
+// RenderSystemRL - оптимизированная система рендеринга
 type RenderSystemRL struct {
-	ecs            *entity.ECS
-	font           rl.Font
-	camera         *rl.Camera3D
-	renderCache    map[types.EntityID]*CachedRenderData
-	frustum        [6]rl.Vector4 // Плоскости для frustum culling
-	wallModel      rl.Model
-	wallModelWires rl.Model
+	ecs             *entity.ECS
+	font            rl.Font
+	camera          *rl.Camera3D
+	renderCache     map[types.EntityID]*CachedRenderData
+	frustum         [6]rl.Vector4 // Плоскости для frustum culling
+	towerModels     map[string]rl.Model
+	towerWireModels map[string]rl.Model
 }
 
 // NewRenderSystemRL создает новую оптимизированную систему рендеринга
 func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
-	// Создаем меш для стены (шестиугольная призма)
-	// Параметры подобраны так, чтобы соответствовать старому виду
-	mesh := rl.GenMeshCylinder(1.0, 1.0, 6)
-	model := rl.LoadModelFromMesh(mesh)
+	rs := &RenderSystemRL{
+		ecs:             ecs,
+		font:            font,
+		renderCache:     make(map[types.EntityID]*CachedRenderData),
+		towerModels:     make(map[string]rl.Model),
+		towerWireModels: make(map[string]rl.Model),
+	}
+	rs.pregenerateTowerModels()
+	return rs
+}
 
-	// Создаем отдельную модель для контура
-	meshWires := rl.GenMeshCylinder(1.0, 1.0, 6)
-	modelWires := rl.LoadModelFromMesh(meshWires)
+// pregenerateTowerModels создает 3D-модели для каждого типа башни
+func (s *RenderSystemRL) pregenerateTowerModels() {
+	for id, towerDef := range defs.TowerDefs {
+		var mesh, wireMesh rl.Mesh
 
-	// Применяем поворот в 30 градусов один раз при создании
-	rotation := rl.MatrixRotate(rl.NewVector3(0, 1, 0), 30*rl.Deg2rad)
-	model.Transform = rl.MatrixMultiply(model.Transform, rotation)
-	modelWires.Transform = rl.MatrixMultiply(modelWires.Transform, rotation)
+		// Логика создания меша в зависимости от типа башни
+		switch {
+		case towerDef.Type == defs.TowerTypeWall:
+			mesh = rl.GenMeshCylinder(1.0, 1.0, 6)
+			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 6)
+		case towerDef.Type == defs.TowerTypeMiner:
+			// Добытчики будут рендериться динамически для сохранения формы конуса
+			continue
+		case towerDef.CraftingLevel >= 1:
+			mesh = rl.GenMeshCube(1.0, 1.0, 1.0)
+			wireMesh = rl.GenMeshCube(1.0, 1.0, 1.0)
+		default: // Обычные атакующие башни
+			mesh = rl.GenMeshCylinder(1.0, 1.0, 24)
+			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 24)
+		}
 
-	return &RenderSystemRL{
-		ecs:            ecs,
-		font:           font,
-		renderCache:    make(map[types.EntityID]*CachedRenderData),
-		wallModel:      model,
-		wallModelWires: modelWires,
+		model := rl.LoadModelFromMesh(mesh)
+		wireModel := rl.LoadModelFromMesh(wireMesh)
+
+		s.towerModels[id] = model
+		s.towerWireModels[id] = wireModel
 	}
 }
 
@@ -160,45 +177,48 @@ func (s *RenderSystemRL) drawEntities() {
 }
 
 func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderData, scaledRadius float32, color rl.Color, hasStroke bool) {
-	towerDef, ok := defs.TowerDefs[tower.DefID]
-	if !ok {
-		return
-	}
+	towerDef, _ := defs.TowerDefs[tower.DefID]
 
-	startPos := rl.NewVector3(data.WorldPos.X, 0, data.WorldPos.Z)
-	endPos := rl.NewVector3(data.WorldPos.X, data.Height, data.WorldPos.Z)
-
-	switch {
-	case towerDef.Type == defs.TowerTypeWall:
-		radius := scaledRadius * 1.8
-		position := rl.NewVector3(data.WorldPos.X, data.Height/2, data.WorldPos.Z)
-		scale := rl.NewVector3(radius, data.Height/2, radius) // Масштабируем по XZ и Y
-
-		rl.DrawModelEx(s.wallModel, position, rl.NewVector3(0, 0, 0), 0, scale, color)
-		if hasStroke {
-			rl.DrawModelWiresEx(s.wallModelWires, position, rl.NewVector3(0, 0, 0), 0, scale, rl.White)
-		}
-
-	case towerDef.Type == defs.TowerTypeMiner:
+	// Особый случай для майнеров: рисуем динамически, чтобы получить конус
+	if towerDef.Type == defs.TowerTypeMiner {
+		startPos := rl.NewVector3(data.WorldPos.X, 0, data.WorldPos.Z)
+		endPos := rl.NewVector3(data.WorldPos.X, data.Height, data.WorldPos.Z)
 		radius := scaledRadius * 1.2
 		rl.DrawCylinderEx(startPos, endPos, radius, 0, 16, color)
 		if hasStroke {
 			rl.DrawCylinderWiresEx(startPos, endPos, radius, 0, 16, rl.White)
 		}
+		return
+	}
+
+	// Оптимизированный путь для всех остальных башен
+	model, ok := s.towerModels[tower.DefID]
+	if !ok {
+		return // Модель не найдена
+	}
+	wireModel, _ := s.towerWireModels[tower.DefID]
+
+	// ИСПРАВЛЕНО: Позиция Y должна быть на земле (WorldPos.Y), а не в центре башни.
+	position := data.WorldPos
+	var scale rl.Vector3
+
+	// Логика масштабирования в зависимости от типа
+	switch {
+	case towerDef.Type == defs.TowerTypeWall:
+		radius := scaledRadius * 1.8
+		scale = rl.NewVector3(radius, data.Height, radius)
 	case tower.CraftingLevel >= 1:
-		pos := data.WorldPos
-		pos.Y = data.Height / 2
 		size := scaledRadius * 2
-		rl.DrawCube(pos, size, data.Height, size, color)
-		if hasStroke {
-			rl.DrawCubeWires(pos, size, data.Height, size, rl.White)
-		}
+		scale = rl.NewVector3(size, data.Height, size)
 	default:
 		radius := scaledRadius * 1.2
-		rl.DrawCylinderEx(startPos, endPos, radius, radius, 24, color)
-		if hasStroke {
-			rl.DrawCylinderWiresEx(startPos, endPos, radius, radius, 24, rl.White)
-		}
+		scale = rl.NewVector3(radius, data.Height, radius)
+	}
+
+	// ИСПРАВЛЕНО: Модель рисуется из ее начала координат (основания), а не центра.
+	rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, scale, color)
+	if hasStroke {
+		rl.DrawModelWiresEx(wireModel, position, rl.NewVector3(0, 1, 0), 0, scale, rl.White)
 	}
 }
 

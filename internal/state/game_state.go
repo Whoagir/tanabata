@@ -335,3 +335,9 @@ func (g *GameState) DrawUI() {
 
 func (g *GameState) Exit() {
 }
+
+// Cleanup освобождает ресурсы, используемые состоянием
+func (g *GameState) Cleanup() {
+	g.renderer.Cleanup()
+	// В будущем здесь можно будет выгружать и другие ресурсы, например, шрифт
+}
