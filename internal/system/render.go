@@ -122,13 +122,13 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 	}
 }
 
-// Draw использует кэшированные данные для отрисовки
+// Draw использует кэшированные данные для отрисовки всего, КРОМЕ снарядов
 func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
 	if s.camera == nil {
 		return
 	}
 	s.drawPulsingOres(gameTime)
-	s.drawEntities()
+	s.drawSolidEntities()
 	s.drawLines(hiddenLineID)
 	s.drawLasers()
 	s.drawRotatingBeams()
@@ -137,9 +137,14 @@ func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, 
 	s.drawCombinationIndicators()
 }
 
-func (s *RenderSystemRL) drawEntities() {
+func (s *RenderSystemRL) drawSolidEntities() {
 	for id, data := range s.renderCache {
 		if !data.IsOnScreen {
+			continue
+		}
+
+		// Пропускаем снаряды, они будут отрисованы в отдельном проходе
+		if _, isProjectile := s.ecs.Projectiles[id]; isProjectile {
 			continue
 		}
 
@@ -168,11 +173,32 @@ func (s *RenderSystemRL) drawEntities() {
 			}
 		} else if tower, isTower := s.ecs.Towers[id]; isTower {
 			s.drawTower(tower, data, scaledRadius, finalColor, renderable.HasStroke)
-		} else if _, isProjectile := s.ecs.Projectiles[id]; isProjectile {
-			pos := data.WorldPos
-			pos.Y = scaledRadius
-			rl.DrawSphere(pos, scaledRadius, finalColor)
 		}
+	}
+}
+
+// DrawProjectiles рисует только снаряды. Должна вызываться отдельно с отключенным depth test.
+func (s *RenderSystemRL) DrawProjectiles() {
+	for id, data := range s.renderCache {
+		if !data.IsOnScreen {
+			continue
+		}
+
+		// Рисуем только снаряды
+		if _, isProjectile := s.ecs.Projectiles[id]; !isProjectile {
+			continue
+		}
+
+		renderable, ok := s.ecs.Renderables[id]
+		if !ok {
+			continue
+		}
+
+		finalColor := colorToRL(renderable.Color)
+		scaledRadius := data.Radius * float32(config.CoordScale)
+		pos := data.WorldPos
+		pos.Y = scaledRadius
+		rl.DrawSphere(pos, scaledRadius, finalColor)
 	}
 }
 

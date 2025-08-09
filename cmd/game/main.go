@@ -29,6 +29,7 @@ func main() {
 	// --- Инициализация Raylib ---
 	rl.InitWindow(config.ScreenWidth, config.ScreenHeight, "Go Tower Defense")
 	rl.SetTargetFPS(60)
+	rl.EnableBackfaceCulling() // Включаем отсечение задних граней
 	defer rl.CloseWindow()
 
 	// --- Загрузка определений ---
@@ -50,16 +51,14 @@ func main() {
 	camera := rl.Camera3D{}
 	camera.Up = rl.NewVector3(0, 1, 0)
 	camera.Projection = rl.CameraPerspective
-	// Устанавливаем плоскости отсечения, чтобы видеть всю карту
-	camera.Fovy = 55.0 // Устанавливаем Fovy, чтобы избежать нулевого значения
+	// Устанавливаем Fovy из конфига для консистентности
+	camera.Fovy = config.CameraFovyDefault
 
-	// Позиции, цели и углы обзора для интерполяции (как в map_viewer)
-	isoPos := rl.NewVector3(144, 200, 144) // Приближено на 20% (было 180, 250, 180)
+	// Позиции и цели для интерполяции
+	isoPos := rl.NewVector3(144, 200, 144)
 	topDownPos := rl.NewVector3(0, 425, 0.1)
 	isoTarget := rl.NewVector3(0, 0, 0)
 	topDownTarget := rl.NewVector3(0, 0, 0)
-	isoFovy := float32(55.0)
-	topDownFovy := float32(35.0)
 	cameraAngleT := float32(0.5)
 
 	// Передаем камеру в GameState
@@ -100,7 +99,9 @@ func main() {
 
 		camera.Position = Vector3Lerp(isoPos, topDownPos, cameraAngleT)
 		camera.Target = Vector3Lerp(isoTarget, topDownTarget, cameraAngleT)
-		camera.Fovy = isoFovy + (topDownFovy-isoFovy)*cameraAngleT
+		// УБРАНО: camera.Fovy = isoFovy + (topDownFovy-isoFovy)*cameraAngleT
+		// Эта строка конфликтовала с логикой зума в GameState.
+		// Теперь Fovy управляется только в GameState.
 
 		sm.Update(deltaTime)
 

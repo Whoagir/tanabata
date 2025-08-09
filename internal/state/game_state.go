@@ -12,6 +12,7 @@ import (
 	"go-tower-defense/pkg/hexmap"
 	"go-tower-defense/pkg/render"
 	"image/color"
+	"strings"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -30,12 +31,42 @@ type GameState struct {
 	recipeBook           *ui.RecipeBookRL
 	lastClickTime        time.Time
 	camera               *rl.Camera3D
+	font                 rl.Font
+	checkpointTextures   map[int]rl.Texture2D // Текстуры для номеров чекпоинтов
+}
+
+// intToRoman конвертирует целое число в римскую цифру (для чисел от 1 до 10)
+func intToRoman(num int) string {
+	if num < 1 || num > 10 {
+		return "" // Поддерживаем только небольшие числа для чекпоинтов
+	}
+	val := []int{10, 9, 5, 4, 1}
+	syms := []string{"X", "IX", "V", "IV", "I"}
+	var roman strings.Builder
+	for i := 0; i < len(val); i++ {
+		for num >= val[i] {
+			roman.WriteString(syms[i])
+			num -= val[i]
+		}
+	}
+	return roman.String()
 }
 
 // NewGameState создает новое состояние игры для Raylib
 func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, camera *rl.Camera3D) *GameState {
 	hexMap := hexmap.NewHexMap()
-	font := rl.LoadFont("assets/fonts/arial.ttf")
+
+	// Загрузка шрифта с поддержкой кириллицы
+	var fontChars []rune
+	for i := 32; i <= 127; i++ {
+		fontChars = append(fontChars, rune(i))
+	}
+	for i := 0x0400; i <= 0x04FF; i++ {
+		fontChars = append(fontChars, rune(i))
+	}
+	fontChars = append(fontChars, '₽', '«', '»', '(', ')', '.', ',')
+	font := rl.LoadFontEx("assets/fonts/arial.ttf", 64, fontChars, int32(len(fontChars))) // Увеличим размер для качества
+
 	gameLogic := app.NewGame(hexMap, font)
 
 	// Собираем информацию о цветах для руды перед созданием рендерера
@@ -75,6 +106,16 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 	recipeBookY := (float32(config.ScreenHeight) - recipeBookHeight) / 2
 	recipeBook := ui.NewRecipeBookRL(recipeBookX, recipeBookY, recipeBookWidth, recipeBookHeight, recipeLibrary.Recipes, font)
 
+	// --- Генерация текстур для чекпоинтов ---
+	checkpointTextures := make(map[int]rl.Texture2D)
+	for i := 0; i < len(hexMap.Checkpoints); i++ {
+		romanNumeral := intToRoman(i + 1)
+		img := rl.ImageTextEx(font, romanNumeral, 64, 1, rl.White)
+		tex := rl.LoadTextureFromImage(img)
+		checkpointTextures[i] = tex
+		rl.UnloadImage(img) // Освобождаем память CPU
+	}
+
 	gs := &GameState{
 		sm:                   sm,
 		game:                 gameLogic,
@@ -87,6 +128,8 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 		recipeBook:           recipeBook,
 		lastClickTime:        time.Now(),
 		camera:               camera,
+		font:                 font,
+		checkpointTextures:   checkpointTextures, // Сохраняем текстуры
 	}
 
 	return gs
@@ -106,10 +149,27 @@ func (g *GameState) Update(deltaTime float64) {
 		return
 	}
 
+	// Управление масштабированием камеры
+	if rl.IsKeyPressed(rl.KeyR) {
+		g.camera.Fovy -= config.CameraZoomStep
+		if g.camera.Fovy < config.CameraFovyMin {
+			g.camera.Fovy = config.CameraFovyMin
+		}
+	}
+	if rl.IsKeyPressed(rl.KeyT) {
+		g.camera.Fovy += config.CameraZoomStep
+		if g.camera.Fovy > config.CameraFovyMax {
+			g.camera.Fovy = config.CameraFovyMax
+		}
+	}
+	if rl.IsKeyPressed(rl.KeyY) {
+		g.camera.Fovy = config.CameraFovyDefault
+	}
+
 	g.game.PauseButton.SetPaused(false)
 	g.infoPanel.Update(g.game.ECS)
 
-	if rl.IsKeyPressed(rl.KeyR) {
+	if rl.IsKeyPressed(rl.KeyB) { // Используем 'B' для книги рецептов, чтобы не конфликтовать с зумом
 		g.recipeBook.Toggle()
 	}
 
@@ -292,26 +352,42 @@ func (g *GameState) Draw() {
 	if g.camera == nil {
 		return
 	}
+	// Шаг 1: Отрисовка основной сцены (земля, башни, враги, эффекты)
 	g.renderer.Draw()
-	// ИСПРАВЛЕНО: Добавлены недостающие аргументы
 	g.game.RenderSystem.Draw(g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
 
-	// ИСПРАВЛЕНО: Получаем ID из ключа карты
+	// Шаг 2: Отрисовка выделения башен
 	for id, tower := range g.game.ECS.Towers {
 		if tower.IsHighlighted || tower.IsManuallySelected {
 			x, y := tower.Hex.ToPixel(config.HexSize)
 			worldX := float32(x * config.CoordScale)
 			worldZ := float32(y * config.CoordScale)
-			
+
 			var height float32 = 2.0
-			if renderable, ok := g.game.ECS.Renderables[id]; ok { // Используем ID
+			if renderable, ok := g.game.ECS.Renderables[id]; ok {
 				height = g.game.RenderSystem.GetTowerRenderHeight(tower, renderable)
 			}
 
-			highlightPos := rl.NewVector3(worldX, height + 0.5, worldZ)
+			highlightPos := rl.NewVector3(worldX, height+0.5, worldZ)
 			rl.DrawCylinderWires(highlightPos, float32(config.HexSize*config.CoordScale)*1.1, float32(config.HexSize*config.CoordScale)*1.1, 2.0, 6, config.HighlightColorRL)
 		}
 	}
+
+	// Шаг 3: Отрисовка номеров чекпоинтов как билбордов
+	for i, checkpoint := range g.hexMap.Checkpoints {
+		if tex, ok := g.checkpointTextures[i]; ok {
+			px, py := checkpoint.ToPixel(config.HexSize)
+			worldPos := rl.NewVector3(float32(px*config.CoordScale), 4.0, float32(py*config.CoordScale))
+			rl.DrawBillboard(*g.camera, tex, worldPos, 10.0, config.GridColorRL)
+		}
+	}
+
+	// --- Финальный рендеринг снарядов ---
+	rl.DrawRenderBatchActive()
+	rl.DisableDepthTest()
+	g.game.RenderSystem.DrawProjectiles()
+	rl.DrawRenderBatchActive()
+	rl.EnableDepthTest()
 }
 
 // DrawUI рисует все элементы интерфейса в 2D
@@ -356,5 +432,9 @@ func (g *GameState) Exit() {
 // Cleanup освобождает ресурсы, используемые состоянием
 func (g *GameState) Cleanup() {
 	g.renderer.Cleanup()
+	// Выгружаем текстуры чекпоинтов
+	for _, tex := range g.checkpointTextures {
+		rl.UnloadTexture(tex)
+	}
 	// В будущем здесь можно будет выгружать и другие ресурсы, например, шрифт
 }
