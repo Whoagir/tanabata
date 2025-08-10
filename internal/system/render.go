@@ -10,6 +10,7 @@ import (
 	"go-tower-defense/pkg/hexmap"
 	"image/color"
 	"math"
+	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -31,6 +32,7 @@ type RenderSystemRL struct {
 	frustum         [6]rl.Vector4 // Плоскости для frustum culling
 	towerModels     map[string]rl.Model
 	towerWireModels map[string]rl.Model
+	laserModel      rl.Model // Добавлено для оптимизации лазеров
 }
 
 // NewRenderSystemRL создает новую оптимизированную систему рендеринга
@@ -43,8 +45,52 @@ func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
 		towerWireModels: make(map[string]rl.Model),
 	}
 	rs.pregenerateTowerModels()
+	rs.pregenerateLaserModel() // Добавлен вызов для создания модели лазера
 	return rs
 }
+
+// pregenerateLaserModel создает 3D-модель для лазера для оптимизации.
+func (s *RenderSystemRL) pregenerateLaserModel() {
+	mesh := rl.GenMeshCylinder(1.0, 1.0, 8)
+	// Вручную трансформируем вершины, так как rl.MeshTransform может отсутствовать
+	transform := rl.MatrixTranslate(0, 0.5, 0)
+	meshTransform(&mesh, transform)
+	s.laserModel = rl.LoadModelFromMesh(mesh)
+}
+
+// meshTransform применяет матрицу трансформации к каждой вершине меша.
+// Это ручная реализация rl.MeshTransform для совместимости.
+func meshTransform(mesh *rl.Mesh, transform rl.Matrix) {
+	vertexCount := int(mesh.VertexCount)
+	// Используем unsafe.Pointer для корректного преобразования *float32 в []float32
+	sliceHeader := struct {
+		data unsafe.Pointer
+		len  int
+		cap  int
+	}{
+		data: unsafe.Pointer(mesh.Vertices),
+		len:  vertexCount * 3,
+		cap:  vertexCount * 3,
+	}
+	vertices := *(*[]float32)(unsafe.Pointer(&sliceHeader))
+
+	for i := 0; i < vertexCount; i++ {
+		vertexIndex := i * 3
+
+		vec := rl.NewVector3(
+			vertices[vertexIndex],
+			vertices[vertexIndex+1],
+			vertices[vertexIndex+2],
+		)
+
+		transformedVec := rl.Vector3Transform(vec, transform)
+
+		vertices[vertexIndex] = transformedVec.X
+		vertices[vertexIndex+1] = transformedVec.Y
+		vertices[vertexIndex+2] = transformedVec.Z
+	}
+}
+
 
 // pregenerateTowerModels создает 3D-модели для каждого типа башни
 func (s *RenderSystemRL) pregenerateTowerModels() {
@@ -120,6 +166,21 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 			delete(s.ecs.Lasers, id)
 		}
 	}
+
+	// Обновление таймеров эффектов вулкана
+	for id, effect := range s.ecs.VolcanoEffects {
+		effect.Timer += deltaTime
+		// Анимация радиуса
+		progress := effect.Timer / effect.Duration
+		if progress > 1.0 {
+			progress = 1.0
+		}
+		effect.Radius = effect.MaxRadius * progress
+
+		if effect.Timer >= effect.Duration {
+			delete(s.ecs.VolcanoEffects, id)
+		}
+	}
 }
 
 // Draw использует кэшированные данные для отрисовки всего, КРОМЕ снарядов
@@ -131,6 +192,7 @@ func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, 
 	s.drawSolidEntities()
 	s.drawLines(hiddenLineID)
 	s.drawLasers()
+	s.drawVolcanoEffects() // <-- Добавлен вызов
 	s.drawRotatingBeams()
 	s.drawDraggingLine(isDragging, sourceTowerID, cancelDrag)
 	s.drawText()
@@ -387,7 +449,10 @@ func (s *RenderSystemRL) drawLines(hiddenLineID types.EntityID) {
 	}
 }
 
+// drawLasers отрисовывает лазерные лучи с использованием оптимизированной модели.
 func (s *RenderSystemRL) drawLasers() {
+	yAxis := rl.NewVector3(0, 1, 0) // Модель цилиндра по умолчанию ориентирована вдоль оси Y
+
 	for _, laser := range s.ecs.Lasers {
 		alpha := 1.0 - (laser.Timer / laser.Duration)
 		if alpha < 0 {
@@ -397,9 +462,35 @@ func (s *RenderSystemRL) drawLasers() {
 		lineColor := rl.NewColor(uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(alpha*255))
 
 		startPos := s.pixelToWorld(component.Position{X: laser.FromX, Y: laser.FromY})
+		startPos.Y = float32(laser.FromHeight)
 		endPos := s.pixelToWorld(component.Position{X: laser.ToX, Y: laser.ToY})
+		endPos.Y = float32(laser.ToHeight)
 
-		rl.DrawLine3D(startPos, endPos, lineColor)
+		direction := rl.Vector3Subtract(endPos, startPos)
+		distance := rl.Vector3Length(direction)
+
+		if distance < 0.001 {
+			continue
+		}
+
+		// Масштаб: X и Z - толщина, Y - длина.
+		// Наша модель имеет высоту 1, поэтому масштабируем Y на всю длину.
+		scale := rl.NewVector3(1.0, distance, 1.0)
+
+		// Вращение: вычисляем ось и угол для поворота от Y-оси к вектору direction
+		rotationAxis := rl.Vector3CrossProduct(yAxis, direction)
+		if rl.Vector3LengthSqr(rotationAxis) < 0.0001 {
+			// Векторы коллинеарны (параллельны). Ось вращения может быть любой.
+			rotationAxis = rl.NewVector3(1, 0, 0)
+		}
+		dot := rl.Vector3DotProduct(yAxis, rl.Vector3Normalize(direction))
+		if dot > 1.0 { dot = 1.0 }
+		if dot < -1.0 { dot = -1.0 }
+		rotationAngle := float32(math.Acos(float64(dot))) * rl.Rad2deg
+
+		// Позиция: теперь это startPos, так как мы изм��нили pivot модели на ее основание.
+		// Модель будет отрисована в startPos и правильно повернута/растянута до endPos.
+		rl.DrawModelEx(s.laserModel, startPos, rotationAxis, rotationAngle, scale, lineColor)
 	}
 }
 
@@ -445,4 +536,24 @@ func (s *RenderSystemRL) drawText() {
 
 func (s *RenderSystemRL) drawCombinationIndicators() {
 	// ... (implementation from "было.txt")
+}
+
+func (s *RenderSystemRL) drawVolcanoEffects() {
+	for _, effect := range s.ecs.VolcanoEffects {
+		pos := rl.NewVector3(float32(effect.X*config.CoordScale), float32(effect.Z), float32(effect.Y*config.CoordScale))
+		
+		// Анимация прозрачности: эффект плавно появляется и исчезает
+		progress := effect.Timer / effect.Duration
+		alpha := 0.0
+		if progress < 0.5 {
+			alpha = progress * 2 // От 0 до 1
+		} else {
+			alpha = 1.0 - (progress-0.5)*2 // От 1 до 0
+		}
+
+		color := colorToRL(effect.Color)
+		color.A = uint8(alpha * 255)
+
+		rl.DrawSphere(pos, float32(effect.Radius*config.CoordScale), color)
+	}
 }

@@ -39,8 +39,9 @@ func (s *AreaAttackSystem) Update(deltaTime float64) {
 
 		// Перезарядка
 		combat.FireCooldown = 1.0 / combat.FireRate
+		towerDef := defs.TowerDefs[tower.DefID]
 
-		// Находим по��ицию башни
+		// Находим позицию башни
 		towerPos, ok := s.ecs.Positions[id]
 		if !ok {
 			continue
@@ -48,7 +49,6 @@ func (s *AreaAttackSystem) Update(deltaTime float64) {
 
 		// --- Создание визуального эффекта ---
 		effectID := s.ecs.NewEntity()
-		towerDef := defs.TowerDefs[tower.DefID]
 		s.ecs.Positions[effectID] = towerPos // Эффект в той же позиции, что и башня
 		s.ecs.Renderables[effectID] = &component.Renderable{
 			Color:     towerDef.Visuals.Color,
@@ -62,14 +62,12 @@ func (s *AreaAttackSystem) Update(deltaTime float64) {
 		}
 		// --- Конец создания эффекта ---
 
-
 		// Находим всех врагов в радиусе и наносим урон
 		for enemyID, enemyPos := range s.ecs.Positions {
 			// Убеждаемся, что это враг
 			if _, isEnemy := s.ecs.Enemies[enemyID]; !isEnemy {
 				continue
 			}
-
 			dx := towerPos.X - enemyPos.X
 			dy := towerPos.Y - enemyPos.Y
 			distSq := dx*dx + dy*dy

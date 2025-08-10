@@ -297,7 +297,7 @@
       "range": 2,
       "shot_cost": 0.25,
       "attack": {
-        "type": "AREA_OF_EFFECT",
+        "type": "NONE",
         "damage_type": "PHYSICAL"
       }
     },

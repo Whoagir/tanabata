@@ -47,6 +47,7 @@ type Game struct {
 	CraftingSystem            *system.CraftingSystem
 	PlayerSystem              *system.PlayerSystem
 	AreaAttackSystem          *system.AreaAttackSystem
+	VolcanoSystem             *system.VolcanoSystem
 	EventDispatcher           *event.Dispatcher
 	Font                      rl.Font // Изменено
 	Rng                       *utils.PRNGService
@@ -109,6 +110,7 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 	g.CraftingSystem = system.NewCraftingSystem(ecs)
 	g.PlayerSystem = system.NewPlayerSystem(ecs)
 	g.AreaAttackSystem = system.NewAreaAttackSystem(ecs)
+	g.VolcanoSystem = system.NewVolcanoSystem(ecs, g.FindPowerSourcesForTower)
 	g.generateOre()
 	g.initUI()
 
@@ -333,6 +335,7 @@ func (g *Game) Update(deltaTime float64) {
 
 	if g.ECS.GameState.Phase == component.WaveState {
 		g.StatusEffectSystem.Update(dt)
+		g.VolcanoSystem.Update(dt)
 		g.AreaAttackSystem.Update(dt)
 		g.CombatSystem.Update(dt)
 		g.ProjectileSystem.Update(dt)

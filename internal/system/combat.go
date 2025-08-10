@@ -128,8 +128,9 @@ func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *componen
 		return false
 	}
 	targetID := targets[0]
-	targetPos, ok := s.ecs.Positions[targetID]
-	if !ok {
+	targetPos, okPos := s.ecs.Positions[targetID]
+	targetRenderable, okRender := s.ecs.Renderables[targetID]
+	if !okPos || !okRender {
 		return false
 	}
 
@@ -154,9 +155,8 @@ func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *componen
 		slowMultiplier := *combat.Attack.Params.SlowMultiplier
 		slowDuration := *combat.Attack.Params.SlowDuration
 		if slowMultiplier > 0 && slowDuration > 0 {
-			// Применяем или обновляем эффект замедления
 			if existingEffect, ok := s.ecs.SlowEffects[targetID]; ok {
-				existingEffect.Timer = slowDuration // Сбрасываем таймер на полную длительность
+				existingEffect.Timer = slowDuration
 			} else {
 				s.ecs.SlowEffects[targetID] = &component.SlowEffect{
 					SlowFactor: 1.0 - slowMultiplier,
@@ -168,21 +168,50 @@ func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *componen
 
 	// 4. Создать сущность с компонентом Laser для визуализации
 	laserID := s.ecs.NewEntity()
-	towerX, towerY := tower.Hex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
+	towerX, towerY := tower.Hex.ToPixel(float64(config.HexSize))
+	towerRenderable := s.ecs.Renderables[towerID]
+
+	// Получаем высоты
+	fromHeight := getTowerRenderHeight(tower, towerRenderable)
+	toHeight := float32(targetRenderable.Radius * config.CoordScale)
+
 	s.ecs.Lasers[laserID] = &component.Laser{
-		FromX:    towerX,
-		FromY:    towerY,
-		ToX:      targetPos.X,
-		ToY:      targetPos.Y,
-		Color:    getProjectileColorByAttackType(combat.Attack.DamageType),
-		Duration: 0.15, // Короткая вспышка
-		Timer:    0,
+		FromX:      towerX,
+		FromY:      towerY,
+		FromHeight: float64(fromHeight),
+		ToX:        targetPos.X,
+		ToY:        targetPos.Y,
+		ToHeight:   float64(toHeight),
+		Color:      getProjectileColorByAttackType(combat.Attack.DamageType),
+		Duration:   0.15, // Короткая вспышка
+		Timer:      0,
 	}
-	// Добавляем Renderable, чтобы система рендеринга знала об этой сущности
 	s.ecs.Renderables[laserID] = &component.Renderable{}
 
 	return true
 }
+
+// getTowerRenderHeight рассчитывает высоту башни для рендеринга.
+// Эта функция является дубликатом из render.go, чтобы избежать циклической зависимости.
+func getTowerRenderHeight(tower *component.Tower, renderable *component.Renderable) float32 {
+	scaledRadius := float32(renderable.Radius * config.CoordScale)
+	towerDef, ok := defs.TowerDefs[tower.DefID]
+	if !ok {
+		return scaledRadius * 4
+	}
+
+	switch {
+	case towerDef.Type == defs.TowerTypeWall:
+		return scaledRadius * 1.5
+	case towerDef.Type == defs.TowerTypeMiner:
+		return scaledRadius * 9.0
+	case tower.CraftingLevel >= 1:
+		return scaledRadius * 4.0
+	default:
+		return scaledRadius * 7.0
+	}
+}
+
 
 func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *component.Tower, combat *component.Combat, towerDef *defs.TowerDefinition) bool {
 	// Для INTERNAL атак цель не нужна, просто считаем выстрел успешным

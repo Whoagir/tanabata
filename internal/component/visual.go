@@ -18,9 +18,19 @@ type AoeEffectComponent struct {
 
 // Laser представляет собой визуальный эффект лазерного луча.
 type Laser struct {
-	FromX, FromY float64
-	ToX, ToY     float64
-	Color        color.Color
+	FromX, FromY, FromHeight float64
+	ToX, ToY, ToHeight       float64
+	Color                    color.Color
+	Timer                    float64 // Сколько времени эффект уже активен
+	Duration                 float64 // Общая продолжительность эффекта
+}
+
+// VolcanoEffect представляет собой визуальный эффект извержения вулкана для одной цели.
+type VolcanoEffect struct {
+	X, Y, Z      float64 // Позиция центра эффекта
+	Radius       float64 // Текущий радиус
+	MaxRadius    float64 // Максималь��ый радиус
 	Timer        float64 // Сколько времени эффект уже активен
 	Duration     float64 // Общая продолжительность эффекта
+	Color        color.Color
 }

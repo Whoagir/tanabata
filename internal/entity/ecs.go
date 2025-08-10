@@ -28,6 +28,8 @@ type ECS struct {
 	SlowEffects   map[types.EntityID]*component.SlowEffect
 	PoisonEffects map[types.EntityID]*component.PoisonEffect
 	Lasers                 map[types.EntityID]*component.Laser
+	VolcanoEffects         map[types.EntityID]*component.VolcanoEffect // Добавлено для эффектов вулкана
+	VolcanoAuras           map[types.EntityID]*component.VolcanoAura   // Добавлено для логики атаки вулкана
 	Combinables            map[types.EntityID]*component.Combinable
 	ManualSelectionMarkers map[types.EntityID]*component.ManualSelectionMarker
 	PlayerState            map[types.EntityID]*component.PlayerStateComponent // <<< Новый компонент
@@ -58,6 +60,8 @@ func NewECS() *ECS {
 		SlowEffects:            make(map[types.EntityID]*component.SlowEffect),
 		PoisonEffects:          make(map[types.EntityID]*component.PoisonEffect),
 		Lasers:                 make(map[types.EntityID]*component.Laser),
+		VolcanoEffects:         make(map[types.EntityID]*component.VolcanoEffect), // Инициализация
+		VolcanoAuras:           make(map[types.EntityID]*component.VolcanoAura),   // Инициализация
 		Combinables:            make(map[types.EntityID]*component.Combinable),
 		ManualSelectionMarkers: make(map[types.EntityID]*component.ManualSelectionMarker),
 		PlayerState:            make(map[types.EntityID]*component.PlayerStateComponent), // <<< Инициализация
