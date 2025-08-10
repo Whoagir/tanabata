@@ -2,7 +2,7 @@
 package ui
 
 import (
-	"image/color"
+	"go-tower-defense/internal/config"
 	"math"
 	"time"
 
@@ -25,15 +25,14 @@ func NewStateIndicatorRL(x, y, radius float32) *StateIndicatorRL {
 }
 
 // Draw отрисовывает индикатор
-func (i *StateIndicatorRL) Draw(stateColor color.RGBA) {
+func (i *StateIndicatorRL) Draw(stateColor rl.Color) {
 	elapsed := time.Since(i.LastClickTime).Seconds()
 	scale := 1.0 + 0.3*math.Exp(-elapsed*8)
 	currentRadius := i.Radius * float32(scale)
 
-	rlColor := rl.NewColor(stateColor.R, stateColor.G, stateColor.B, stateColor.A)
-
-	rl.DrawCircleV(rl.NewVector2(i.X, i.Y), currentRadius, rlColor)
-	rl.DrawCircleLines(int32(i.X), int32(i.Y), currentRadius, rl.White)
+	rl.DrawCircleV(rl.NewVector2(i.X, i.Y), currentRadius, stateColor)
+	// Рисуем кольцо для имитации толстой обводки
+	rl.DrawRing(rl.NewVector2(i.X, i.Y), currentRadius, currentRadius+config.UIBorderWidth, 0, 360, 36, config.UIBorderColor)
 }
 
 // IsClicked проверяет, был ли клик внутри индикатора

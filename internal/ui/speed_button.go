@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"go-tower-defense/internal/config"
 	"math"
 	"time"
 
@@ -14,18 +15,16 @@ type SpeedButtonRL struct {
 	Size           float32
 	LastClickTime  time.Time
 	LastToggleTime time.Time
-	StateColors    []rl.Color
 	CurrentState   int
 }
 
-func NewSpeedButtonRL(x, y, size float32, stateColors []rl.Color) *SpeedButtonRL {
+func NewSpeedButtonRL(x, y, size float32) *SpeedButtonRL {
 	return &SpeedButtonRL{
 		X:              x,
 		Y:              y,
 		Size:           size,
 		LastClickTime:  time.Time{},
 		LastToggleTime: time.Time{},
-		StateColors:    stateColors,
 		CurrentState:   0,
 	}
 }
@@ -35,7 +34,7 @@ func (b *SpeedButtonRL) Draw() {
 	scale := 1.0 + 0.3*math.Exp(-elapsed*8)
 	triangleSize := b.Size * float32(scale)
 
-	rlColor := b.StateColors[b.CurrentState]
+	rlColor := config.SpeedButtonColorsRL[b.CurrentState]
 
 	// Параметры треугольников
 	height := triangleSize * 1.2
@@ -46,15 +45,21 @@ func (b *SpeedButtonRL) Draw() {
 	p1_left := rl.NewVector2(b.X-width, b.Y-height/2)
 	p2_left := rl.NewVector2(b.X, b.Y)
 	p3_left := rl.NewVector2(b.X-width, b.Y+height/2)
-	rl.DrawTriangle(p1_left, p2_left, p3_left, rlColor)
-	rl.DrawTriangleLines(p1_left, p2_left, p3_left, rl.White)
+	// ИСПРАВЛЕНИЕ: Рисуем заливку и обводку. Меняем порядок вершин для заливки.
+	rl.DrawTriangle(p1_left, p3_left, p2_left, rlColor) // p3 и p2 поменялись местами
+	rl.DrawLineEx(p1_left, p2_left, config.UIBorderWidth, config.UIBorderColor)
+	rl.DrawLineEx(p2_left, p3_left, config.UIBorderWidth, config.UIBorderColor)
+	rl.DrawLineEx(p3_left, p1_left, config.UIBorderWidth, config.UIBorderColor)
 
 	// Правый треугольник
 	p1_right := rl.NewVector2(b.X-width+offset, b.Y-height/2)
 	p2_right := rl.NewVector2(b.X+offset, b.Y)
 	p3_right := rl.NewVector2(b.X-width+offset, b.Y+height/2)
-	rl.DrawTriangle(p1_right, p2_right, p3_right, rlColor)
-	rl.DrawTriangleLines(p1_right, p2_right, p3_right, rl.White)
+	// ИСПРАВЛЕНИЕ: Рисуем заливку и обводку. Меняем порядок вершин для заливки.
+	rl.DrawTriangle(p1_right, p3_right, p2_right, rlColor) // p3 и p2 поменялись местами
+	rl.DrawLineEx(p1_right, p2_right, config.UIBorderWidth, config.UIBorderColor)
+	rl.DrawLineEx(p2_right, p3_right, config.UIBorderWidth, config.UIBorderColor)
+	rl.DrawLineEx(p3_right, p1_right, config.UIBorderWidth, config.UIBorderColor)
 }
 
 func (b *SpeedButtonRL) IsClicked(mousePos rl.Vector2) bool {
@@ -63,7 +68,7 @@ func (b *SpeedButtonRL) IsClicked(mousePos rl.Vector2) bool {
 }
 
 func (b *SpeedButtonRL) ToggleState() {
-	b.CurrentState = (b.CurrentState + 1) % len(b.StateColors)
+	b.CurrentState = (b.CurrentState + 1) % len(config.SpeedButtonColorsRL)
 	b.LastClickTime = time.Now()
 	b.LastToggleTime = time.Now()
 }

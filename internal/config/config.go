@@ -53,15 +53,13 @@ const (
 	CameraFovyDefault = 45.0 // Угол обзора по умолчанию
 	CameraFovyMin     = 10.0 // Минимальный угол обзора (максимальный зум)
 	CameraFovyMax     = 120.0 // Максимальный угол обзора (минимальный зум)
+	UIBorderWidth     = 2.0   // Ширина обводки для элементов UI
 )
 
 // Цвета для Ebiten (останутся для справки или если где-то еще используются)
 var (
 	BackgroundColor       = color.RGBA{R: 30, G: 30, B: 30, A: 255}
 	GridColor             = color.RGBA{R: 50, G: 50, B: 50, A: 255}
-	BuildStateColor       = color.RGBA{R: 0, G: 255, B: 0, A: 255}
-	WaveStateColor        = color.RGBA{R: 255, G: 0, B: 0, A: 255}
-	SelectionStateColor   = color.RGBA{R: 255, G: 255, B: 0, A: 255}
 	HighlightColor        = color.RGBA{R: 255, G: 255, B: 0, A: 100}
 	TextLightColor        = color.White
 	TextDarkColor         = color.Black
@@ -69,81 +67,85 @@ var (
 	ButtonIdleColor       = color.RGBA{R: 70, G: 70, B: 70, A: 255}
 	ButtonHoverColor      = color.RGBA{R: 100, G: 100, B: 100, A: 255}
 	ButtonClickColor      = color.RGBA{R: 130, G: 130, B: 130, A: 255}
-	SpeedButtonPlayColor  = color.RGBA{R: 0, G: 150, B: 255, A: 255}
-	SpeedButtonFastColor  = color.RGBA{R: 255, G: 165, B: 0, A: 255}
-	SpeedButtonSuperColor = color.RGBA{R: 255, G: 69, B: 0, A: 255}
-	PauseButtonPlayColor  = color.RGBA{R: 0, G: 200, B: 0, A: 255}
-	PauseButtonPauseColor = color.RGBA{R: 255, G: 200, B: 0, A: 255}
 )
 
 // --- Новые цвета и константы для Raylib ---
 var (
+	// Основная палитра UI (приглушенные цвета)
+	UIColorBlue   = rl.NewColor(44, 85, 119, 255)   // Приглушенный синий
+	UIColorRed    = rl.NewColor(169, 68, 66, 255)   // Приглушенный красный
+	UIColorYellow = rl.NewColor(204, 146, 67, 255)  // Приглушенный желтый/оранжевый
+	UIBorderColor = rl.NewColor(220, 220, 220, 220) // Слегка прозрачный белый
+
+	// Цвета состояний из основной палитры
+	BuildStateColor       = UIColorBlue
+	WaveStateColor        = UIColorRed
+	SelectionStateColor   = UIColorYellow
+	PauseButtonPlayColor  = UIColorBlue
+	PauseButtonPauseColor = UIColorRed
+	UIndicatorActiveColor = UIColorRed
+	UIndicatorInactiveColor = UIColorBlue
+
+	// Цве��а для кнопки скорости
+	SpeedButtonColorsRL = []rl.Color{
+		UIColorBlue,
+		UIColorRed,
+		UIColorYellow,
+	}
+
+	// Остальные цвета UI
+	InfoPanelBgColorRL          = rl.NewColor(40, 40, 40, 230)
+	InfoPanelBorderColorRL      = rl.Gray
+	WaveIndicatorColorRL        = rl.LightGray
+	XpBarBackgroundColorRL      = rl.DarkGray
+	XpBarForegroundColorRL      = rl.NewColor(77, 144, 77, 255) // Приглушенный зеленый
+	XpBarBorderColorRL          = rl.Gray
+	PlayerLevelTextColorRL      = rl.White
+	PlayerXpTextColorRL         = rl.White
+	RecipeBookBackgroundColorRL = rl.NewColor(20, 20, 30, 245)
+	RecipeBookBorderColorRL     = rl.Gray
+	RecipeTitleColorRL          = rl.NewColor(255, 215, 0, 220) // Слегка приглушенное золото
+	RecipeDefaultColorRL        = rl.Gray
+	RecipeCanCraftColorRL       = rl.LightGray
+	CombineButtonColorRL        = UIColorBlue
+	SelectButtonColorRL         = rl.NewColor(77, 144, 77, 255)
+	SelectButtonActiveColorRL   = UIColorYellow
+	UIndicatorStrikethroughColorRL = rl.NewColor(255, 255, 255, 150)
+
+	// --- Игровые цвета (НЕ ТРОГАТЬ) ---
 	BackgroundColorRL           = rl.NewColor(30, 30, 30, 255)
 	GridColorRL                 = rl.NewColor(50, 50, 50, 255)
 	HighlightColorRL            = rl.NewColor(255, 255, 0, 100)
 	TextLightColorRL            = rl.White
 	TextDarkColorRL             = rl.Black
-	InfoPanelBgColorRL          = rl.NewColor(40, 40, 40, 220)
-	ButtonIdleColorRL           = rl.NewColor(70, 70, 70, 255)
-	ButtonHoverColorRL          = rl.NewColor(100, 100, 100, 255)
-	ButtonClickColorRL          = rl.NewColor(130, 130, 130, 255)
-	SpeedButtonPlayColorRL      = rl.NewColor(0, 150, 255, 255)
-	SpeedButtonFastColorRL      = rl.NewColor(255, 165, 0, 255)
-	SpeedButtonSuperColorRL     = rl.NewColor(255, 69, 0, 255)
-	PauseButtonPlayColorRL      = rl.NewColor(0, 200, 0, 255)
-	PauseButtonPauseColorRL     = rl.NewColor(255, 200, 0, 255)
-	WaveIndicatorColorRL        = rl.White
-	XpBarBackgroundColorRL      = rl.DarkGray
-	XpBarForegroundColorRL      = rl.Green
-	XpBarBorderColorRL          = rl.LightGray
-	PlayerLevelTextColorRL      = rl.White
-	PlayerXpTextColorRL         = rl.White
-	RecipeBookBackgroundColorRL = rl.NewColor(20, 20, 30, 240)
-	RecipeBookBorderColorRL     = rl.LightGray
-	RecipeTitleColorRL          = rl.Gold
-	RecipeDefaultColorRL        = rl.Gray
-	RecipeCanCraftColorRL       = rl.White
-	InfoPanelBorderColorRL      = rl.LightGray
-	CheckpointColorRL           = rl.NewColor(255, 215, 0, 255) // Золотой для чекпоинтов
-	OreHexBackgroundColorRL     = rl.NewColor(45, 45, 45, 255)   // Темно-серый для фона гекса с рудой
-	StrokeColorRL               = rl.NewColor(100, 100, 100, 255) // Цвет обводки гексов
-	CombineButtonColorRL        = rl.NewColor(0, 121, 241, 255) // Синий
-	SelectButtonColorRL         = rl.NewColor(40, 167, 69, 255) // Зеленый
-	SelectButtonActiveColorRL   = rl.NewColor(255, 193, 7, 255) // Желтый
+	CheckpointColorRL           = rl.NewColor(255, 215, 0, 255)
+	OreHexBackgroundColorRL     = rl.NewColor(45, 45, 45, 255)
+	StrokeColorRL               = rl.NewColor(100, 100, 100, 255)
 
-	// Цвета снарядов (из нового + добавлено из старого, если нужно)
-	ProjectileColorPhysicalRL = rl.NewColor(255, 100, 0, 255)   // Яркий оранжевый
-	ProjectileColorMagicalRL  = rl.NewColor(220, 50, 220, 255)  // Яркий пурпурный
-	ProjectileColorPureRL     = rl.NewColor(180, 240, 255, 255) // Светло-голубой
-	ProjectileColorSlowRL     = rl.NewColor(173, 216, 230, 255) // Ледяной синий
-	ProjectileColorPoisonRL   = rl.NewColor(124, 252, 0, 255)   // Ядовито-салатовый
+	// Цвета снарядов
+	ProjectileColorPhysicalRL = rl.NewColor(255, 100, 0, 255)
+	ProjectileColorMagicalRL  = rl.NewColor(220, 50, 220, 255)
+	ProjectileColorPureRL     = rl.NewColor(180, 240, 255, 255)
+	ProjectileColorSlowRL     = rl.NewColor(173, 216, 230, 255)
+	ProjectileColorPoisonRL   = rl.NewColor(124, 252, 0, 255)
 
-	// Цвета сущностей (из нового + добавлено из старого)
-	OreColorRL         = rl.NewColor(70, 130, 180, 128) // Более темный синий для руды
-	EnemyDamageColorRL = rl.White                        // Белый для вспышки урона
-	TowerWireColorRL   = rl.NewColor(80, 80, 80, 255)    // Темно-серый для обводки башен
+	// Цвета сущностей
+	OreColorRL         = rl.NewColor(70, 130, 180, 128)
+	EnemyDamageColorRL = rl.White
+	TowerWireColorRL   = rl.NewColor(80, 80, 80, 255)
 
-	// Добавлено из старого (адаптировано для Raylib)
+	// Старые цвета (адаптированные)
 	PassableColorRL       = rl.NewColor(70, 100, 120, 220)
 	ImpassableColorRL     = rl.NewColor(150, 70, 70, 220)
 	EntryColorRL          = rl.NewColor(0, 255, 0, 255)
 	ExitColorRL           = rl.NewColor(255, 0, 0, 255)
-	BuildStateColorRL     = rl.NewColor(70, 130, 180, 220) // Был в старом, добавил RL-версию
-	WaveStateColorRL      = rl.NewColor(220, 60, 60, 220)  // Был в старом, добавил RL-версию
-	SelectionStateColorRL = rl.NewColor(255, 215, 0, 255)  // Золотой/желтый для выбора
 	IndicatorStrokeRL     = rl.NewColor(240, 240, 240, 255)
 	BaseColorRL           = rl.NewColor(50, 205, 50, 255)
 	EnemyColorRL          = rl.NewColor(0, 0, 0, 255)
 	TowerStrokeColorRL    = rl.NewColor(255, 255, 255, 255)
-	TowerAStrokeColorRL   = rl.NewColor(255, 80, 80, 255) // Ярко-красный для типа A
-	TowerBStrokeColorRL   = rl.NewColor(255, 255, 0, 255) // Желтый для типа B
-	LineColorRL           = rl.NewColor(255, 195, 0, 150) // Насыщенный золотой для сети
-	StrokeWidth           = 2.0                           // Не цвет, но добавил как var из старого
-	SpeedButtonColorsRL   = []rl.Color{                   // Массив из старого, адаптированный
-		rl.NewColor(70, 130, 180, 220),
-		rl.NewColor(220, 60, 60, 220),
-		rl.NewColor(194, 178, 128, 255),
-	}
+	TowerAStrokeColorRL   = rl.NewColor(255, 80, 80, 255)
+	TowerBStrokeColorRL   = rl.NewColor(255, 255, 0, 255)
+	LineColorRL           = rl.NewColor(255, 195, 0, 150)
 )
 
 const (

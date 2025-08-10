@@ -11,7 +11,6 @@ import (
 	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"go-tower-defense/pkg/render"
-	"image/color"
 	"strings"
 	"time"
 
@@ -25,10 +24,11 @@ type GameState struct {
 	hexMap               *hexmap.HexMap
 	renderer             *render.HexRenderer
 	indicator            *ui.StateIndicatorRL
-	waveIndicator        *ui.WaveIndicatorRL
 	playerLevelIndicator *ui.PlayerLevelIndicatorRL
 	infoPanel            *ui.InfoPanelRL
 	recipeBook           *ui.RecipeBookRL
+	uIndicator           *ui.UIndicatorRL
+	waveIndicator        *ui.WaveIndicator // Добавлено
 	lastClickTime        time.Time
 	camera               *rl.Camera3D
 	font                 rl.Font
@@ -87,16 +87,25 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 
 	renderer := render.NewHexRenderer(hexMap, oreHexColors)
 
+	// --- Расчет позиций и размеров для UI ---
+	pauseButtonX := float32(config.ScreenWidth - config.IndicatorOffsetX - 90)
+	pauseButtonSize := float32(config.IndicatorRadius)
+	indicatorX := float32(config.ScreenWidth - config.IndicatorOffsetX)
+	indicatorRadius := float32(config.IndicatorRadius)
+
+	levelIndicatorLeftEdge := pauseButtonX - pauseButtonSize
+	levelIndicatorRightEdge := indicatorX + indicatorRadius
+	levelIndicatorWidth := levelIndicatorRightEdge - levelIndicatorLeftEdge
+
 	indicator := ui.NewStateIndicatorRL(
-		float32(config.ScreenWidth-config.IndicatorOffsetX),
+		indicatorX,
 		float32(config.IndicatorOffsetX),
-		float32(config.IndicatorRadius),
+		indicatorRadius,
 	)
-	waveIndicator := ui.NewWaveIndicatorRL(0, 0, font)
 	playerLevelIndicator := ui.NewPlayerLevelIndicatorRL(
-		float32(config.ScreenWidth-ui.XpBarWidth-config.IndicatorOffsetX+10),
-		float32(config.IndicatorOffsetX+28),
-		font,
+		levelIndicatorLeftEdge,
+		float32(config.IndicatorOffsetX+35), // Смещаем ниже кнопок
+		levelIndicatorWidth,
 	)
 	infoPanel := ui.NewInfoPanelRL(font, gameLogic.EventDispatcher)
 
@@ -105,6 +114,20 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 	recipeBookX := (float32(config.ScreenWidth) - recipeBookWidth) / 2
 	recipeBookY := (float32(config.ScreenHeight) - recipeBookHeight) / 2
 	recipeBook := ui.NewRecipeBookRL(recipeBookX, recipeBookY, recipeBookWidth, recipeBookHeight, recipeLibrary.Recipes, font)
+
+	waveIndicatorY := playerLevelIndicator.Y + 44 // Располагаем ниже индикатора уровня
+	waveIndicator := ui.NewWaveIndicator(
+		levelIndicatorLeftEdge+levelIndicatorWidth/2, // Центрируем по горизонтали
+		waveIndicatorY,
+		28, // Размер шрифта
+	)
+
+	uIndicator := ui.NewUIndicatorRL(
+		float32(config.IndicatorOffsetX),
+		float32(config.IndicatorOffsetX),
+		40, // Размер шрифта для "U"
+		font,
+	)
 
 	// --- Генерация текстур для чекпоинтов ---
 	checkpointTextures := make(map[int]rl.Texture2D)
@@ -122,10 +145,11 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 		hexMap:               hexMap,
 		renderer:             renderer,
 		indicator:            indicator,
-		waveIndicator:        waveIndicator,
 		playerLevelIndicator: playerLevelIndicator,
 		infoPanel:            infoPanel,
 		recipeBook:           recipeBook,
+		uIndicator:           uIndicator,
+		waveIndicator:        waveIndicator, // Добавлено
 		lastClickTime:        time.Now(),
 		camera:               camera,
 		font:                 font,
@@ -199,7 +223,7 @@ func (g *GameState) Update(deltaTime float64) {
 		return
 	}
 
-	if g.game.ECS.GameState.Phase == component.BuildState {
+	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		g.handleDebugKeys()
 		if rl.IsKeyPressed(rl.KeyU) {
 			g.game.ToggleLineDragMode()
@@ -392,7 +416,7 @@ func (g *GameState) Draw() {
 
 // DrawUI рисует все элементы интерфейса в 2D
 func (g *GameState) DrawUI() {
-	var stateColor color.RGBA
+	var stateColor rl.Color
 	switch g.game.ECS.GameState.Phase {
 	case component.BuildState:
 		stateColor = config.BuildStateColor
@@ -403,12 +427,6 @@ func (g *GameState) DrawUI() {
 	}
 	g.indicator.Draw(stateColor)
 
-	waveTextWidth := g.waveIndicator.GetTextWidth(g.game.Wave)
-	levelIndicatorCenterX := g.playerLevelIndicator.X + (ui.XpBarWidth / 2)
-	g.waveIndicator.X = levelIndicatorCenterX - (waveTextWidth / 2)
-	g.waveIndicator.Y = g.playerLevelIndicator.Y + 25
-	g.waveIndicator.Draw(g.game.Wave)
-
 	g.game.SpeedButton.Draw()
 	g.game.PauseButton.Draw()
 	g.infoPanel.Draw(g.game.ECS)
@@ -417,12 +435,20 @@ func (g *GameState) DrawUI() {
 		g.playerLevelIndicator.Draw(playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
 	}
 
+	// Отрисовка номера волны
+	g.waveIndicator.Draw(g.game.Wave, g.font)
+
 	if g.recipeBook.IsVisible {
 		availableTowers := make(map[string]int)
 		for _, tower := range g.game.ECS.Towers {
 			availableTowers[tower.DefID]++
 		}
 		g.recipeBook.Draw(availableTowers)
+	}
+
+	// Отрисовка индикатора режима "U"
+	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
+		g.uIndicator.Draw(g.game.IsInLineDragMode())
 	}
 }
 

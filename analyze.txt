@@ -8,7 +8,9 @@
 │   └── fonts
 │       └── arial.ttf
 ├── cmd
-│   └── game
+│   ├── game
+│   │   └── main.go
+│   └── map_viewer_raylib
 │       └── main.go
 ├── internal
 │   ├── app
@@ -29,6 +31,7 @@
 │   │   ├── player.go
 │   │   ├── projectile.go
 │   │   ├── render.go
+│   │   ├── rotating_beam.go
 │   │   ├── selection.go
 │   │   ├── status_effect.go
 │   │   ├── text.go
@@ -81,6 +84,7 @@
 │   │   ├── info_panel.go
 │   │   ├── pause_button.go
 │   │   ├── player_level_indicator.go
+│   │   ├── recipe_book.go
 │   │   ├── speed_button.go
 │   │   └── wave_indicator.go
 │   └── utils
@@ -91,6 +95,8 @@
 │   ├── hexmap
 │   │   ├── hex.go
 │   │   ├── map.go
+│   │   ├── map_3d.go
+│   │   ├── ore_generation_3d.go
 │   │   ├── pathfinding.go
 │   │   └── utils.go
 │   ├── render
@@ -107,14 +113,17 @@
 ├── GEMINI.md
 ├── go.mod
 ├── go.sum
+├── hex_renderer_optimal.txt
+├── main.exe
 ├── profile
+├── render_optimal.txt
 ├── reset_env.ps1
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
+├── было.txt
+├── генерация руды.txt
 ├── диалог.txt
-├── дневник (2).txt
 ├── дневник.txt
-├── енерация руды.txt
 ├── игра 3.png
 ├── игра 4.png
 ├── игра 5.png

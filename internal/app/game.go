@@ -354,16 +354,17 @@ func (g *Game) StartWave() {
 // --- Private Helper Functions ---
 
 func (g *Game) initUI() {
-	speedButtonStates := []rl.Color{
-		config.SpeedButtonPlayColorRL,
-		config.SpeedButtonFastColorRL,
-		config.SpeedButtonSuperColorRL,
-	}
+	// Рассчитываем X-координаты кнопок, между которыми нужно вставить нашу
+	pauseButtonX := float32(config.ScreenWidth - config.IndicatorOffsetX - 90)
+	indicatorX := float32(config.ScreenWidth - config.IndicatorOffsetX)
+	
+	// Находим среднюю точку для симметричного расположения и добавляем небольшое смещение вправо
+	speedButtonX := (pauseButtonX+indicatorX)/2 + 2
+
 	g.SpeedButton = ui.NewSpeedButtonRL(
-		float32(config.ScreenWidth-config.SpeedButtonOffsetX),
+		speedButtonX, // Новая, вычисленная координата X
 		float32(config.SpeedButtonY),
 		float32(config.SpeedButtonSize),
-		speedButtonStates,
 	)
 	g.SpeedMultiplier = 1.0
 
@@ -371,8 +372,6 @@ func (g *Game) initUI() {
 		float32(config.ScreenWidth-config.IndicatorOffsetX-90),
 		float32(config.IndicatorOffsetX),
 		float32(config.IndicatorRadius),
-		config.PauseButtonPlayColorRL,
-		config.PauseButtonPauseColorRL,
 	)
 }
 

@@ -2,7 +2,7 @@
 package ui
 
 import (
-	"image/color"
+	"go-tower-defense/internal/config"
 	"math"
 	"time"
 
@@ -16,19 +16,15 @@ type PauseButtonRL struct {
 	LastClickTime  time.Time
 	LastToggleTime time.Time
 	IsPaused       bool
-	PauseColor     color.Color
-	PlayColor      color.Color
 }
 
-func NewPauseButtonRL(x, y, size float32, pauseColor, playColor color.Color) *PauseButtonRL {
+func NewPauseButtonRL(x, y, size float32) *PauseButtonRL {
 	return &PauseButtonRL{
 		X:              x,
 		Y:              y,
 		Size:           size,
 		LastClickTime:  time.Time{},
 		LastToggleTime: time.Time{},
-		PauseColor:     pauseColor,
-		PlayColor:      playColor,
 		IsPaused:       false,
 	}
 }
@@ -40,24 +36,28 @@ func (b *PauseButtonRL) Draw() {
 
 	if b.IsPaused {
 		// Треугольник (play)
-		rlColor := colorToRL(b.PlayColor)
 		p1 := rl.NewVector2(b.X-rectSize, b.Y-rectSize*1.2)
 		p2 := rl.NewVector2(b.X-rectSize, b.Y+rectSize*1.2)
 		p3 := rl.NewVector2(b.X+rectSize, b.Y)
-		rl.DrawTriangle(p1, p2, p3, rlColor)
-		rl.DrawTriangleLines(p1, p2, p3, rl.White)
+		rl.DrawTriangle(p1, p2, p3, config.PauseButtonPauseColor)
+		// Рисуем обводку вручную
+		rl.DrawLineEx(p1, p2, config.UIBorderWidth, config.UIBorderColor)
+		rl.DrawLineEx(p2, p3, config.UIBorderWidth, config.UIBorderColor)
+		rl.DrawLineEx(p3, p1, config.UIBorderWidth, config.UIBorderColor)
 	} else {
 		// Два прямоугольника (pause)
-		rlColor := colorToRL(b.PauseColor)
 		width := rectSize * 0.6
 		height := rectSize * 2.0
 		spacing := rectSize * 0.4
-		// Левый
-		rl.DrawRectangleV(rl.NewVector2(b.X-width-spacing/2, b.Y-height/2), rl.NewVector2(width, height), rlColor)
-		rl.DrawRectangleLines(int32(b.X-width-spacing/2), int32(b.Y-height/2), int32(width), int32(height), rl.White)
-		// Правый
-		rl.DrawRectangleV(rl.NewVector2(b.X+spacing/2, b.Y-height/2), rl.NewVector2(width, height), rlColor)
-		rl.DrawRectangleLines(int32(b.X+spacing/2), int32(b.Y-height/2), int32(width), int32(height), rl.White)
+
+		leftRect := rl.NewRectangle(b.X-width-spacing/2, b.Y-height/2, width, height)
+		rightRect := rl.NewRectangle(b.X+spacing/2, b.Y-height/2, width, height)
+
+		rl.DrawRectangleRec(leftRect, config.PauseButtonPlayColor)
+		rl.DrawRectangleRec(rightRect, config.PauseButtonPlayColor)
+
+		rl.DrawRectangleLinesEx(leftRect, config.UIBorderWidth, config.UIBorderColor)
+		rl.DrawRectangleLinesEx(rightRect, config.UIBorderWidth, config.UIBorderColor)
 	}
 }
 
@@ -73,10 +73,4 @@ func (b *PauseButtonRL) TogglePause() {
 
 func (b *PauseButtonRL) SetPaused(paused bool) {
 	b.IsPaused = paused
-}
-
-// colorToRL преобразует стандартный color.Color в rl.Color
-func colorToRL(c color.Color) rl.Color {
-	r, g, b, a := c.RGBA()
-	return rl.NewColor(uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(a>>8))
 }
