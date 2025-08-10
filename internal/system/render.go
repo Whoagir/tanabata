@@ -173,6 +173,18 @@ func (s *RenderSystemRL) drawSolidEntities() {
 			}
 		} else if tower, isTower := s.ecs.Towers[id]; isTower {
 			s.drawTower(tower, data, scaledRadius, finalColor, renderable.HasStroke)
+			// <<< НАЧАЛО: Отрисовка индикатора крафта >>>
+			if _, ok := s.ecs.Combinables[id]; ok {
+				indicatorPos := data.WorldPos
+				indicatorPos.Y = data.Height + 4.0 // Располагаем над башней
+				indicatorRadius := scaledRadius * 0.5
+
+				// Рисуем сам диск
+				rl.DrawCylinder(indicatorPos, indicatorRadius, indicatorRadius, 0.1, 12, rl.Gold)
+				// Рисуем обводку
+				rl.DrawCylinderWires(indicatorPos, indicatorRadius, indicatorRadius, 0.1, 12, rl.Black)
+			}
+			// <<< КОНЕЦ: Отрисовка индикатора крафта >>>
 		}
 	}
 }
@@ -396,7 +408,35 @@ func (s *RenderSystemRL) drawRotatingBeams() {
 }
 
 func (s *RenderSystemRL) drawDraggingLine(isDragging bool, sourceTowerID types.EntityID, cancelDrag func()) {
-	// ... (implementation from "было.txt")
+	if !isDragging || sourceTowerID == 0 || s.camera == nil {
+		return
+	}
+
+	sourceTower, okT := s.ecs.Towers[sourceTowerID]
+	sourceRender, okR := s.ecs.Renderables[sourceTowerID]
+	if !okT || !okR {
+		// Если башня по какой-то причине исчезла, отменяем перетаскивание
+		cancelDrag()
+		return
+	}
+
+	// Получаем начальную позицию (верхушка башни)
+	startPos := s.hexToWorld(sourceTower.Hex)
+	startPos.Y = s.GetTowerRenderHeight(sourceTower, sourceRender)
+
+	// Получаем конечную позицию (курсор на плоскости y=0)
+	ray := rl.GetMouseRay(rl.GetMousePosition(), *s.camera)
+	t := -ray.Position.Y / ray.Direction.Y
+	var endPos rl.Vector3
+	if t > 0 {
+		endPos = rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
+	} else {
+		// Если курсор не указывает на плоскость, рисуем линию в направлении камеры
+		endPos = rl.Vector3Add(s.camera.Position, rl.Vector3Scale(ray.Direction, 100))
+	}
+
+	// Рисуем линию
+	rl.DrawCapsule(startPos, endPos, 0.6, 8, 8, rl.Yellow)
 }
 
 func (s *RenderSystemRL) drawText() {

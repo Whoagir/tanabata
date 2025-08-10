@@ -190,7 +190,6 @@ func (g *GameState) Update(deltaTime float64) {
 		g.camera.Fovy = config.CameraFovyDefault
 	}
 
-	g.game.PauseButton.SetPaused(false)
 	g.infoPanel.Update(g.game.ECS)
 
 	if rl.IsKeyPressed(rl.KeyB) { // Используем 'B' для книги рецептов, чтобы не конфликтовать с зумом
@@ -220,6 +219,8 @@ func (g *GameState) Update(deltaTime float64) {
 	}
 
 	if rl.IsKeyPressed(rl.KeyF9) {
+		g.game.HandlePauseClick()
+		g.sm.SetState(NewPauseState(g.sm, g, g.font))
 		return
 	}
 
@@ -275,6 +276,20 @@ func (g *GameState) getHexUnderCursor() hexmap.Hex {
 	return hexmap.Hex{}
 }
 
+func (g *GameState) getHitPointUnderCursor() (rl.Vector3, bool) {
+	if g.camera == nil {
+		return rl.Vector3{}, false
+	}
+	ray := rl.GetMouseRay(rl.GetMousePosition(), *g.camera)
+	// Рассчитываем пересечение с плоскостью y=0
+	t := -ray.Position.Y / ray.Direction.Y
+	if t > 0 {
+		hitPoint := rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
+		return hitPoint, true
+	}
+	return rl.Vector3{}, false
+}
+
 func (g *GameState) handleDebugKeys() {
 	if rl.IsKeyPressed(rl.KeyOne) {
 		g.game.DebugTowerID = "RANDOM_ATTACK"
@@ -308,6 +323,7 @@ func (g *GameState) handleUIClick(mousePos rl.Vector2) {
 		g.game.HandleSpeedClick()
 	} else if g.game.PauseButton.IsClicked(mousePos) {
 		g.game.HandlePauseClick()
+		g.sm.SetState(NewPauseState(g.sm, g, g.font)) // Переключаемся в состояние паузы
 	} else if g.indicator.IsClicked(mousePos) {
 		g.indicator.HandleClick()
 		g.game.HandleIndicatorClick()
@@ -334,6 +350,7 @@ func (g *GameState) findEntityAtCursor() (types.EntityID, bool) {
 
 func (g *GameState) handleGameClick(button rl.MouseButton) {
 	hex := g.getHexUnderCursor()
+	hitPoint, hasHit := g.getHitPointUnderCursor()
 
 	if button == rl.MouseLeftButton {
 		entityID, entityFound := g.findEntityAtCursor()
@@ -348,12 +365,19 @@ func (g *GameState) handleGameClick(button rl.MouseButton) {
 
 	if !g.hexMap.Contains(hex) {
 		g.game.ClearAllSelections()
+		// Если мы в режиме перетаскивания и кликнули вне карты, отменяем его
+		if g.game.IsInLineDragMode() {
+			g.game.CancelLineDrag()
+		}
 		return
 	}
 
 	if g.game.IsInLineDragMode() {
-		if button == rl.MouseLeftButton {
-			// g.game.HandleLineDragClick(hex, x, y)
+		if button == rl.MouseLeftButton && hasHit {
+			g.game.HandleLineDragClick(hex, hitPoint)
+		} else if button == rl.MouseRightButton {
+			// Отмена перетаскивания по правому клику
+			g.game.CancelLineDrag()
 		}
 		return
 	}

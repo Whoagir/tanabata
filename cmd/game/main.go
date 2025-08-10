@@ -79,30 +79,34 @@ func main() {
 		}
 		lastUpdateTime = now
 
-		// --- Управление камерой (как в map_viewer) ---
-		if rl.IsKeyDown(rl.KeyQ) {
-			isoPos = rl.Vector3RotateByAxisAngle(isoPos, camera.Up, -rotationSpeed)
-		}
-		if rl.IsKeyDown(rl.KeyE) {
-			isoPos = rl.Vector3RotateByAxisAngle(isoPos, camera.Up, rotationSpeed)
-		}
-
-		wheel := rl.GetMouseWheelMove()
-		if wheel != 0 {
-			cameraAngleT += wheel * 0.05
-			if cameraAngleT > 0.99 {
-				cameraAngleT = 0.99
-			} else if cameraAngleT < 0.0 {
-				cameraAngleT = 0.0
+		// --- Управление камерой и обновление состояния (только если не на паузе) ---
+		if _, isPaused := sm.Current().(*state.PauseState); !isPaused {
+			// --- Управление камерой (как в map_viewer) ---
+			if rl.IsKeyDown(rl.KeyQ) {
+				isoPos = rl.Vector3RotateByAxisAngle(isoPos, camera.Up, -rotationSpeed)
 			}
+			if rl.IsKeyDown(rl.KeyE) {
+				isoPos = rl.Vector3RotateByAxisAngle(isoPos, camera.Up, rotationSpeed)
+			}
+
+			wheel := rl.GetMouseWheelMove()
+			if wheel != 0 {
+				cameraAngleT += wheel * 0.05
+				if cameraAngleT > 0.99 {
+					cameraAngleT = 0.99
+				} else if cameraAngleT < 0.0 {
+					cameraAngleT = 0.0
+				}
+			}
+
+			camera.Position = Vector3Lerp(isoPos, topDownPos, cameraAngleT)
+			camera.Target = Vector3Lerp(isoTarget, topDownTarget, cameraAngleT)
+			// УБРАНО: camera.Fovy = isoFovy + (topDownFovy-isoFovy)*cameraAngleT
+			// Эта строка конфликтовала с логикой зума в GameState.
+			// Теперь Fovy управляется только в GameState.
 		}
 
-		camera.Position = Vector3Lerp(isoPos, topDownPos, cameraAngleT)
-		camera.Target = Vector3Lerp(isoTarget, topDownTarget, cameraAngleT)
-		// УБРАНО: camera.Fovy = isoFovy + (topDownFovy-isoFovy)*cameraAngleT
-		// Эта строка конфликтовала с логикой зума в GameState.
-		// Теперь Fovy управляется только в GameState.
-
+		// Обновляем состояние всегда, чтобы PauseState мог обработать выход из паузы
 		sm.Update(deltaTime)
 
 		// --- Отрисовка ---

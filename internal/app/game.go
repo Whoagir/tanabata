@@ -436,7 +436,13 @@ func (g *Game) HandleSpeedClick() {
 }
 
 func (g *Game) HandlePauseClick() {
-	g.PauseButton.TogglePause()
+	g.isPaused = !g.isPaused
+	g.PauseButton.SetPaused(g.isPaused)
+}
+
+// IsPaused возвращает текущее состояние паузы.
+func (g *Game) IsPaused() bool {
+	return g.isPaused
 }
 
 // GetTowerHexesByType возвращает гексы, сгруппированные по типу башни.
@@ -609,9 +615,9 @@ func (g *Game) ToggleLineDragMode() {
 	}
 }
 
-func (g *Game) HandleLineDragClick(hex hexmap.Hex, x, y int) {
+func (g *Game) HandleLineDragClick(hex hexmap.Hex, hitPoint rl.Vector3) {
 	if g.dragSourceTowerID == 0 {
-		g.startLineDrag(hex, x, y)
+		g.startLineDrag(hex, hitPoint)
 		return
 	}
 	g.finishLineDrag(hex)
@@ -737,7 +743,7 @@ func removeElement(slice []types.EntityID, element types.EntityID) []types.Entit
 	return result
 }
 
-func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
+func (g *Game) startLineDrag(hex hexmap.Hex, hitPoint rl.Vector3) {
 	g.DebugInfo = nil
 
 	sourceID, ok := g.getTowerAt(hex)
@@ -747,6 +753,7 @@ func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
 
 	tower := g.ECS.Towers[sourceID]
 	towerDef := defs.TowerDefs[tower.DefID]
+	// Запрещаем перетаскивать линии от корневых майнеров (которые стоят на руде)
 	isRootMiner := towerDef.Type == defs.TowerTypeMiner && g.isOnOre(tower.Hex)
 	if isRootMiner {
 		return
@@ -758,23 +765,25 @@ func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
 		return
 	}
 
-	sourcePos, ok := g.ECS.Positions[sourceID]
-	if !ok {
-		return
-	}
+	// Получаем 3D позицию исходной башни
+	sourcePos3D := g.hexToWorld(tower.Hex)
 
-	clickAngle := math.Atan2(float64(y)-sourcePos.Y, float64(x)-sourcePos.X)
+	// Вычисляем угол клика на плоскости XZ
+	clickAngle := math.Atan2(float64(hitPoint.Z-sourcePos3D.Z), float64(hitPoint.X-sourcePos3D.X))
 
 	var bestMatchID types.EntityID
 	minAngleDiff := math.Pi
 
 	for _, neighborID := range connections {
-		neighborPos, ok := g.ECS.Positions[neighborID]
+		neighborTower, ok := g.ECS.Towers[neighborID]
 		if !ok {
 			continue
 		}
+		// Получаем 3D позицию соседней башни
+		neighborPos3D := g.hexToWorld(neighborTower.Hex)
 
-		lineAngle := math.Atan2(neighborPos.Y-sourcePos.Y, neighborPos.X-sourcePos.X)
+		// Вычисляем угол до соседа на плоскости XZ
+		lineAngle := math.Atan2(float64(neighborPos3D.Z-sourcePos3D.Z), float64(neighborPos3D.X-sourcePos3D.X))
 		angleDiff := math.Abs(clickAngle - lineAngle)
 		if angleDiff > math.Pi {
 			angleDiff = 2*math.Pi - angleDiff
@@ -786,6 +795,7 @@ func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
 		}
 	}
 
+	// Порог для определения "попадания" в линию
 	if bestMatchID != 0 && minAngleDiff < math.Pi/3.5 {
 		targetID := bestMatchID
 		lineID, isConnected := g.getLineBetweenTowers(sourceID, targetID)
@@ -793,10 +803,17 @@ func (g *Game) startLineDrag(hex hexmap.Hex, x, y int) {
 			return
 		}
 
-		g.dragSourceTowerID = sourceID
-		g.dragOriginalParentID = targetID
+		// ИСПРАВЛЕНО: Меняем местами источник и исходную точку
+		g.dragSourceTowerID = targetID      // Источник - это сосед, от которого идет линия
+		g.dragOriginalParentID = sourceID // А исходная точка - та, на которую кликнули
 		g.hiddenLineID = lineID
 	}
+}
+
+// hexToWorld - вспомогательная функция для преобразования гекса в мировые координаты
+func (g *Game) hexToWorld(h hexmap.Hex) rl.Vector3 {
+	x, y := h.ToPixel(float64(config.HexSize))
+	return rl.NewVector3(float32(x*config.CoordScale), 0, float32(y*config.CoordScale))
 }
 
 func (g *Game) getLineBetweenTowers(tower1ID, tower2ID types.EntityID) (types.EntityID, bool) {
