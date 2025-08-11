@@ -44,13 +44,21 @@ type AttackDef struct {
 // Using pointers to avoid including all fields for all attack types.
 type AttackParams struct {
 	// For Projectile
-	SplitCount *int `json:"split_count,omitempty"`
+	SplitCount  *int            `json:"split_count,omitempty"`
+	ImpactBurst *ImpactBurstDef `json:"impact_burst,omitempty"`
 	// For Laser
 	SlowMultiplier *float64 `json:"slow_multiplier,omitempty"`
 	SlowDuration   *float64 `json:"slow_duration,omitempty"`
 	// For RotatingBeam
 	RotationSpeed float64 `json:"rotation_speed,omitempty"`
 	ArcAngle      float64 `json:"arc_angle,omitempty"`
+}
+
+// ImpactBurstDef defines the properties of a projectile's impact explosion.
+type ImpactBurstDef struct {
+	Radius       float64 `json:"radius"`
+	TargetCount  int     `json:"target_count"`
+	DamageFactor float64 `json:"damage_factor"`
 }
 
 // CombatStats contains parameters related to a tower's combat abilities.

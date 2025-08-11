@@ -25,4 +25,9 @@ type Projectile struct {
 	// Для условного самонаведения
 	IsConditionallyHoming bool    // Включена ли логика самонаведения
 	TargetLastSlowFactor  float64 // Множитель замедления цели в момент последнего расчета
+
+	// Для механики разрыва при попадании
+	ImpactBurstRadius       float64 // Радиус поиска новых целей
+	ImpactBurstTargetCount  int     // Количество новых целей
+	ImpactBurstDamageFactor float64 // Множитель урона для новых снарядов
 }

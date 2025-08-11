@@ -8,6 +8,7 @@ import (
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event"
 	"go-tower-defense/internal/types"
+	"go-tower-defense/pkg/hexmap"
 	"math"
 )
 
@@ -97,7 +98,6 @@ func (s *ProjectileSystem) handleHoming(projID types.EntityID, proj *component.P
 	}
 }
 
-
 // Вспомогательная функция для удаления снаряда
 func (s *ProjectileSystem) removeProjectile(id types.EntityID) {
 	delete(s.ecs.Positions, id)
@@ -106,52 +106,94 @@ func (s *ProjectileSystem) removeProjectile(id types.EntityID) {
 }
 
 func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *component.Projectile) {
-	// Применяем эффект замедления, если он есть
+	// Запоминаем позиц��ю цели перед нанесением урона, на случай если цель умрет
+	targetPos, targetExists := s.ecs.Positions[proj.TargetID]
+	if !targetExists {
+		s.removeProjectile(projectileID)
+		return
+	}
+
+	// Применяем эффекты и урон
+	s.applyEffectsAndDamage(proj)
+
+	// --- Новая логика Impact Burst ---
+	if proj.ImpactBurstRadius > 0 {
+		s.handleImpactBurst(proj, targetPos)
+	}
+	// --- Конец новой логики ---
+
+	// Удаляем основной снаряд
+	s.removeProjectile(projectileID)
+
+	// Обновляем визуал цели, если она еще жива
+	s.updateTargetVisuals(proj.TargetID)
+}
+
+func (s *ProjectileSystem) applyEffectsAndDamage(proj *component.Projectile) {
 	if proj.SlowsTarget {
 		s.ecs.SlowEffects[proj.TargetID] = &component.SlowEffect{
 			Timer:      proj.SlowDuration,
 			SlowFactor: proj.SlowFactor,
 		}
 	}
-
-	// Применяем эффект отравления, если он есть
 	if proj.AppliesPoison {
 		s.ecs.PoisonEffects[proj.TargetID] = &component.PoisonEffect{
 			Timer:        proj.PoisonDuration,
 			DamagePerSec: proj.PoisonDPS,
-			TickTimer:    1.0, // Первый тик урона будет через 1 секунду
+			TickTimer:    1.0,
 		}
 	}
-
-	// Наносим урон
 	ApplyDamage(s.ecs, proj.TargetID, proj.Damage, proj.AttackType)
+}
 
-	// Удаляем снаряд
-	s.removeProjectile(projectileID)
+func (s *ProjectileSystem) handleImpactBurst(proj *component.Projectile, impactPos *component.Position) {
+	impactHex := hexmap.PixelToHex(impactPos.X, impactPos.Y, float64(config.HexSize))
+	nearbyEnemies := s.combatSystem.FindEnemiesInRadius(impactHex, proj.ImpactBurstRadius)
 
-	// Проверяем, жив ли еще враг, чтобы обновить его радиус
-	if health, exists := s.ecs.Healths[proj.TargetID]; exists {
-		// Получаем компонент врага, чтобы узнать его DefID
-		enemy, isEnemy := s.ecs.Enemies[proj.TargetID]
-		if !isEnemy {
-			return // Цель больше не враг
+	// Создаем новый AttackDef для "мини-снарядов", без ImpactBurst, чтобы избежать рекурсии
+	miniProjectileAttackDef := &defs.AttackDef{
+		Type:       defs.BehaviorProjectile,
+		DamageType: proj.AttackType, // Наследуем тип урона
+		Params:     nil,             // Явно без параметров
+	}
+
+	burstDamage := int(float64(proj.Damage) * proj.ImpactBurstDamageFactor)
+	targetsHit := 0
+
+	for _, enemyID := range nearbyEnemies {
+		if enemyID == proj.TargetID {
+			continue // Не стреляем в первоначальную цель
+		}
+		if targetsHit >= proj.ImpactBurstTargetCount {
+			break
 		}
 
-		// Получаем правильное определение врага из библиотеки
-		def, ok := defs.EnemyDefs[enemy.DefID]
-		if !ok {
-			return // Не удалось найти определение
-		}
+		// Создаем "мини-снаряд" из точки попадания в новую цель
+		s.combatSystem.CreateProjectile(impactPos, enemyID, miniProjectileAttackDef, burstDamage, 0.5)
+		targetsHit++
+	}
+}
 
+func (s *ProjectileSystem) updateTargetVisuals(targetID types.EntityID) {
+	health, exists := s.ecs.Healths[targetID]
+	if !exists {
+		s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyRemovedFromGame, Data: targetID})
+		return
+	}
+
+	enemy, isEnemy := s.ecs.Enemies[targetID]
+	if !isEnemy {
+		return
+	}
+	def, ok := defs.EnemyDefs[enemy.DefID]
+	if !ok {
+		return
+	}
+
+	if renderable, ok := s.ecs.Renderables[targetID]; ok {
 		healthf := float32(health.Value)
 		health_m := float32(def.Health)
-		if renderable, ok := s.ecs.Renderables[proj.TargetID]; ok {
-			// Используем правильный RadiusFactor из определения врага
-			newRadius := (0.6 + 0.4*(healthf/health_m)) * float32(config.HexSize*def.Visuals.RadiusFactor)
-			renderable.Radius = newRadius
-		}
-	} else {
-		// ��раг был уничтожен, отправляем событие
-		s.eventDispatcher.Dispatch(event.Event{Type: event.EnemyRemovedFromGame, Data: proj.TargetID})
+		newRadius := (0.6 + 0.4*(healthf/health_m)) * float32(config.HexSize*def.Visuals.RadiusFactor)
+		renderable.Radius = newRadius
 	}
 }

@@ -98,7 +98,7 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 		Rng:             utils.NewPRNGService(0),
 		towersBuilt:     0,
 		gameTime:        0.0,
-		DebugTowerID:    "TOWER_LIGHTHOUSE",
+		DebugTowerID:    "",
 	}
 	g.RenderSystem = system.NewRenderSystemRL(ecs, font)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
@@ -348,7 +348,7 @@ func (g *Game) initUI() {
 	// Рассчитываем X-координаты кнопок, между которыми нужно вставить нашу
 	pauseButtonX := float32(config.ScreenWidth - config.IndicatorOffsetX - 90)
 	indicatorX := float32(config.ScreenWidth - config.IndicatorOffsetX)
-	
+
 	// Находим среднюю точку для симметричного расположения и добавляем небольшое смещение вправо
 	speedButtonX := (pauseButtonX+indicatorX)/2 + 2
 
@@ -795,7 +795,7 @@ func (g *Game) startLineDrag(hex hexmap.Hex, hitPoint rl.Vector3) {
 		}
 
 		// ИСПРАВЛЕНО: Меняем местами источник и исходную точку
-		g.dragSourceTowerID = targetID      // Источник - это сосед, от которого идет линия
+		g.dragSourceTowerID = targetID    // Источник - это сосед, от которого идет линия
 		g.dragOriginalParentID = sourceID // А исходная точка - та, на которую кликнули
 		g.hiddenLineID = lineID
 	}

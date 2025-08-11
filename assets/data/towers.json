@@ -177,7 +177,12 @@
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",
         "params": {
-          "split_count": 3
+          "split_count": 3,
+          "impact_burst": {
+            "radius": 1.5,
+            "target_count": 4,
+            "damage_factor": 0.4
+          }
         }
       }
     },

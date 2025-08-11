@@ -329,6 +329,7 @@ wave - компонент для волны врагов, тут есть ном
 │   │   └── tower_management.go // работа с вышками 
 │   ├── component
 │   │   ├── aura.go // компонент Aura и AuraEffect
+│   │   ├── beacon.go // для работы маяка 
 │   │   ├── combat.go //компоненты Health и Combat 
 │   │   ├── crafting.go
 │   │   ├── enemy.go //компонент Enemy 
@@ -340,11 +341,13 @@ wave - компонент для волны врагов, тут есть ном
 │   │   ├── player.go // это как бы сущность игрок которая нужна для лвла и рандома
 │   │   ├── projectile.go //компонент Projectile 
 │   │   ├── render.go //компонент Renderable
+│   │   ├── rotating_beam.go 
 │   │   ├── selection.go
 │   │   ├── status_effect.go //компонент SlowEffect и компонент PoisonEffect
 │   │   ├── text.go //компонент Text 
 │   │   ├── tower.go //компонент Tower
 │   │   ├── visual.go //компонент DamageFlash для эффектов (эффект получения урона)
+│   │   ├── volcano.go // для работы вышки с названием вулкан 
 │   │   └── wave.go //компонент Wave 
 │   ├── config
 │   │   └── config.go // все конфииги тут 
@@ -372,6 +375,7 @@ wave - компонент для волны врагов, тут есть ном
 │   ├── system
 │   │   ├── area_attack_system.go
 │   │   ├── aura.go
+│   │   ├── beacon_system.go // для работы маяка 
 │   │   ├── combat.go
 │   │   ├── crafting.go
 │   │   ├── environmental_damage.go
@@ -384,6 +388,7 @@ wave - компонент для волны врагов, тут есть ном
 │   │   ├── status_effect.go
 │   │   ├── utils.go
 │   │   ├── visual_effect.go
+│   │   ├── volcano_system.go // для работы вулкана 
 │   │   └── wave.go
 │   ├── types
 │   │   └── types.go// вроде геттер для EntityID
@@ -391,8 +396,10 @@ wave - компонент для волны врагов, тут есть ном
 │   │   ├── indicator.go
 │   │   ├── info_panel.go // ui шка которая нужна что бы показывать состояние сущностей
 │   │   ├── pause_button.go // ui шка что бы ставить паузу (альтернатива F9) 
-│   │   ├── player_level_indicator.go
+│   │   ├── player_level_indicator.go // ui шка для демонстрации лвла игрока 
+│   │   ├── recipe_book.go
 │   │   ├── speed_button.go // ui шка для контроля скорости игры
+│   │   ├── u_indicator.go
 │   │   └── wave_indicator.go
 │   └── utils
 │       ├── coords.go
@@ -420,14 +427,11 @@ wave - компонент для волны врагов, тут есть ном
 ├── GEMINI.md
 ├── go.mod
 ├── go.sum
-├── hex_renderer_optimal.txt
 ├── main.exe
 ├── profile
-├── render_optimal.txt
 ├── reset_env.ps1
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
-├── было.txt
 ├── генерация руды.txt
 ├── диалог.txt
 ├── дневник.txt
@@ -436,7 +440,7 @@ wave - компонент для волны врагов, тут есть ном
 ├── игра 5.png
 ├── игра.png
 ├── игрга 2.png
-├── информация.txt
+├── история.txt
 └── ошибки.txt
 
 

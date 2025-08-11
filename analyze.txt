@@ -20,6 +20,7 @@
 │   │   └── tower_management.go
 │   ├── component
 │   │   ├── aura.go
+│   │   ├── beacon.go
 │   │   ├── combat.go
 │   │   ├── crafting.go
 │   │   ├── enemy.go
@@ -37,6 +38,7 @@
 │   │   ├── text.go
 │   │   ├── tower.go
 │   │   ├── visual.go
+│   │   ├── volcano.go
 │   │   └── wave.go
 │   ├── config
 │   │   └── config.go
@@ -64,6 +66,7 @@
 │   ├── system
 │   │   ├── area_attack_system.go
 │   │   ├── aura.go
+│   │   ├── beacon_system.go
 │   │   ├── combat.go
 │   │   ├── crafting.go
 │   │   ├── environmental_damage.go
@@ -76,6 +79,7 @@
 │   │   ├── status_effect.go
 │   │   ├── utils.go
 │   │   ├── visual_effect.go
+│   │   ├── volcano_system.go
 │   │   └── wave.go
 │   ├── types
 │   │   └── types.go
@@ -86,6 +90,7 @@
 │   │   ├── player_level_indicator.go
 │   │   ├── recipe_book.go
 │   │   ├── speed_button.go
+│   │   ├── u_indicator.go
 │   │   └── wave_indicator.go
 │   └── utils
 │       ├── coords.go
@@ -113,14 +118,11 @@
 ├── GEMINI.md
 ├── go.mod
 ├── go.sum
-├── hex_renderer_optimal.txt
 ├── main.exe
 ├── profile
-├── render_optimal.txt
 ├── reset_env.ps1
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
-├── было.txt
 ├── генерация руды.txt
 ├── диалог.txt
 ├── дневник.txt
@@ -129,5 +131,5 @@
 ├── игра 5.png
 ├── игра.png
 ├── игрга 2.png
-├── информация.txt
+├── история.txt
 └── ошибки.txt

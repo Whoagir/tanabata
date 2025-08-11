@@ -8,7 +8,6 @@ import (
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/internal/ui"
-	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"go-tower-defense/pkg/render"
 	"strings"
@@ -238,11 +237,13 @@ func (g *GameState) Update(deltaTime float64) {
 
 	if isShiftPressed {
 		if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-			hex := g.getHexUnderCursor()
+			ray := rl.GetMouseRay(rl.GetMousePosition(), *g.camera)
+			hex := g.getHexUnderCursor(ray)
 			g.game.HandleShiftClick(hex, true, false)
 		}
 		if rl.IsMouseButtonPressed(rl.MouseRightButton) {
-			hex := g.getHexUnderCursor()
+			ray := rl.GetMouseRay(rl.GetMousePosition(), *g.camera)
+			hex := g.getHexUnderCursor(ray)
 			g.game.HandleShiftClick(hex, false, true)
 		}
 	} else {
@@ -261,11 +262,10 @@ func (g *GameState) Update(deltaTime float64) {
 	}
 }
 
-func (g *GameState) getHexUnderCursor() hexmap.Hex {
+func (g *GameState) getHexUnderCursor(ray rl.Ray) hexmap.Hex {
 	if g.camera == nil {
 		return hexmap.Hex{}
 	}
-	ray := rl.GetMouseRay(rl.GetMousePosition(), *g.camera)
 	t := -ray.Position.Y / ray.Direction.Y
 	if t > 0 {
 		hitPoint := rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
@@ -276,11 +276,10 @@ func (g *GameState) getHexUnderCursor() hexmap.Hex {
 	return hexmap.Hex{}
 }
 
-func (g *GameState) getHitPointUnderCursor() (rl.Vector3, bool) {
+func (g *GameState) getHitPointUnderCursor(ray rl.Ray) (rl.Vector3, bool) {
 	if g.camera == nil {
 		return rl.Vector3{}, false
 	}
-	ray := rl.GetMouseRay(rl.GetMousePosition(), *g.camera)
 	// Рассчитываем пересечение с плоскостью y=0
 	t := -ray.Position.Y / ray.Direction.Y
 	if t > 0 {
@@ -330,33 +329,66 @@ func (g *GameState) handleUIClick(mousePos rl.Vector2) {
 	}
 }
 
-func (g *GameState) findEntityAtCursor() (types.EntityID, bool) {
-	hex := g.getHexUnderCursor()
+func (g *GameState) findEntityAtCursor(ray rl.Ray) (types.EntityID, bool) {
+	// Шаг 1: Проверка башен (быстрая, на основе гексов)
+	hex := g.getHexUnderCursor(ray)
 	for id, t := range g.game.ECS.Towers {
 		if t.Hex == hex {
 			return id, true
 		}
 	}
+
+	// Шаг 2: Проверка врагов (медленная, на основе столкновений луча со сферой)
+	var closestEntity types.EntityID
+	closestDistance := float32(-1.0)
+	found := false
+
 	for id := range g.game.ECS.Enemies {
 		if pos, ok := g.game.ECS.Positions[id]; ok {
-			enemyHex := utils.ScreenToHex(pos.X, pos.Y)
-			if enemyHex == hex {
-				return id, true
+			if renderable, okRender := g.game.ECS.Renderables[id]; okRender {
+				// Определяем Bounding Sphere для врага, точно как в RenderSystem
+				scaledRadius := renderable.Radius * float32(config.CoordScale)
+				enemyPosition := rl.NewVector3(float32(pos.X*config.CoordScale), scaledRadius, float32(pos.Y*config.CoordScale))
+
+				// Проверяем столкновение
+				collision := rl.GetRayCollisionSphere(ray, enemyPosition, scaledRadius)
+
+				if collision.Hit {
+					distance := rl.Vector3DistanceSqr(g.camera.Position, enemyPosition)
+					if !found || distance < closestDistance {
+						closestDistance = distance
+						closestEntity = id
+						found = true
+					}
+				}
 			}
 		}
 	}
+
+	if found {
+		return closestEntity, true
+	}
+
+	// Ничего не найдено
 	return 0, false
 }
 
 func (g *GameState) handleGameClick(button rl.MouseButton) {
-	hex := g.getHexUnderCursor()
-	hitPoint, hasHit := g.getHitPointUnderCursor()
+	ray := rl.GetMouseRay(rl.GetMousePosition(), *g.camera)
+	hex := g.getHexUnderCursor(ray)
+	hitPoint, hasHit := g.getHitPointUnderCursor(ray)
 
 	if button == rl.MouseLeftButton {
-		entityID, entityFound := g.findEntityAtCursor()
+		entityID, entityFound := g.findEntityAtCursor(ray)
 		if entityFound {
-			g.infoPanel.SetTarget(entityID)
-			g.game.SetHighlightedTower(entityID)
+			// Проверяем, является ли сущность врагом, чтобы не сбрасывать выделение башни
+			if _, isEnemy := g.game.ECS.Enemies[entityID]; isEnemy {
+				g.infoPanel.SetTarget(entityID)
+				// Не сбрасываем выделение башни, если кликнули на врага
+			} else if _, isTower := g.game.ECS.Towers[entityID]; isTower {
+				g.infoPanel.SetTarget(entityID)
+				g.game.SetHighlightedTower(entityID)
+			}
 		} else {
 			g.infoPanel.Hide()
 			g.game.ClearAllSelections()
@@ -470,7 +502,7 @@ func (g *GameState) DrawUI() {
 		g.recipeBook.Draw(availableTowers)
 	}
 
-	// Отрисовка индикатора режима "U"
+	// Отрисовка индик��тора режима "U"
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		g.uIndicator.Draw(g.game.IsInLineDragMode())
 	}
