@@ -7,4 +7,5 @@ type Enemy struct {
 	LineDamageCooldown float64 // Таймер для получения урона от линий
 	PhysicalArmor      int
 	MagicalArmor       int
+	LastCheckpointIndex int    // Индекс последнего пройденного чекпоинта
 }

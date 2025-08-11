@@ -69,11 +69,12 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 		HasStroke: def.Visuals.StrokeWidth > 0,
 	}
 	s.ecs.Enemies[id] = &component.Enemy{
-		DefID:              wave.EnemyID,
-		OreDamageCooldown:  0,
-		LineDamageCooldown: 0,
-		PhysicalArmor:      def.PhysicalArmor,
-		MagicalArmor:       def.MagicalArmor,
+		DefID:               wave.EnemyID,
+		OreDamageCooldown:   0,
+		LineDamageCooldown:  0,
+		PhysicalArmor:       def.PhysicalArmor,
+		MagicalArmor:        def.MagicalArmor,
+		LastCheckpointIndex: -1, // Явно устанавливаем -1, чтобы избежать бага с подсветкой
 	}
 	s.activeEnemies++
 }

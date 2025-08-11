@@ -2,18 +2,30 @@
 package system
 
 import (
+	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/entity"
+	"go-tower-defense/internal/types"
+	"go-tower-defense/pkg/hexmap"
 	"math"
 )
 
-// MovementSystem обновляет позиции сущностей
-type MovementSystem struct {
-	ecs *entity.ECS
+// MovementGameContext определяет методы, которые MovementSystem требует от Game.
+// Это помогает избежать циклических зависимостей.
+type MovementGameContext interface {
+	GetHexMap() *hexmap.HexMap
+	GetClearedCheckpoints() map[hexmap.Hex]bool
+	GetEnemies() map[types.EntityID]*component.Enemy
 }
 
-func NewMovementSystem(ecs *entity.ECS) *MovementSystem {
-	return &MovementSystem{ecs: ecs}
+// MovementSystem обновляет позиции сущностей
+type MovementSystem struct {
+	ecs  *entity.ECS
+	game MovementGameContext // Используем интерфейс вместо прямой зависимости
+}
+
+func NewMovementSystem(ecs *entity.ECS, game MovementGameContext) *MovementSystem {
+	return &MovementSystem{ecs: ecs, game: game}
 }
 
 func (s *MovementSystem) Update(deltaTime float64) {
@@ -24,14 +36,12 @@ func (s *MovementSystem) Update(deltaTime float64) {
 					continue
 				}
 				targetHex := path.Hexes[path.CurrentIndex]
-				// ИСПОЛЬЗУЕМ ToPixel, чтобы получить "сырые" координаты без смещения, как у карты
 				tx, ty := targetHex.ToPixel(float64(config.HexSize))
 
 				dx := tx - pos.X
 				dy := ty - pos.Y
 				dist := math.Sqrt(dx*dx + dy*dy)
 
-				// Проверяем наличие эффекта замедления
 				currentSpeed := vel.Speed
 				if slowEffect, isSlowed := s.ecs.SlowEffects[id]; isSlowed {
 					currentSpeed *= slowEffect.SlowFactor
@@ -42,6 +52,18 @@ func (s *MovementSystem) Update(deltaTime float64) {
 					pos.X = tx
 					pos.Y = ty
 					path.CurrentIndex++
+
+					// Проверяем, является ли достигнутый гекс чекпоинтом
+					hexMap := s.game.GetHexMap()
+					for i, cpHex := range hexMap.Checkpoints {
+						if targetHex == cpHex {
+							if enemy, ok := s.ecs.Enemies[id]; ok {
+								enemy.LastCheckpointIndex = i
+							}
+							break // Выходим из цикла, так как гекс может быть только одним чекпоинтом
+						}
+					}
+
 				} else {
 					pos.X += (dx / dist) * moveDistance
 					pos.Y += (dy / dist) * moveDistance

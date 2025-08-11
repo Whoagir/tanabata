@@ -75,6 +75,7 @@ type Game struct {
 	dragSourceTowerID    types.EntityID
 	dragOriginalParentID types.EntityID
 	PlayerID             types.EntityID // ID сущности игрока
+	ClearedCheckpoints   map[hexmap.Hex]bool
 }
 
 // NewGame initializes a new game instance.
@@ -90,7 +91,6 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 		Wave:            1,
 		BaseHealth:      config.BaseHealth,
 		ECS:             ecs,
-		MovementSystem:  system.NewMovementSystem(ecs),
 		WaveSystem:      system.NewWaveSystem(ecs, hexMap, eventDispatcher),
 		OreSystem:       system.NewOreSystem(ecs, eventDispatcher),
 		EventDispatcher: eventDispatcher,
@@ -100,6 +100,8 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 		gameTime:        0.0,
 		DebugTowerID:    "",
 	}
+	// ВАЖНО: MovementSystem создается после инициализации g
+	g.MovementSystem = system.NewMovementSystem(ecs, g)
 	g.RenderSystem = system.NewRenderSystemRL(ecs, font)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
 	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)
@@ -133,6 +135,22 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 
 	return g
 }
+
+// GetHexMap возвращает карту гексов (для MovementSystem)
+func (g *Game) GetHexMap() *hexmap.HexMap {
+	return g.HexMap
+}
+
+// GetClearedCheckpoints возвращает карту очищенных чекпоинтов (для MovementSystem)
+func (g *Game) GetClearedCheckpoints() map[hexmap.Hex]bool {
+	return g.ClearedCheckpoints
+}
+
+// GetEnemies возвращает карту врагов (для MovementSystem)
+func (g *Game) GetEnemies() map[types.EntityID]*component.Enemy {
+	return g.ECS.Enemies
+}
+
 
 // CombineTowers выполняет логику объединения башен.
 func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
@@ -202,7 +220,7 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 	g.rebuildEnergyNetwork()
 }
 
-// FindPathToPowerSource находит кратчайший путь от атакующей башни до ближайшего
+// FindPathToPowerSource находит кратчайший путь от атакующей башни до ближ��йшего
 // источника энергии (башни-добытчика на активной руде).
 func (g *Game) FindPathToPowerSource(startNode types.EntityID) []types.EntityID {
 	if _, exists := g.ECS.Towers[startNode]; !exists {
@@ -321,6 +339,7 @@ func (g *Game) Update(deltaTime float64) {
 	g.VisualEffectSystem.Update(dt)
 
 	if g.ECS.GameState.Phase == component.WaveState {
+		g.UpdateCheckpointHighlighting() // <-- НОВЫЙ ВЫЗОВ
 		g.StatusEffectSystem.Update(dt)
 		g.VolcanoSystem.Update(dt)
 		g.BeaconSystem.Update(dt)
@@ -335,8 +354,41 @@ func (g *Game) Update(deltaTime float64) {
 	g.OreSystem.Update()
 }
 
+// UpdateCheckpointHighlighting динамически обновл��ет подсветку чекпоинтов.
+func (g *Game) UpdateCheckpointHighlighting() {
+	var lastLivingEnemy *component.Enemy
+	minProgressIndex := math.MaxInt32
+
+	// 1. Найти физически последнего живого врага (с наименьшим прогрессом)
+	for id, enemy := range g.ECS.Enemies {
+		health, hasHealth := g.ECS.Healths[id]
+		path, hasPath := g.ECS.Paths[id]
+
+		if hasHealth && health.Value > 0 && hasPath {
+			if path.CurrentIndex < minProgressIndex {
+				minProgressIndex = path.CurrentIndex
+				lastLivingEnemy = enemy
+			}
+		}
+	}
+
+	// 2. Сначала полностью очистить подсветку
+	g.ClearedCheckpoints = make(map[hexmap.Hex]bool)
+
+	// 3. Если враг найден, подсветить все пройденные им чекпоинты
+	if lastLivingEnemy != nil {
+		lastIndex := lastLivingEnemy.LastCheckpointIndex
+		if lastIndex >= 0 && lastIndex < len(g.HexMap.Checkpoints) {
+			for i := 0; i <= lastIndex; i++ {
+				g.ClearedCheckpoints[g.HexMap.Checkpoints[i]] = true
+			}
+		}
+	}
+}
+
 // StartWave begins the enemy wave.
 func (g *Game) StartWave() {
+	g.ClearedCheckpoints = make(map[hexmap.Hex]bool) // Сбрасываем чекпоинты
 	g.ECS.Wave = g.WaveSystem.StartWave(g.Wave)
 	g.WaveSystem.ResetActiveEnemies()
 	g.Wave++
@@ -345,7 +397,7 @@ func (g *Game) StartWave() {
 // --- Private Helper Functions ---
 
 func (g *Game) initUI() {
-	// Рассчитываем X-координаты кнопок, между которыми нужно вставить нашу
+	// Ра��считываем X-координаты кнопок, между которыми нужно вставить нашу
 	pauseButtonX := float32(config.ScreenWidth - config.IndicatorOffsetX - 90)
 	indicatorX := float32(config.ScreenWidth - config.IndicatorOffsetX)
 
@@ -431,7 +483,7 @@ func (g *Game) HandlePauseClick() {
 	g.PauseButton.SetPaused(g.isPaused)
 }
 
-// IsPaused возвращает текущее состояние паузы.
+// IsPaused возвращает текущее состояние пауз��.
 func (g *Game) IsPaused() bool {
 	return g.isPaused
 }
@@ -468,7 +520,7 @@ func (g *Game) GetAllTowerHexes() []hexmap.Hex {
 	return allHexes
 }
 
-// GetTowerAtHex возвращает башню на указанном гексе, если она существует.
+// GetTowerAtHex возвраща��т башню на указанном гексе, если она существует.
 func (g *Game) GetTowerAtHex(hex hexmap.Hex) (*component.Tower, bool) {
 	for _, tower := range g.ECS.Towers {
 		if tower.Hex == hex {

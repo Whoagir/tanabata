@@ -1,0 +1,88 @@
+Привет! Понимаю проблему - у тебя используется raylib-go, и при обычной сборке exe файл не включает в себя необходимые DLL библиотеки raylib. Поэтому у друзей не запускается.
+
+Вот несколько решений:
+
+## Решение 1: Статическая сборка (рекомендую)
+
+```bash
+# Для Windows x64
+CGO_ENABLED=1 CC=gcc GOOS=windows GOARCH=amd64 go build -tags static -ldflags "-s -w" -o game.exe cmd/game/main.go
+```
+
+Или если у тебя PowerShell:
+```powershell
+$env:CGO_ENABLED="1"
+$env:CC="gcc"
+$env:GOOS="windows"
+$env:GOARCH="amd64"
+go build -tags static -ldflags "-s -w" -o game.exe cmd/game/main.go
+```
+
+## Решение 2: Включить все зависимости в один exe
+
+Создай файл `build.bat`:
+```batch
+@echo off
+set CGO_ENABLED=1
+set CC=gcc
+go build -tags static -ldflags "-s -w -extldflags '-static'" -o game.exe cmd/game/main.go
+```
+
+## Решение 3: Использовать UPX для сжатия (опционально)
+
+После сборки можешь сжать exe:
+```bash
+# Скачай UPX: https://github.com/upx/upx/releases
+upx --best game.exe
+```
+
+## Решение 4: Если ничего не помогает - bundle с DLL
+
+Создай папку с игрой и положи туда:
+1. `game.exe` 
+2. `raylib.dll` (найди в `%GOPATH%/pkg/mod/github.com/gen2brain/raylib-go`)
+3. Возможно понадобятся: `msvcr100.dll`, `msvcp100.dll`
+
+## Проверка зависимостей
+
+Чтобы узнать какие DLL нужны твоему exe:
+```powershell
+# Установи Dependencies Walker или используй:
+dumpbin /dependents game.exe
+```
+
+## Полный скрипт сборки для Windows
+
+Создай `build-release.ps1`:
+```powershell
+# Очистка
+Remove-Item -Path ".\release" -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Path ".\release"
+
+# Установка переменных окружения
+$env:CGO_ENABLED="1"
+$env:CC="gcc"
+$env:GOOS="windows"
+$env:GOARCH="amd64"
+
+# Сборка
+Write-Host "Building game..." -ForegroundColor Green
+go build -tags static -ldflags "-s -w -H windowsgui" -o release/game.exe cmd/game/main.go
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Build successful!" -ForegroundColor Green
+    Write-Host "File size: $((Get-Item release/game.exe).length / 1MB) MB"
+    
+    # Опционально: сжатие UPX
+    # & upx --best release/game.exe
+} else {
+    Write-Host "Build failed!" -ForegroundColor Red
+}
+```
+
+**Важно:** 
+- Убедись что у тебя установлен MinGW-w64 или TDM-GCC
+- Флаг `-H windowsgui` убирает консольное окно
+- Флаги `-s -w` уменьшают размер exe
+
+Попробуй первое решение со статической сборкой - обычно это решает проблему. Если не поможет, напиши какая конкретно ошибка появляется у друзей при запуске.

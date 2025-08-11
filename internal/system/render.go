@@ -35,7 +35,7 @@ type RenderSystemRL struct {
 	laserModel      rl.Model // Добавлено для оптимизации лазеров
 }
 
-// NewRenderSystemRL создает новую оптимизированную систему рендеринга
+// NewRenderSystemRL со��дает новую оптимизированную систему рендеринга
 func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
 	rs := &RenderSystemRL{
 		ecs:             ecs,
@@ -62,7 +62,7 @@ func (s *RenderSystemRL) pregenerateLaserModel() {
 // Это ручная реализация rl.MeshTransform для совместимости.
 func meshTransform(mesh *rl.Mesh, transform rl.Matrix) {
 	vertexCount := int(mesh.VertexCount)
-	// Используем unsafe.Pointer для корректного преобразования *float32 в []float32
+	// Использ��ем unsafe.Pointer для корректного преобразования *float32 в []float32
 	sliceHeader := struct {
 		data unsafe.Pointer
 		len  int
@@ -103,7 +103,7 @@ func (s *RenderSystemRL) pregenerateTowerModels() {
 			mesh = rl.GenMeshCylinder(1.0, 1.0, 6)
 			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 6)
 		case towerDef.Type == defs.TowerTypeMiner:
-			// Добытчики будут рендериться динамически для сохранения формы конуса
+			// Добытчики будут рендериться динам��чески для сохранения формы конуса
 			continue
 		case towerDef.CraftingLevel >= 1:
 			mesh = rl.GenMeshCube(1.0, 1.0, 1.0)
@@ -184,19 +184,35 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 }
 
 // Draw использует кэшированные данные для отрисовки всего, КРОМЕ снарядов
-func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func()) {
+func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func(), clearedCheckpoints map[hexmap.Hex]bool) {
 	if s.camera == nil {
 		return
 	}
 	s.drawPulsingOres(gameTime)
+	s.drawClearedCheckpoints(clearedCheckpoints) // <-- НОВЫЙ ВЫЗОВ
 	s.drawSolidEntities()
 	s.drawLines(hiddenLineID)
 	s.drawLasers()
-	s.drawVolcanoEffects() // <-- Добавлен вызов
-	s.drawBeaconSectors()  // <-- НОВЫЙ ВЫЗОВ
+	s.drawVolcanoEffects()
+	s.drawBeaconSectors()
 	s.drawDraggingLine(isDragging, sourceTowerID, cancelDrag)
 	s.drawText()
 	s.drawCombinationIndicators()
+}
+
+// drawClearedCheckpoints рисует оверлей на очищенных чекпоинтах
+func (s *RenderSystemRL) drawClearedCheckpoints(clearedCheckpoints map[hexmap.Hex]bool) {
+	if clearedCheckpoints == nil || len(clearedCheckpoints) == 0 {
+		return
+	}
+	for hex := range clearedCheckpoints {
+		pos := s.hexToWorld(hex)
+		pos.Y += 1.0 // Приподнимаем еще выше, чтобы избежать конфликтов
+		radius := float32(config.HexSize * config.CoordScale)
+		color := rl.NewColor(0, 120, 0, 200) // Темно-зеленый, более заметный цвет
+
+		rl.DrawCylinder(pos, radius, radius, 0.8, 6, color)
+	}
 }
 
 func (s *RenderSystemRL) drawBeaconSectors() {
@@ -287,7 +303,7 @@ func (s *RenderSystemRL) drawSolidEntities() {
 			}
 		} else if tower, isTower := s.ecs.Towers[id]; isTower {
 			s.drawTower(tower, data, scaledRadius, finalColor, renderable.HasStroke)
-			// <<< НАЧАЛО: Отрисовка индикатора крафта >>>
+			// <<< НАЧАЛО: Отрисовка индикат��ра крафта >>>
 			if _, ok := s.ecs.Combinables[id]; ok {
 				indicatorPos := data.WorldPos
 				indicatorPos.Y = data.Height + 4.0 // Располагаем над башней
@@ -540,7 +556,7 @@ func (s *RenderSystemRL) drawLasers() {
 		if dot < -1.0 { dot = -1.0 }
 		rotationAngle := float32(math.Acos(float64(dot))) * rl.Rad2deg
 
-		// Позиция: теперь это startPos, так как мы изм��нили pivot модели на ее основание.
+		// Позиция: теперь это startPos, так как мы изменили pivot модели на ее основание.
 		// Модель будет отрисована в startPos и правильно повернута/растянута до endPos.
 		rl.DrawModelEx(s.laserModel, startPos, rotationAxis, rotationAngle, scale, lineColor)
 	}

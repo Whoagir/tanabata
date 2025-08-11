@@ -34,7 +34,7 @@ type GameState struct {
 	checkpointTextures   map[int]rl.Texture2D // Текстуры для номеров чекпоинтов
 }
 
-// intToRoman конвертирует целое число в римскую цифру (для чисел от 1 до 10)
+// intToRoman конв��ртирует целое число в римскую цифру (для чисел от 1 до 10)
 func intToRoman(num int) string {
 	if num < 1 || num > 10 {
 		return "" // Поддерживаем только небольшие числа для чекпоинтов
@@ -134,6 +134,7 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 		romanNumeral := intToRoman(i + 1)
 		img := rl.ImageTextEx(font, romanNumeral, 64, 1, rl.White)
 		tex := rl.LoadTextureFromImage(img)
+		rl.SetTextureFilter(tex, rl.FilterPoint) // Используем точечную фильтрацию для четкости
 		checkpointTextures[i] = tex
 		rl.UnloadImage(img) // Освобождаем память CPU
 	}
@@ -173,20 +174,53 @@ func (g *GameState) Update(deltaTime float64) {
 	}
 
 	// Управление масштабированием камеры
-	if rl.IsKeyPressed(rl.KeyR) {
-		g.camera.Fovy -= config.CameraZoomStep
-		if g.camera.Fovy < config.CameraFovyMin {
-			g.camera.Fovy = config.CameraFovyMin
+	if g.camera.Projection == rl.CameraPerspective {
+		if rl.IsKeyPressed(rl.KeyR) {
+			g.camera.Fovy -= config.CameraZoomStep
+			if g.camera.Fovy < config.CameraFovyMin {
+				g.camera.Fovy = config.CameraFovyMin
+			}
+		}
+		if rl.IsKeyPressed(rl.KeyT) {
+			g.camera.Fovy += config.CameraZoomStep
+			if g.camera.Fovy > config.CameraFovyMax {
+				g.camera.Fovy = config.CameraFovyMax
+			}
+		}
+	} else if g.camera.Projection == rl.CameraOrthographic {
+		// Добавляем управление зумом для ортографической камеры
+		if rl.IsKeyPressed(rl.KeyR) {
+			g.camera.Fovy -= config.CameraOrthoZoomStep
+			if g.camera.Fovy < config.CameraOrthoFovyMin {
+				g.camera.Fovy = config.CameraOrthoFovyMin
+			}
+		}
+		if rl.IsKeyPressed(rl.KeyT) {
+			g.camera.Fovy += config.CameraOrthoZoomStep
+			if g.camera.Fovy > config.CameraOrthoFovyMax {
+				g.camera.Fovy = config.CameraOrthoFovyMax
+			}
 		}
 	}
-	if rl.IsKeyPressed(rl.KeyT) {
-		g.camera.Fovy += config.CameraZoomStep
-		if g.camera.Fovy > config.CameraFovyMax {
-			g.camera.Fovy = config.CameraFovyMax
-		}
-	}
+
 	if rl.IsKeyPressed(rl.KeyY) {
-		g.camera.Fovy = config.CameraFovyDefault
+		// Сбрасываем зум в зависимости от текущего режима
+		if g.camera.Projection == rl.CameraPerspective {
+			g.camera.Fovy = config.CameraFovyDefault
+		} else {
+			g.camera.Fovy = config.CameraOrthoFovyDefault
+		}
+	}
+
+	// Переключение режима проекции камеры
+	if rl.IsKeyPressed(rl.KeyP) {
+		if g.camera.Projection == rl.CameraPerspective {
+			g.camera.Projection = rl.CameraOrthographic
+			g.camera.Fovy = config.CameraOrthoFovyDefault // Устанавливаем "зум" для ортографического вида
+		} else {
+			g.camera.Projection = rl.CameraPerspective
+			g.camera.Fovy = config.CameraFovyDefault // Возвращаем стандартный "зум" для перспективы
+		}
 	}
 
 	g.infoPanel.Update(g.game.ECS)
@@ -434,33 +468,98 @@ func (g *GameState) Draw() {
 	}
 	// Шаг 1: Отрисовка основной сцены (земля, башни, враги, эффекты)
 	g.renderer.Draw()
-	g.game.RenderSystem.Draw(g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag)
+	g.game.RenderSystem.Draw(g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag, g.game.ClearedCheckpoints)
 
-	// Шаг 2: Отрисовка выделения башен
-	for id, tower := range g.game.ECS.Towers {
-		if tower.IsHighlighted || tower.IsManuallySelected {
+	// Шаг 2: Отрисовка выделения для выбранной сущности
+	selectedID := g.infoPanel.TargetEntity
+	if selectedID != 0 {
+		var worldPos rl.Vector3
+		var radius float32
+		var found bool
+
+		if tower, ok := g.game.ECS.Towers[selectedID]; ok {
 			x, y := tower.Hex.ToPixel(config.HexSize)
-			worldX := float32(x * config.CoordScale)
-			worldZ := float32(y * config.CoordScale)
-
-			var height float32 = 2.0
-			if renderable, ok := g.game.ECS.Renderables[id]; ok {
-				height = g.game.RenderSystem.GetTowerRenderHeight(tower, renderable)
+			worldPos = rl.NewVector3(float32(x*config.CoordScale), 0, float32(y*config.CoordScale))
+			if renderable, ok := g.game.ECS.Renderables[selectedID]; ok {
+				radius = renderable.Radius * float32(config.CoordScale) * 2.0 // Делаем круг выделения чуть больше
+			} else {
+				radius = float32(config.HexSize*config.CoordScale) * 1.35
 			}
+			found = true
+		} else if pos, ok := g.game.ECS.Positions[selectedID]; ok {
+			// Это для ��рагов, если мы решим их тоже выделять кругом
+			worldPos = rl.NewVector3(float32(pos.X*config.CoordScale), 0, float32(pos.Y*config.CoordScale))
+			if renderable, ok := g.game.ECS.Renderables[selectedID]; ok {
+				radius = renderable.Radius * float32(config.CoordScale) * 1.6 // Чуть больше радиуса врага
+			}
+			found = true
+		}
 
-			highlightPos := rl.NewVector3(worldX, height+0.5, worldZ)
-			rl.DrawCylinderWires(highlightPos, float32(config.HexSize*config.CoordScale)*1.1, float32(config.HexSize*config.CoordScale)*1.1, 2.0, 6, config.HighlightColorRL)
+		if found {
+			highlightPos := rl.NewVector3(worldPos.X, 0.5, worldPos.Z)
+			fillColor := rl.NewColor(255, 255, 224, 100) // Полупрозрачный светло-желтый
+
+			// Рисуем заливку
+			rl.DrawCylinder(highlightPos, radius, radius, 0.2, 12, fillColor)
+			// Рисуем обводку
+			rl.DrawCylinderWires(highlightPos, radius, radius, 0.2, 12, config.HighlightColorRL)
 		}
 	}
 
-	// Шаг 3: Отрисовка номеров чекпоинтов как билбордов
+	// Шаг 3: Отрисовка номеров чекпоинтов как сферических билбордов
+	rl.DrawRenderBatchActive() // Принудительно отрисовываем все, что было до этого
+	rl.DisableDepthTest()      // Отключаем тест глубины, чтобы номера были видны сквозь другие объекты
+
 	for i, checkpoint := range g.hexMap.Checkpoints {
 		if tex, ok := g.checkpointTextures[i]; ok {
 			px, py := checkpoint.ToPixel(config.HexSize)
-			worldPos := rl.NewVector3(float32(px*config.CoordScale), 4.0, float32(py*config.CoordScale))
-			rl.DrawBillboard(*g.camera, tex, worldPos, 10.0, config.GridColorRL)
+			worldPos := rl.NewVector3(float32(px*config.CoordScale), 5.0, float32(py*config.CoordScale))
+			
+			// Ручная отрисовка сферического билборда с учетом соотношения сторон
+			camMatrix := rl.GetCameraMatrix(*g.camera)
+			
+			// Векторы камеры в мировом пространстве
+			camRight := rl.NewVector3(camMatrix.M0, camMatrix.M4, camMatrix.M8)
+			camUp := rl.NewVector3(camMatrix.M1, camMatrix.M5, camMatrix.M9)
+
+			// Сохраняем соотношение сторон текстуры
+			aspectRatio := float32(tex.Width) / float32(tex.Height)
+			height := float32(9.0) // Уменьшили на 10%
+			width := height * aspectRatio
+			
+			// Вычисляем 4 угла квада
+			v1 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, -width/2), rl.Vector3Scale(camUp, -height/2))) // Bottom-Left
+			v2 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, width/2), rl.Vector3Scale(camUp, -height/2)))  // Bottom-Right
+			v3 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, width/2), rl.Vector3Scale(camUp, height/2)))   // Top-Right
+			v4 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, -width/2), rl.Vector3Scale(camUp, height/2)))  // Top-Left
+
+			rl.SetTexture(tex.ID)
+			rl.Begin(rl.Quads)
+			
+			rl.Color4ub(config.GridColorRL.R, config.GridColorRL.G, config.GridColorRL.B, config.GridColorRL.A)
+
+			// Bottom-left corner for texture and quad
+			rl.TexCoord2f(0.0, 1.0)
+			rl.Vertex3f(v1.X, v1.Y, v1.Z)
+
+			// Bottom-right corner for texture and quad
+			rl.TexCoord2f(1.0, 1.0)
+			rl.Vertex3f(v2.X, v2.Y, v2.Z)
+
+			// Top-right corner for texture and quad
+			rl.TexCoord2f(1.0, 0.0)
+			rl.Vertex3f(v3.X, v3.Y, v3.Z)
+
+			// Top-left corner for texture and quad
+			rl.TexCoord2f(0.0, 0.0)
+			rl.Vertex3f(v4.X, v4.Y, v4.Z)
+			
+			rl.End()
+			rl.SetTexture(0)
 		}
 	}
+	rl.DrawRenderBatchActive() // Завершаем ручную отрисовку
+	rl.EnableDepthTest()       // Включаем тест глубины обратно
 
 	// --- Финальный рендеринг снарядов ---
 	rl.DrawRenderBatchActive()
@@ -502,7 +601,7 @@ func (g *GameState) DrawUI() {
 		g.recipeBook.Draw(availableTowers)
 	}
 
-	// Отрисовка индик��тора режима "U"
+	// Отрисовка индикатора режима "U"
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		g.uIndicator.Draw(g.game.IsInLineDragMode())
 	}
@@ -519,4 +618,14 @@ func (g *GameState) Cleanup() {
 		rl.UnloadTexture(tex)
 	}
 	// В будущем здесь можно будет выгружать и другие ресурсы, например, шрифт
+}
+
+// GetGame возвращает текущий экземпляр игры
+func (g *GameState) GetGame() *app.Game {
+	return g.game
+}
+
+// GetFont возвращает шрифт, используемый в состоянии
+func (g *GameState) GetFont() rl.Font {
+	return g.font
 }
