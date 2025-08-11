@@ -301,7 +301,7 @@ func (g *GameState) handleDebugKeys() {
 		g.game.DebugTowerID = "TOWER_WALL"
 	}
 	if rl.IsKeyPressed(rl.KeyZero) {
-		g.game.DebugTowerID = "TOWER_SILVER"
+		g.game.DebugTowerID = "TOWER_LIGHTHOUSE"
 	}
 }
 

@@ -33,7 +33,8 @@ type ECS struct {
 	Combinables            map[types.EntityID]*component.Combinable
 	ManualSelectionMarkers map[types.EntityID]*component.ManualSelectionMarker
 	PlayerState            map[types.EntityID]*component.PlayerStateComponent // <<< Новый компонент
-	RotatingBeams          map[types.EntityID]*component.RotatingBeamComponent
+	Beacons                map[types.EntityID]*component.Beacon
+	BeaconAttackSectors    map[types.EntityID]*component.BeaconAttackSector
 	Wave                   *component.Wave
 	GameState              *component.GameState
 }
@@ -65,7 +66,8 @@ func NewECS() *ECS {
 		Combinables:            make(map[types.EntityID]*component.Combinable),
 		ManualSelectionMarkers: make(map[types.EntityID]*component.ManualSelectionMarker),
 		PlayerState:            make(map[types.EntityID]*component.PlayerStateComponent), // <<< Инициализация
-		RotatingBeams:          make(map[types.EntityID]*component.RotatingBeamComponent),
+		Beacons:                make(map[types.EntityID]*component.Beacon),
+		BeaconAttackSectors:    make(map[types.EntityID]*component.BeaconAttackSector),
 		Wave:                   nil,
 		GameState: &component.GameState{
 			Phase:        component.BuildState,

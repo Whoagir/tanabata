@@ -193,10 +193,62 @@ func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, 
 	s.drawLines(hiddenLineID)
 	s.drawLasers()
 	s.drawVolcanoEffects() // <-- Добавлен вызов
-	s.drawRotatingBeams()
+	s.drawBeaconSectors()  // <-- НОВЫЙ ВЫЗОВ
 	s.drawDraggingLine(isDragging, sourceTowerID, cancelDrag)
 	s.drawText()
 	s.drawCombinationIndicators()
+}
+
+func (s *RenderSystemRL) drawBeaconSectors() {
+	for id, sector := range s.ecs.BeaconAttackSectors {
+		if !sector.IsVisible {
+			continue
+		}
+
+		tower, okT := s.ecs.Towers[id]
+		beacon, okB := s.ecs.Beacons[id]
+		combat, okC := s.ecs.Combats[id]
+		renderable, okR := s.ecs.Renderables[id]
+		if !okT || !okB || !okC || !okR {
+			continue
+		}
+
+		// Параметры для отрисовки
+		towerPos := s.hexToWorld(tower.Hex)
+		towerHeight := s.GetTowerRenderHeight(tower, renderable)
+		towerTop := rl.NewVector3(towerPos.X, towerHeight, towerPos.Z)
+
+		rangePixels := float32(float64(combat.Range) * config.HexSize * config.CoordScale)
+		startAngle := float32(beacon.CurrentAngle - beacon.ArcAngle/2)
+		endAngle := float32(beacon.CurrentAngle + beacon.ArcAngle/2)
+
+		// Вершины основания пирамиды
+		v1 := towerPos // Центр основания
+		v2 := rl.NewVector3(
+			towerPos.X+rangePixels*float32(math.Cos(float64(startAngle))),
+			0,
+			towerPos.Z+rangePixels*float32(math.Sin(float64(startAngle))),
+		)
+		v3 := rl.NewVector3(
+			towerPos.X+rangePixels*float32(math.Cos(float64(endAngle))),
+			0,
+			towerPos.Z+rangePixels*float32(math.Sin(float64(endAngle))),
+		)
+
+		// Цвет с прозрачностью
+		sectorColor := rl.NewColor(255, 255, 224, 70) // Бледно-желтый, полупрозрачный
+
+		// Рисуем грани пирамиды
+		rl.DrawTriangle3D(towerTop, v2, v3, sectorColor)
+		rl.DrawTriangle3D(towerTop, v3, v1, sectorColor)
+		rl.DrawTriangle3D(towerTop, v1, v2, sectorColor)
+
+		// Рисуем контур основания
+		lineColor := rl.NewColor(255, 255, 150, 150)
+		rl.DrawLine3D(v1, v2, lineColor)
+		rl.DrawLine3D(v1, v3, lineColor)
+		rl.DrawLine3D(v2, v3, lineColor)
+	}
 }
 
 func (s *RenderSystemRL) drawSolidEntities() {

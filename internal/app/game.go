@@ -48,6 +48,7 @@ type Game struct {
 	PlayerSystem              *system.PlayerSystem
 	AreaAttackSystem          *system.AreaAttackSystem
 	VolcanoSystem             *system.VolcanoSystem
+	BeaconSystem              *system.BeaconSystem
 	EventDispatcher           *event.Dispatcher
 	Font                      rl.Font // Изменено
 	Rng                       *utils.PRNGService
@@ -97,7 +98,7 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 		Rng:             utils.NewPRNGService(0),
 		towersBuilt:     0,
 		gameTime:        0.0,
-		DebugTowerID:    "",
+		DebugTowerID:    "TOWER_LIGHTHOUSE",
 	}
 	g.RenderSystem = system.NewRenderSystemRL(ecs, font)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
@@ -111,6 +112,7 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 	g.PlayerSystem = system.NewPlayerSystem(ecs)
 	g.AreaAttackSystem = system.NewAreaAttackSystem(ecs)
 	g.VolcanoSystem = system.NewVolcanoSystem(ecs, g.FindPowerSourcesForTower)
+	g.BeaconSystem = system.NewBeaconSystem(ecs, g.FindPowerSourcesForTower)
 	g.generateOre()
 	g.initUI()
 
@@ -165,26 +167,12 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 
 			if outputDef.Combat.Attack != nil {
 				combat.Attack = *outputDef.Combat.Attack
-				if outputDef.Combat.Attack.Type == defs.BehaviorRotatingBeam && outputDef.Combat.Attack.Params != nil {
-					g.ECS.RotatingBeams[clickedTowerID] = &component.RotatingBeamComponent{
-						CurrentAngle:  0,
-						RotationSpeed: outputDef.Combat.Attack.Params.RotationSpeed,
-						ArcAngle:      outputDef.Combat.Attack.Params.ArcAngle,
-						Damage:        float64(outputDef.Combat.Damage),
-						DamageType:    string(outputDef.Combat.Attack.DamageType),
-						Range:         outputDef.Combat.Range,
-						LastHitTime:   make(map[types.EntityID]float64),
-					}
-				} else {
-					delete(g.ECS.RotatingBeams, clickedTowerID)
-				}
 			}
 			if !combatExists {
 				g.ECS.Combats[clickedTowerID] = combat
 			}
 		} else {
 			delete(g.ECS.Combats, clickedTowerID)
-			delete(g.ECS.RotatingBeams, clickedTowerID)
 		}
 
 		if renderable, ok := g.ECS.Renderables[clickedTowerID]; ok {
@@ -201,7 +189,6 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 		if tower, ok := g.ECS.Towers[id]; ok {
 			delete(g.ECS.Combats, id)
 			delete(g.ECS.Auras, id)
-			delete(g.ECS.RotatingBeams, id)
 			tower.DefID = "TOWER_WALL"
 			if renderable, ok := g.ECS.Renderables[id]; ok {
 				renderable.Color = wallDef.Visuals.Color
@@ -336,6 +323,7 @@ func (g *Game) Update(deltaTime float64) {
 	if g.ECS.GameState.Phase == component.WaveState {
 		g.StatusEffectSystem.Update(dt)
 		g.VolcanoSystem.Update(dt)
+		g.BeaconSystem.Update(dt)
 		g.AreaAttackSystem.Update(dt)
 		g.CombatSystem.Update(dt)
 		g.ProjectileSystem.Update(dt)

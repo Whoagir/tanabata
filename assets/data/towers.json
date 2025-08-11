@@ -319,11 +319,11 @@
       "range": 4,
       "shot_cost": 0.20,
       "attack": {
-        "type": "ROTATING_BEAM",
+        "type": "NONE",
         "damage_type": "PURE",
         "params": {
           "rotation_speed": 1.5,
-          "arc_angle": 0.785 
+          "arc_angle": 90
         }
       }
     },

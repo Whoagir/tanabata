@@ -35,17 +35,6 @@ func NewCombatSystem(ecs *entity.ECS,
 }
 
 func (s *CombatSystem) Update(deltaTime float64) {
-	// Сначала обновим вращение всех маяков, это должно происходить всегда
-	for id, beam := range s.ecs.RotatingBeams {
-		if tower, ok := s.ecs.Towers[id]; ok && tower.IsActive {
-			beam.CurrentAngle += beam.RotationSpeed * deltaTime
-			beam.CurrentAngle = math.Mod(beam.CurrentAngle, 2*math.Pi)
-			if beam.CurrentAngle < 0 {
-				beam.CurrentAngle += 2 * math.Pi
-			}
-		}
-	}
-
 	// Затем обрабатываем логику атаки для всех башен
 	for id, combat := range s.ecs.Combats {
 		tower, hasTower := s.ecs.Towers[id]
@@ -56,6 +45,11 @@ func (s *CombatSystem) Update(deltaTime float64) {
 		towerDef, ok := defs.TowerDefs[tower.DefID]
 		if !ok {
 			log.Printf("CombatSystem: Could not find tower definition for ID %s", tower.DefID)
+			continue
+		}
+
+		// Пропускаем башни с особыми типами атак, которые обрабатываются в других системах
+		if combat.Attack.Type == defs.BehaviorAreaOfEffect || combat.Attack.Type == defs.BehaviorNone {
 			continue
 		}
 
@@ -87,9 +81,6 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
 		case defs.BehaviorLaser:
 			attackPerformed = s.handleLaserAttack(id, tower, combat, &towerDef)
-		case defs.BehaviorRotatingBeam:
-			// Для маяка deltaTime не передаем, т.к. вращение уже произошло
-			attackPerformed = s.handleRotatingBeamAttack(id, tower, combat, &towerDef)
 		default:
 			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
 		}
@@ -468,59 +459,6 @@ func calculateDirection(from, to *component.Position) float64 {
 	dx := to.X - from.X
 	dy := to.Y - from.Y
 	return math.Atan2(dy, dx)
-}
-
-func (s *CombatSystem) handleRotatingBeamAttack(towerID types.EntityID, tower *component.Tower, combat *component.Combat, towerDef *defs.TowerDefinition) bool {
-	beam, ok := s.ecs.RotatingBeams[towerID]
-	if !ok {
-		return false
-	}
-
-	// Вращение уже произошло в Update. Здесь только логика урона.
-	towerX, towerY := tower.Hex.ToPixel(float64(config.HexSize)) // ИСПРАВЛЕНО
-	towerPos := &component.Position{X: towerX, Y: towerY}
-
-	enemiesInRange := s.findEnemiesInRadius(tower.Hex, beam.Range)
-	if len(enemiesInRange) == 0 {
-		return false
-	}
-
-	hitOccurred := false
-	finalDamage := s.calculateFinalDamage(towerID, towerDef.Combat.Damage)
-	damageCooldown := 1.0 / combat.FireRate
-
-	for _, enemyID := range enemiesInRange {
-		// Проверяем кулдаун для каждого врага индивидуально
-		lastHit, wasHit := beam.LastHitTime[enemyID]
-		if wasHit && (s.ecs.GameTime-lastHit) < damageCooldown {
-			continue
-		}
-
-		enemyPos := s.ecs.Positions[enemyID]
-		if enemyPos == nil {
-			continue
-		}
-
-		angleToEnemy := math.Atan2(enemyPos.Y-towerPos.Y, enemyPos.X-towerPos.X)
-		if angleToEnemy < 0 {
-			angleToEnemy += 2 * math.Pi
-		}
-
-		diff := angleToEnemy - beam.CurrentAngle
-		if diff > math.Pi {
-			diff -= 2 * math.Pi
-		} else if diff < -math.Pi {
-			diff += 2 * math.Pi
-		}
-
-		if math.Abs(diff) <= beam.ArcAngle/2 {
-			ApplyDamage(s.ecs, enemyID, finalDamage, defs.AttackDamageType(beam.DamageType))
-			beam.LastHitTime[enemyID] = s.ecs.GameTime // Обновляем время последнего удара для этого врага
-			hitOccurred = true
-		}
-	}
-
-	return hitOccurred
 }
 
 func (s *CombatSystem) calculateFinalDamage(towerID types.EntityID, baseDamage int) int {

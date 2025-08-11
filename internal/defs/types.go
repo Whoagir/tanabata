@@ -29,4 +29,6 @@ const (
 	BehaviorAreaOfEffect AttackBehaviorType = "AREA_OF_EFFECT"
 	// BehaviorRotatingBeam creates a rotating beam attack.
 	BehaviorRotatingBeam AttackBehaviorType = "ROTATING_BEAM"
+	// BehaviorNone indicates that the tower has no standard attack and is handled by a custom system.
+	BehaviorNone AttackBehaviorType = "NONE"
 )
