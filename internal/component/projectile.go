@@ -9,6 +9,7 @@ import (
 
 // Projectile представляет летящий снаряд.
 type Projectile struct {
+	SourceID     types.EntityID // ID башни, которая создала снаряд
 	TargetID     types.EntityID
 	Speed        float64
 	Damage       int
@@ -30,4 +31,6 @@ type Projectile struct {
 	ImpactBurstRadius       float64 // Радиус поиска новых целей
 	ImpactBurstTargetCount  int     // Количество новых целей
 	ImpactBurstDamageFactor float64 // Множитель урона для новых снарядов
+
+	VisualType string // Тип визуала: "SPHERE", "ELLIPSE", etc.
 }

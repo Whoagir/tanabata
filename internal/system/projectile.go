@@ -17,13 +17,15 @@ type ProjectileSystem struct {
 	ecs             *entity.ECS
 	eventDispatcher *event.Dispatcher
 	combatSystem    *CombatSystem // Добавляем ссылку на CombatSystem для доступа к predictTargetPosition
+	towerDefs       map[string]*defs.TowerDefinition
 }
 
-func NewProjectileSystem(ecs *entity.ECS, eventDispatcher *event.Dispatcher, combatSystem *CombatSystem) *ProjectileSystem {
+func NewProjectileSystem(ecs *entity.ECS, eventDispatcher *event.Dispatcher, combatSystem *CombatSystem, towerDefs map[string]*defs.TowerDefinition) *ProjectileSystem {
 	return &ProjectileSystem{
 		ecs:             ecs,
 		eventDispatcher: eventDispatcher,
 		combatSystem:    combatSystem,
+		towerDefs:       towerDefs,
 	}
 }
 
@@ -118,7 +120,7 @@ func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *componen
 
 	// --- Новая логика Impact Burst ---
 	if proj.ImpactBurstRadius > 0 {
-		s.handleImpactBurst(proj, targetPos)
+		s.handleImpactBurst(proj, targetPos, proj.SourceID)
 	}
 	// --- Конец новой логики ---
 
@@ -130,6 +132,16 @@ func (s *ProjectileSystem) hitTarget(projectileID types.EntityID, proj *componen
 }
 
 func (s *ProjectileSystem) applyEffectsAndDamage(proj *component.Projectile) {
+	tower, towerExists := s.ecs.Towers[proj.SourceID]
+	if !towerExists {
+		return // Не можем применить эффект, если не знаем башню-источник
+	}
+	towerDef, defExists := s.towerDefs[tower.DefID]
+	if !defExists {
+		return
+	}
+
+	// Стандартные эффекты
 	if proj.SlowsTarget {
 		s.ecs.SlowEffects[proj.TargetID] = &component.SlowEffect{
 			Timer:      proj.SlowDuration,
@@ -143,10 +155,31 @@ func (s *ProjectileSystem) applyEffectsAndDamage(proj *component.Projectile) {
 			TickTimer:    1.0,
 		}
 	}
+
+	// Новый эффект Jade Poison
+	if towerDef.Combat.Attack.Params != nil && towerDef.Combat.Attack.Params.Effect == "JADE_POISON" {
+		container, exists := s.ecs.JadePoisonContainers[proj.TargetID]
+		if !exists {
+			container = &component.JadePoisonContainer{
+				Target:             proj.TargetID,
+				Instances:          make([]component.JadePoisonInstance, 0),
+				DamagePerStack:     10,   // Базовый урон
+				SlowFactorPerStack: 0.05, // Базовое замедление
+			}
+			s.ecs.JadePoisonContainers[proj.TargetID] = container
+		}
+		// Добавляем новый стак
+		newInstance := component.JadePoisonInstance{
+			Duration:  5.0,
+			TickTimer: 1.0,
+		}
+		container.Instances = append(container.Instances, newInstance)
+	}
+
 	ApplyDamage(s.ecs, proj.TargetID, proj.Damage, proj.AttackType)
 }
 
-func (s *ProjectileSystem) handleImpactBurst(proj *component.Projectile, impactPos *component.Position) {
+func (s *ProjectileSystem) handleImpactBurst(proj *component.Projectile, impactPos *component.Position, sourceID types.EntityID) {
 	impactHex := hexmap.PixelToHex(impactPos.X, impactPos.Y, float64(config.HexSize))
 	nearbyEnemies := s.combatSystem.FindEnemiesInRadius(impactHex, proj.ImpactBurstRadius)
 
@@ -169,7 +202,7 @@ func (s *ProjectileSystem) handleImpactBurst(proj *component.Projectile, impactP
 		}
 
 		// Создаем "мини-снаряд" из точки попадания в новую цель
-		s.combatSystem.CreateProjectile(impactPos, enemyID, miniProjectileAttackDef, burstDamage, 0.5)
+		s.combatSystem.CreateProjectile(impactPos, sourceID, enemyID, miniProjectileAttackDef, burstDamage, 0.5)
 		targetsHit++
 	}
 }

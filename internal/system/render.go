@@ -33,6 +33,7 @@ type RenderSystemRL struct {
 	towerModels     map[string]rl.Model
 	towerWireModels map[string]rl.Model
 	laserModel      rl.Model // Добавлено для оптимизации лазеров
+	ellipseModel    rl.Model // Модель для эллиптических снарядов
 }
 
 // NewRenderSystemRL со��дает новую оптимизированную систему рендеринга
@@ -45,7 +46,9 @@ func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
 		towerWireModels: make(map[string]rl.Model),
 	}
 	rs.pregenerateTowerModels()
-	rs.pregenerateLaserModel() // Добавлен вызов для создания модели лазера
+	rs.pregenerateLaserModel()
+	// Создаем модель для эллипса (простой куб, который будем масштабировать)
+	rs.ellipseModel = rl.LoadModelFromMesh(rl.GenMeshCube(1.0, 1.0, 1.0))
 	return rs
 }
 
@@ -103,7 +106,7 @@ func (s *RenderSystemRL) pregenerateTowerModels() {
 			mesh = rl.GenMeshCylinder(1.0, 1.0, 6)
 			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 6)
 		case towerDef.Type == defs.TowerTypeMiner:
-			// Добытчики будут рендериться динам��чески для сохранения формы конуса
+			// Добытчики будут рендеритьс�� динам��чески для сохранения формы конуса
 			continue
 		case towerDef.CraftingLevel >= 1:
 			mesh = rl.GenMeshCube(1.0, 1.0, 1.0)
@@ -184,12 +187,13 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 }
 
 // Draw использует кэшированные данные для отрисовки всего, КРОМЕ снарядов
-func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func(), clearedCheckpoints map[hexmap.Hex]bool) {
+func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func(), clearedCheckpoints map[hexmap.Hex]bool, futurePath []hexmap.Hex) {
 	if s.camera == nil {
 		return
 	}
 	s.drawPulsingOres(gameTime)
 	s.drawClearedCheckpoints(clearedCheckpoints) // <-- НОВЫЙ ВЫЗОВ
+	s.drawFuturePath(futurePath)                 // <-- НОВЫЙ ВЫЗОВ
 	s.drawSolidEntities()
 	s.drawLines(hiddenLineID)
 	s.drawLasers()
@@ -200,6 +204,20 @@ func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, 
 	s.drawCombinationIndicators()
 }
 
+// drawFuturePath затемняет гексы, по которым будут двигаться враги.
+func (s *RenderSystemRL) drawFuturePath(path []hexmap.Hex) {
+	if path == nil || len(path) == 0 {
+		return
+	}
+	color := rl.NewColor(0, 0, 0, 70) // Сохраняем текущий цвет по просьбе
+	for _, hex := range path {
+		pos := s.hexToWorld(hex)
+		pos.Y += 0.75 // Поднимаем выше, как у чекпоинтов
+		radius := float32(config.HexSize*config.CoordScale) * 1.05 // Делаем "жирнее", как чекпоинты
+		rl.DrawCylinder(pos, radius, radius, 1.2, 6, color) // Делаем толще, как чекпоинты
+	}
+}
+
 // drawClearedCheckpoints рисует оверлей на очищенных чекпоинтах
 func (s *RenderSystemRL) drawClearedCheckpoints(clearedCheckpoints map[hexmap.Hex]bool) {
 	if clearedCheckpoints == nil || len(clearedCheckpoints) == 0 {
@@ -207,11 +225,11 @@ func (s *RenderSystemRL) drawClearedCheckpoints(clearedCheckpoints map[hexmap.He
 	}
 	for hex := range clearedCheckpoints {
 		pos := s.hexToWorld(hex)
-		pos.Y += 1.0 // Приподнимаем еще выше, чтобы избежать конфликтов
-		radius := float32(config.HexSize * config.CoordScale)
-		color := rl.NewColor(0, 120, 0, 200) // Темно-зеленый, более заметный цвет
+		pos.Y += 0.7 // Смещаем чуть ниже
+		radius := float32(config.HexSize*config.CoordScale) * 1.05 // Увеличиваем радиус на 5%
+		color := rl.NewColor(0, 120, 0, 200)                      // Темно-зеленый, более заметный цвет
 
-		rl.DrawCylinder(pos, radius, radius, 0.8, 6, color)
+		rl.DrawCylinder(pos, radius, radius, 1.2, 6, color)
 	}
 }
 
@@ -286,6 +304,23 @@ func (s *RenderSystemRL) drawSolidEntities() {
 		finalColor := colorToRL(renderable.Color)
 		if _, ok := s.ecs.DamageFlashes[id]; ok {
 			finalColor = config.EnemyDamageColorRL
+		} else if poisonContainer, ok := s.ecs.JadePoisonContainers[id]; ok {
+			numStacks := len(poisonContainer.Instances)
+			if numStacks > 0 {
+				originalColor := colorToRL(renderable.Color)
+				// Целевой цвет: сине-зеленый, с преобладанием зеленого
+				targetColor := rl.NewColor(40, 220, 140, 255)
+				// Рассчитываем фактор смешивания в зависимости от кол-ва стаков
+				const maxVisualStacks = 5.0 // Уменьшаем для более быстрого достижения максимального эффекта
+				lerpFactor := float32(numStacks) / maxVisualStacks
+				if lerpFactor > 1.0 {
+					lerpFactor = 1.0
+				}
+				// Интерполируем цвет
+				finalColor.R = uint8(float32(originalColor.R)*(1-lerpFactor) + float32(targetColor.R)*lerpFactor)
+				finalColor.G = uint8(float32(originalColor.G)*(1-lerpFactor) + float32(targetColor.G)*lerpFactor)
+				finalColor.B = uint8(float32(originalColor.B)*(1-lerpFactor) + float32(targetColor.B)*lerpFactor)
+			}
 		} else if _, ok := s.ecs.PoisonEffects[id]; ok {
 			finalColor = config.ProjectileColorPoisonRL
 		} else if _, ok := s.ecs.SlowEffects[id]; ok {
@@ -326,8 +361,8 @@ func (s *RenderSystemRL) DrawProjectiles() {
 			continue
 		}
 
-		// Рисуем только снаряды
-		if _, isProjectile := s.ecs.Projectiles[id]; !isProjectile {
+		proj, isProjectile := s.ecs.Projectiles[id]
+		if !isProjectile {
 			continue
 		}
 
@@ -337,10 +372,28 @@ func (s *RenderSystemRL) DrawProjectiles() {
 		}
 
 		finalColor := colorToRL(renderable.Color)
-		scaledRadius := data.Radius * float32(config.CoordScale)
 		pos := data.WorldPos
-		pos.Y = scaledRadius
-		rl.DrawSphere(pos, scaledRadius, finalColor)
+		pos.Y = float32(config.ProjectileRadius*config.CoordScale) + 1.0 // Поднимаем снаряды чуть выше
+
+		if proj.VisualType == "ELLIPSE" {
+			length := float32(config.ProjectileRadius*config.CoordScale) * 1.5
+			width := float32(config.ProjectileRadius*config.CoordScale) / 2.0
+			height := float32(0.2) // Сделаем чуть толще для заметности
+
+			// Масштабируем наш единичный куб до размеров эллипса
+			scale := rl.NewVector3(length, height, width)
+
+			// Угол поворота вокруг оси Y. Добавляем 90 градусов, так как "длинная" сторона куба
+			// должна быть сонаправлена с вектором движения.
+			rotationAngle := float32(proj.Direction*rl.Rad2deg) + 90
+
+			rl.DrawModelEx(s.ellipseModel, pos, rl.NewVector3(0, 1, 0), rotationAngle, scale, finalColor)
+
+		} else {
+			// Рисуем стандартную сферу
+			scaledRadius := data.Radius * float32(config.CoordScale)
+			rl.DrawSphere(pos, scaledRadius, finalColor)
+		}
 	}
 }
 
@@ -583,7 +636,7 @@ func (s *RenderSystemRL) drawDraggingLine(isDragging bool, sourceTowerID types.E
 	startPos := s.hexToWorld(sourceTower.Hex)
 	startPos.Y = s.GetTowerRenderHeight(sourceTower, sourceRender)
 
-	// Получаем конечную позицию (курсор на плоскости y=0)
+	// Получаем конечную пози��ию (курсор на плоскости y=0)
 	ray := rl.GetMouseRay(rl.GetMousePosition(), *s.camera)
 	t := -ray.Position.Y / ray.Direction.Y
 	var endPos rl.Vector3

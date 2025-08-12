@@ -324,3 +324,22 @@ func (hm *HexMap) Contains(hex Hex) bool {
 func (hm *HexMap) GetNeighbors(h Hex) []Hex {
 	return h.Neighbors(hm)
 }
+
+// Clone создает глубокую копию HexMap.
+func (hm *HexMap) Clone() *HexMap {
+	newTiles := make(map[Hex]Tile, len(hm.Tiles))
+	for h, t := range hm.Tiles {
+		newTiles[h] = t
+	}
+
+	newCheckpoints := make([]Hex, len(hm.Checkpoints))
+	copy(newCheckpoints, hm.Checkpoints)
+
+	return &HexMap{
+		Tiles:       newTiles,
+		Radius:      hm.Radius,
+		Entry:       hm.Entry,
+		Exit:        hm.Exit,
+		Checkpoints: newCheckpoints,
+	}
+}

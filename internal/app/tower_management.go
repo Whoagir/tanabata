@@ -48,6 +48,7 @@ func (g *Game) PlaceTower(hex hexmap.Hex) bool {
 	g.addTowerToEnergyNetwork(id)
 	g.AuraSystem.RecalculateAuras()
 	g.EventDispatcher.Dispatch(event.Event{Type: event.TowerPlaced, Data: hex})
+	g.UpdateFuturePath() // Обновляем путь
 
 	return true
 }
@@ -96,6 +97,7 @@ func (g *Game) RemoveTower(hex hexmap.Hex) bool {
 		}
 
 		g.EventDispatcher.Dispatch(event.Event{Type: event.TowerRemoved, Data: hex})
+		g.UpdateFuturePath() // Обновляем путь
 		return true
 	}
 	return false

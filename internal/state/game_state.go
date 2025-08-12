@@ -52,7 +52,7 @@ func intToRoman(num int) string {
 }
 
 // NewGameState создает новое состояние игры для Raylib
-func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, camera *rl.Camera3D) *GameState {
+func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, towerDefs map[string]*defs.TowerDefinition, camera *rl.Camera3D) *GameState {
 	hexMap := hexmap.NewHexMap()
 
 	// Загрузка шрифта с поддержкой кириллицы
@@ -66,7 +66,7 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, c
 	fontChars = append(fontChars, '₽', '«', '»', '(', ')', '.', ',')
 	font := rl.LoadFontEx("assets/fonts/arial.ttf", 64, fontChars, int32(len(fontChars))) // Увеличим размер для качества
 
-	gameLogic := app.NewGame(hexMap, font)
+	gameLogic := app.NewGame(hexMap, font, towerDefs)
 
 	// Собираем информацию о цветах для руды перед созданием рендерера
 	oreHexColors := make(map[hexmap.Hex]rl.Color)
@@ -468,7 +468,7 @@ func (g *GameState) Draw() {
 	}
 	// Шаг 1: Отрисовка основной сцены (земля, башни, враги, эффекты)
 	g.renderer.Draw()
-	g.game.RenderSystem.Draw(g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag, g.game.ClearedCheckpoints)
+	g.game.RenderSystem.Draw(g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag, g.game.ClearedCheckpoints, g.game.FuturePath)
 
 	// Шаг 2: Отрисовка выделения для выбранной сущности
 	selectedID := g.infoPanel.TargetEntity

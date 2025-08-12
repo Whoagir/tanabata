@@ -27,6 +27,7 @@ type ECS struct {
 	AuraEffects   map[types.EntityID]*component.AuraEffect
 	SlowEffects   map[types.EntityID]*component.SlowEffect
 	PoisonEffects map[types.EntityID]*component.PoisonEffect
+	JadePoisonContainers   map[types.EntityID]*component.JadePoisonContainer
 	Lasers                 map[types.EntityID]*component.Laser
 	VolcanoEffects         map[types.EntityID]*component.VolcanoEffect // Добавлено для эффектов вулкана
 	VolcanoAuras           map[types.EntityID]*component.VolcanoAura   // Добавлено для логики атаки вулкана
@@ -60,6 +61,7 @@ func NewECS() *ECS {
 		AuraEffects:            make(map[types.EntityID]*component.AuraEffect),
 		SlowEffects:            make(map[types.EntityID]*component.SlowEffect),
 		PoisonEffects:          make(map[types.EntityID]*component.PoisonEffect),
+		JadePoisonContainers:   make(map[types.EntityID]*component.JadePoisonContainer),
 		Lasers:                 make(map[types.EntityID]*component.Laser),
 		VolcanoEffects:         make(map[types.EntityID]*component.VolcanoEffect), // Инициализация
 		VolcanoAuras:           make(map[types.EntityID]*component.VolcanoAura),   // Инициализация

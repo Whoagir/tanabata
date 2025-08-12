@@ -43,6 +43,8 @@ type AttackDef struct {
 // AttackParams holds parameters for various attack types.
 // Using pointers to avoid including all fields for all attack types.
 type AttackParams struct {
+	Effect      string          `json:"effect,omitempty"`
+	VisualType  string          `json:"visual_type,omitempty"`
 	// For Projectile
 	SplitCount  *int            `json:"split_count,omitempty"`
 	ImpactBurst *ImpactBurstDef `json:"impact_burst,omitempty"`

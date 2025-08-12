@@ -40,11 +40,19 @@ func main() {
 	// --- Инициализация игры ---
 	rand.Seed(time.Now().UnixNano())
 	sm := state.NewStateMachine()
+
+	// Создаем карту указателей для передачи в системы
+	towerDefPtrs := make(map[string]*defs.TowerDefinition)
+	for id, def := range defs.TowerDefs {
+		d := def // Создаем копию, чтобы указатель был на уникальный экземпляр
+		towerDefPtrs[id] = &d
+	}
+
 	if startFromGame {
-		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary, nil))
+		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary, towerDefPtrs, nil))
 	} else {
 		log.Println("Menu state is not implemented for Raylib yet. Starting game directly.")
-		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary, nil))
+		sm.SetState(state.NewGameState(sm, defs.RecipeLibrary, towerDefPtrs, nil))
 	}
 
 	// --- Настройка 3D камеры (как в map_viewer) ---

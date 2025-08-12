@@ -76,10 +76,11 @@ type Game struct {
 	dragOriginalParentID types.EntityID
 	PlayerID             types.EntityID // ID сущности игрока
 	ClearedCheckpoints   map[hexmap.Hex]bool
+	FuturePath           []hexmap.Hex
 }
 
 // NewGame initializes a new game instance.
-func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
+func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.TowerDefinition) *Game {
 	if hexMap == nil {
 		panic("hexMap cannot be nil")
 	}
@@ -104,7 +105,7 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font) *Game {
 	g.MovementSystem = system.NewMovementSystem(ecs, g)
 	g.RenderSystem = system.NewRenderSystemRL(ecs, font)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
-	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem)
+	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem, towerDefs)
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
 	g.AuraSystem = system.NewAuraSystem(ecs)
 	g.StatusEffectSystem = system.NewStatusEffectSystem(ecs)
@@ -150,7 +151,6 @@ func (g *Game) GetClearedCheckpoints() map[hexmap.Hex]bool {
 func (g *Game) GetEnemies() map[types.EntityID]*component.Enemy {
 	return g.ECS.Enemies
 }
-
 
 // CombineTowers выполняет логику объединения башен.
 func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
@@ -384,6 +384,55 @@ func (g *Game) UpdateCheckpointHighlighting() {
 			}
 		}
 	}
+}
+
+// UpdateFuturePath рассчитывает и сохраняет путь, по которому пойдут следующие враги.
+func (g *Game) UpdateFuturePath() {
+	wallHexes, _, _ := g.GetTowerHexesByType()
+	tempMap := g.HexMap.Clone()
+	for _, h := range wallHexes {
+		if tile, ok := tempMap.Tiles[h]; ok {
+			tile.Passable = false
+			tempMap.Tiles[h] = tile
+		}
+	}
+
+	var fullPath []hexmap.Hex
+	currentStart := g.HexMap.Entry
+
+	// Путь от входа до первого чекпоинта
+	allCheckpoints := g.HexMap.Checkpoints
+	if len(allCheckpoints) > 0 {
+		for _, checkpoint := range allCheckpoints {
+			segment := hexmap.AStar(currentStart, checkpoint, tempMap)
+			if segment == nil {
+				g.FuturePath = nil // Если хоть один сегмент не найден, полного пути нет
+				return
+			}
+			// Добавляем сегмент, исключая его первую точку, чтобы избежать дублирования
+			if len(fullPath) > 0 {
+				fullPath = append(fullPath, segment[1:]...)
+			} else {
+				fullPath = append(fullPath, segment...)
+			}
+			currentStart = checkpoint
+		}
+	}
+
+	// Путь от последнего чекпоинта (или от входа, если чекпоинтов нет) до выхода
+	finalSegment := hexmap.AStar(currentStart, g.HexMap.Exit, tempMap)
+	if finalSegment == nil {
+		g.FuturePath = nil
+		return
+	}
+
+	if len(fullPath) > 0 {
+		fullPath = append(fullPath, finalSegment[1:]...)
+	} else {
+		fullPath = append(fullPath, finalSegment...)
+	}
+
+	g.FuturePath = fullPath
 }
 
 // StartWave begins the enemy wave.
@@ -955,6 +1004,7 @@ func (g *Game) CreateDebugTower(hex hexmap.Hex, towerDefID string) {
 	g.addTowerToEnergyNetwork(id)
 	g.AuraSystem.RecalculateAuras()
 	g.EventDispatcher.Dispatch(event.Event{Type: event.TowerPlaced, Data: hex})
+	g.UpdateFuturePath() // Обновляем путь
 }
 
 func (g *Game) createPlayerEntity() {

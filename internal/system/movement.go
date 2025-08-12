@@ -46,6 +46,22 @@ func (s *MovementSystem) Update(deltaTime float64) {
 				if slowEffect, isSlowed := s.ecs.SlowEffects[id]; isSlowed {
 					currentSpeed *= slowEffect.SlowFactor
 				}
+
+				// Применяем замедление от яда Jade
+				if poisonContainer, isPoisoned := s.ecs.JadePoisonContainers[id]; isPoisoned {
+					numStacks := len(poisonContainer.Instances)
+					if numStacks > 0 {
+						// Рассчитываем общий процент замедления от стаков
+						totalJadeSlow := float64(poisonContainer.SlowFactorPerStack) * float64(numStacks)
+						// Оставшаяся скорость будет (1.0 - totalJadeSlow)
+						speedMultiplier := 1.0 - totalJadeSlow
+						if speedMultiplier < 0.1 { // Ограничим минимальную скорость (например, 10% от базовой)
+							speedMultiplier = 0.1
+						}
+						currentSpeed *= speedMultiplier
+					}
+				}
+
 				moveDistance := currentSpeed * deltaTime
 
 				if dist <= moveDistance {

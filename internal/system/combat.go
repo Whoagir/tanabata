@@ -138,7 +138,7 @@ func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *componen
 	baseDamage := float64(towerDef.Combat.Damage)
 	finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
 
-	// 3. Применить урон и эффекты напрямую
+	// 3. Применить ��рон и эффекты напрямую
 	ApplyDamage(s.ecs, targetID, finalDamage, combat.Attack.DamageType)
 
 	// Применяем замедление, если оно есть
@@ -243,7 +243,7 @@ func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *com
 	startPos := &component.Position{X: towerX, Y: towerY}
 
 	for _, enemyID := range targets {
-		s.CreateProjectile(startPos, enemyID, towerDef.Combat.Attack, finalDamage, 1.0)
+		s.CreateProjectile(startPos, towerID, enemyID, towerDef.Combat.Attack, finalDamage, 1.0)
 	}
 	return true
 }
@@ -290,7 +290,7 @@ func (s *CombatSystem) findTargetsForSplitAttack(startHex hexmap.Hex, rangeRadiu
 
 // CreateProjectile создает новую сущность снаряда.
 // radiusMultiplier позволяет создавать снаряды разного размера (например, 1.0 для обычных, 0.5 для мини-снарядов).
-func (s *CombatSystem) CreateProjectile(startPos *component.Position, targetID types.EntityID, attackDef *defs.AttackDef, damage int, radiusMultiplier float64) {
+func (s *CombatSystem) CreateProjectile(startPos *component.Position, sourceID, targetID types.EntityID, attackDef *defs.AttackDef, damage int, radiusMultiplier float64) {
 	projID := s.ecs.NewEntity()
 
 	predictedPos := s.predictTargetPosition(targetID, startPos, config.ProjectileSpeed)
@@ -299,6 +299,7 @@ func (s *CombatSystem) CreateProjectile(startPos *component.Position, targetID t
 	projectileColor := getProjectileColorByAttackType(attackDef.DamageType)
 
 	proj := &component.Projectile{
+		SourceID:   sourceID,
 		TargetID:   targetID,
 		Speed:      config.ProjectileSpeed,
 		Damage:     damage,
@@ -307,11 +308,17 @@ func (s *CombatSystem) CreateProjectile(startPos *component.Position, targetID t
 		AttackType: attackDef.DamageType,
 	}
 
-	// Переносим параметры ImpactBurst в снаряд, если они есть
-	if attackDef.Params != nil && attackDef.Params.ImpactBurst != nil {
-		proj.ImpactBurstRadius = attackDef.Params.ImpactBurst.Radius
-		proj.ImpactBurstTargetCount = attackDef.Params.ImpactBurst.TargetCount
-		proj.ImpactBurstDamageFactor = attackDef.Params.ImpactBurst.DamageFactor
+	if attackDef.Params != nil {
+		// Переносим параметры ImpactBurst в снаряд, если они есть
+		if attackDef.Params.ImpactBurst != nil {
+			proj.ImpactBurstRadius = attackDef.Params.ImpactBurst.Radius
+			proj.ImpactBurstTargetCount = attackDef.Params.ImpactBurst.TargetCount
+			proj.ImpactBurstDamageFactor = attackDef.Params.ImpactBurst.DamageFactor
+		}
+		// Устанавливаем тип визуала
+		if attackDef.Params.VisualType != "" {
+			proj.VisualType = attackDef.Params.VisualType
+		}
 	}
 
 	proj.IsConditionallyHoming = true
@@ -407,6 +414,18 @@ func (s *CombatSystem) predictTargetPosition(enemyID types.EntityID, startPos *c
 	currentSpeed := enemyVel.Speed
 	if slowEffect, ok := s.ecs.SlowEffects[enemyID]; ok {
 		currentSpeed *= slowEffect.SlowFactor
+	}
+	// Применяем замедление от яда Jade (та же логика, что и в movement.go)
+	if poisonContainer, isPoisoned := s.ecs.JadePoisonContainers[enemyID]; isPoisoned {
+		numStacks := len(poisonContainer.Instances)
+		if numStacks > 0 {
+			totalJadeSlow := float64(poisonContainer.SlowFactorPerStack) * float64(numStacks)
+			speedMultiplier := 1.0 - totalJadeSlow
+			if speedMultiplier < 0.1 {
+				speedMultiplier = 0.1
+			}
+			currentSpeed *= speedMultiplier
+		}
 	}
 
 	const maxIterations = 5

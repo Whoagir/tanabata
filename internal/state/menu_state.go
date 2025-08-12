@@ -23,7 +23,7 @@ func (s *MenuState) Enter() {}
 
 func (s *MenuState) Update(deltaTime float64) {
 	if rl.IsKeyPressed(rl.KeyEnter) {
-		s.stateMachine.SetState(NewGameState(s.stateMachine, s.recipeLibrary, nil))
+		s.stateMachine.SetState(NewGameState(s.stateMachine, defs.RecipeLibrary, nil, nil))
 	}
 }
 

@@ -30,5 +30,13 @@
       { "id": "PO", "level": 1 }
     ],
     "output_id": "TOWER_LIGHTHOUSE"
+  },
+  {
+    "inputs": [
+      { "id": "TE", "level": 1 },
+      { "id": "NI", "level": 1 },
+      { "id": "NU", "level": 1 }
+    ],
+    "output_id": "TOWER_JADE"
   }
 ]

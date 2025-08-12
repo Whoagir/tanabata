@@ -337,5 +337,31 @@
       "radius_factor": 0.35,
       "stroke_width": 2.0
     }
+  },
+  {
+    "id": "TOWER_JADE",
+    "name": "Jade (Яд)",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 5,
+      "fire_rate": 1.0,
+      "range": 4,
+      "shot_cost": 0.12,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "effect": "JADE_POISON",
+          "visual_type": "ELLIPSE"
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 152, "g": 251, "b": 152, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   }
 ]
