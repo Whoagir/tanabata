@@ -1,12 +1,29 @@
 // internal/state/state.go
 package state
 
+import (
+	"go-tower-defense/internal/app"
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+// GameInterface определяет методы, которые состояния могут запрашивать у GameState.
+// Это нужно, чтобы PauseState мог взаимодействовать с GameState, не создавая циклического импорта.
+type GameInterface interface {
+	GetGame() *app.Game
+	GetFont() rl.Font
+}
+
 // State — интерфейс для всех состояний
 type State interface {
 	Enter()
 	Update(deltaTime float64)
-	Draw() // Убрали screen *ebiten.Image
+	Draw()
 	Exit()
+	// Добавляем методы для совместимости с PauseState
+	GetGame() GameInterface
+	GetFont() rl.Font
+	Cleanup()
+	SetCamera(camera *rl.Camera3D)
 }
 
 // StateMachine — структура для управления состояниями

@@ -62,6 +62,7 @@ type Game struct {
 	// Game state
 	gameTime               float64
 	isPaused               bool
+	isGodMode              bool // Режим бессмертия
 	gameSpeed              float64
 	currentWave            *component.Wave
 	isDragging             bool
@@ -100,9 +101,10 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.Tow
 		towersBuilt:     0,
 		gameTime:        0.0,
 		DebugTowerID:    "",
+		isGodMode:       false, // Инициализируем режим бессмертия
 	}
 	// ВАЖНО: MovementSystem создается после инициализации g
-	g.MovementSystem = system.NewMovementSystem(ecs, g)
+	g.MovementSystem = system.NewMovementSystem(ecs, g, g.Rng)
 	g.RenderSystem = system.NewRenderSystemRL(ecs, font)
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
 	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem, towerDefs)
@@ -150,6 +152,27 @@ func (g *Game) GetClearedCheckpoints() map[hexmap.Hex]bool {
 // GetEnemies возвращает карту врагов (для MovementSystem)
 func (g *Game) GetEnemies() map[types.EntityID]*component.Enemy {
 	return g.ECS.Enemies
+}
+
+// GetFont возвращает шрифт, используемый в игре.
+func (g *Game) GetFont() rl.Font {
+	return g.Font
+}
+
+// GetGame возвращает сам экземпляр игры для соответствия интерфейсу.
+func (g *Game) GetGame() *Game {
+	return g
+}
+
+// IsGodMode возвращает, включен ли режим бессмертия.
+func (g *Game) IsGodMode() bool {
+	return g.isGodMode
+}
+
+// ToggleGodMode переключает режим бессмертия.
+func (g *Game) ToggleGodMode() {
+	g.isGodMode = !g.isGodMode
+	log.Printf("God Mode toggled: %v", g.isGodMode)
 }
 
 // CombineTowers выполняет логику объединения башен.
@@ -1014,5 +1037,6 @@ func (g *Game) createPlayerEntity() {
 		Level:         initialLevel,
 		CurrentXP:     0,
 		XPToNextLevel: config.CalculateXPForNextLevel(initialLevel),
+		Health:        20, // Устанавливаем начальное здоровье
 	}
 }

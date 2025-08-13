@@ -7,4 +7,5 @@ type PlayerStateComponent struct {
 	Level         int // Текущий уровень игрока
 	CurrentXP     int // Текущее количество очков опыта
 	XPToNextLevel int // Количество опыта, необходимое для следующего уровня
+	Health        int // Добавляем здоровье игрока
 }

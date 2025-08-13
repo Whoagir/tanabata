@@ -3,7 +3,7 @@ import argparse
 
 def should_ignore(name, is_dir):
     """Определяет, нужно ли игнорировать файл или директорию"""
-    ignored_dirs = {'venv', '__pycache__', '.git', '.idea', '.mypy_cache', 'go-build', 'gopath', 'go-cache', 'gocache', 'CMakeFiles', 'x64', 'buildtrees', '.github', 'downloads', 'installed', 'packages', 'ports', 'scripts', 'versions' }
+    ignored_dirs = {'venv', '__pycache__', '.git', '.idea', '.mypy_cache', 'go-build', 'gopath', 'go-cache', 'gocache', 'CMakeFiles', 'x64', 'buildtrees', '.github', 'downloads', 'installed', 'packages', 'ports', 'scripts', 'versions', 'vendor' }
     ignored_extensions = {'.pyc', '.pyo', '.pyd', '.cpp', '.tlog', '.vcxproj', '.cmake', '.h' }
     
     if is_dir:

@@ -16,28 +16,34 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// Убеждаемся, что GameState соответствует интерфейсу State
+var _ State = (*GameState)(nil)
+
 // GameState — состояние игры
 type GameState struct {
-	sm                   *StateMachine
-	game                 *app.Game
-	hexMap               *hexmap.HexMap
-	renderer             *render.HexRenderer
-	indicator            *ui.StateIndicatorRL
-	playerLevelIndicator *ui.PlayerLevelIndicatorRL
-	infoPanel            *ui.InfoPanelRL
-	recipeBook           *ui.RecipeBookRL
-	uIndicator           *ui.UIndicatorRL
-	waveIndicator        *ui.WaveIndicator // Добавлено
-	lastClickTime        time.Time
-	camera               *rl.Camera3D
-	font                 rl.Font
-	checkpointTextures   map[int]rl.Texture2D // Текстуры для номеров чекпоинтов
+	sm                    *StateMachine
+	game                  *app.Game
+	hexMap                *hexmap.HexMap
+	renderer              *render.HexRenderer
+	indicator             *ui.StateIndicatorRL
+	playerLevelIndicator  *ui.PlayerLevelIndicatorRL
+	playerHealthIndicator *ui.PlayerHealthIndicator
+	infoPanel             *ui.InfoPanelRL
+	recipeBook            *ui.RecipeBookRL
+	uIndicator            *ui.UIndicatorRL
+	waveIndicator         *ui.WaveIndicator
+	lastClickTime         time.Time
+	camera                *rl.Camera3D
+	font                  rl.Font
+	checkpointTextures    map[int]rl.Texture2D
+	isGameOver            bool // Флаг окончания игры
+	restartButton         rl.Rectangle
 }
 
-// intToRoman конв��ртирует целое число в римскую цифру (для чисел от 1 до 10)
+// intToRoman конвертирует целое число в римску�� цифру (для чисел от 1 до 10)
 func intToRoman(num int) string {
 	if num < 1 || num > 10 {
-		return "" // Поддерживаем только небольшие числа для чекпоинтов
+		return ""
 	}
 	val := []int{10, 9, 5, 4, 1}
 	syms := []string{"X", "IX", "V", "IV", "I"}
@@ -55,7 +61,6 @@ func intToRoman(num int) string {
 func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, towerDefs map[string]*defs.TowerDefinition, camera *rl.Camera3D) *GameState {
 	hexMap := hexmap.NewHexMap()
 
-	// Загрузка шрифта с поддержкой кириллицы
 	var fontChars []rune
 	for i := 32; i <= 127; i++ {
 		fontChars = append(fontChars, rune(i))
@@ -64,11 +69,10 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		fontChars = append(fontChars, rune(i))
 	}
 	fontChars = append(fontChars, '₽', '«', '»', '(', ')', '.', ',')
-	font := rl.LoadFontEx("assets/fonts/arial.ttf", 64, fontChars, int32(len(fontChars))) // Увеличим размер для качества
+	font := rl.LoadFontEx("assets/fonts/arial.ttf", 64, fontChars, int32(len(fontChars)))
 
 	gameLogic := app.NewGame(hexMap, font, towerDefs)
 
-	// Собираем информацию о цветах для руды перед созданием рендерера
 	oreHexColors := make(map[hexmap.Hex]rl.Color)
 	specialHexes := make(map[hexmap.Hex]struct{})
 	specialHexes[hexMap.Entry] = struct{}{}
@@ -86,7 +90,6 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 
 	renderer := render.NewHexRenderer(hexMap, oreHexColors)
 
-	// --- Расчет позиций и размеров для UI ---
 	pauseButtonX := float32(config.ScreenWidth - config.IndicatorOffsetX - 90)
 	pauseButtonSize := float32(config.IndicatorRadius)
 	indicatorX := float32(config.ScreenWidth - config.IndicatorOffsetX)
@@ -103,9 +106,23 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 	)
 	playerLevelIndicator := ui.NewPlayerLevelIndicatorRL(
 		levelIndicatorLeftEdge,
-		float32(config.IndicatorOffsetX+35), // Смещаем ниже кнопок
+		float32(config.IndicatorOffsetX+35),
 		levelIndicatorWidth,
 	)
+
+	waveIndicatorY := playerLevelIndicator.Y + 44
+	waveIndicator := ui.NewWaveIndicator(
+		levelIndicatorLeftEdge+levelIndicatorWidth/2,
+		waveIndicatorY,
+		28,
+	)
+
+	// Рассчитываем позицию для индикатора здоровья под индикатором волны
+	healthIndicatorY := waveIndicator.Y + waveIndicator.FontSize + 40 // Y волны + ее высота + отступ
+	// Центрируем по горизонтали так же, как и индикатор волны
+	healthIndicatorX := waveIndicator.X - (float32(ui.HealthCols*(ui.HealthCircleRadius*2+ui.HealthCircleSpacing)-ui.HealthCircleSpacing))/2
+
+	playerHealthIndicator := ui.NewPlayerHealthIndicator(healthIndicatorX, healthIndicatorY)
 	infoPanel := ui.NewInfoPanelRL(font, gameLogic.EventDispatcher)
 
 	recipeBookWidth := float32(400)
@@ -114,46 +131,54 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 	recipeBookY := (float32(config.ScreenHeight) - recipeBookHeight) / 2
 	recipeBook := ui.NewRecipeBookRL(recipeBookX, recipeBookY, recipeBookWidth, recipeBookHeight, recipeLibrary.Recipes, font)
 
-	waveIndicatorY := playerLevelIndicator.Y + 44 // Располагаем ниже индикатора уровня
-	waveIndicator := ui.NewWaveIndicator(
-		levelIndicatorLeftEdge+levelIndicatorWidth/2, // Центрируем по горизонтали
-		waveIndicatorY,
-		28, // Размер шрифта
-	)
-
+	// Размещаем индикатор "U" слева от кнопки паузы
+	uIndicatorSize := float32(30)
+	uIndicatorX := pauseButtonX - 20 - uIndicatorSize/2 // X кнопки паузы - отступ - половина размера индикатора
 	uIndicator := ui.NewUIndicatorRL(
-		float32(config.IndicatorOffsetX),
-		float32(config.IndicatorOffsetX),
-		40, // Размер шрифта для "U"
+		uIndicatorX,
+		float32(config.IndicatorOffsetX), // Y на том же уровне, что и другие иконки
+		uIndicatorSize,
 		font,
 	)
 
-	// --- Генерация текстур для чекпоинтов ---
 	checkpointTextures := make(map[int]rl.Texture2D)
 	for i := 0; i < len(hexMap.Checkpoints); i++ {
 		romanNumeral := intToRoman(i + 1)
 		img := rl.ImageTextEx(font, romanNumeral, 64, 1, rl.White)
 		tex := rl.LoadTextureFromImage(img)
-		rl.SetTextureFilter(tex, rl.FilterPoint) // Используем точечную фильтрацию для четкости
+		rl.SetTextureFilter(tex, rl.FilterPoint)
 		checkpointTextures[i] = tex
-		rl.UnloadImage(img) // Освобождаем память CPU
+		rl.UnloadImage(img)
 	}
 
+	// --- Кнопка рестарта ---
+	btnWidth := float32(200)
+	btnHeight := float32(50)
+	restartButton := rl.NewRectangle(
+		(float32(config.ScreenWidth)-btnWidth)/2,
+		(float32(config.ScreenHeight)-btnHeight)/2+50, // Чуть ниже текста
+		btnWidth,
+		btnHeight,
+	)
+
 	gs := &GameState{
-		sm:                   sm,
-		game:                 gameLogic,
-		hexMap:               hexMap,
-		renderer:             renderer,
-		indicator:            indicator,
-		playerLevelIndicator: playerLevelIndicator,
-		infoPanel:            infoPanel,
-		recipeBook:           recipeBook,
-		uIndicator:           uIndicator,
-		waveIndicator:        waveIndicator, // Добавлено
-		lastClickTime:        time.Now(),
-		camera:               camera,
-		font:                 font,
-		checkpointTextures:   checkpointTextures, // Сохраняем текстуры
+		sm:                    sm,
+		game:                  gameLogic,
+		hexMap:                hexMap,
+		renderer:              renderer,
+		indicator:             indicator,
+		playerLevelIndicator:  playerLevelIndicator,
+		playerHealthIndicator: playerHealthIndicator,
+		infoPanel:             infoPanel,
+		recipeBook:            recipeBook,
+		uIndicator:            uIndicator,
+		waveIndicator:         waveIndicator,
+		lastClickTime:         time.Now(),
+		camera:                camera,
+		font:                  font,
+		checkpointTextures:    checkpointTextures,
+		isGameOver:            false,
+		restartButton:         restartButton,
 	}
 
 	return gs
@@ -173,6 +198,33 @@ func (g *GameState) Update(deltaTime float64) {
 		return
 	}
 
+	// Если игра окончена, блокируем все обновления, кроме клика по рестарту
+	if g.isGameOver {
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			if rl.CheckCollisionPointRec(rl.GetMousePosition(), g.restartButton) {
+				// Создаем карту указателей для передачи в системы
+				towerDefPtrs := make(map[string]*defs.TowerDefinition)
+				for id, def := range defs.TowerDefs {
+					d := def
+					towerDefPtrs[id] = &d
+				}
+				// Пересоздаем состояние игры
+				newState := NewGameState(g.sm, defs.RecipeLibrary, towerDefPtrs, g.camera)
+				newState.SetCamera(g.camera)
+				g.sm.SetState(newState)
+			}
+		}
+		return
+	}
+
+	// Проверяем условие проигрыша
+	if playerState, ok := g.game.ECS.PlayerState[g.game.PlayerID]; ok {
+		if playerState.Health <= 0 {
+			g.isGameOver = true
+			return // Останавливаем дальнейшее обновление
+		}
+	}
+
 	// Управление масштабированием камеры
 	if g.camera.Projection == rl.CameraPerspective {
 		if rl.IsKeyPressed(rl.KeyR) {
@@ -188,7 +240,6 @@ func (g *GameState) Update(deltaTime float64) {
 			}
 		}
 	} else if g.camera.Projection == rl.CameraOrthographic {
-		// Добавляем управление зумом для ортографической камеры
 		if rl.IsKeyPressed(rl.KeyR) {
 			g.camera.Fovy -= config.CameraOrthoZoomStep
 			if g.camera.Fovy < config.CameraOrthoFovyMin {
@@ -204,7 +255,6 @@ func (g *GameState) Update(deltaTime float64) {
 	}
 
 	if rl.IsKeyPressed(rl.KeyY) {
-		// Сбрасываем зум в зависимости от текущего режима
 		if g.camera.Projection == rl.CameraPerspective {
 			g.camera.Fovy = config.CameraFovyDefault
 		} else {
@@ -212,20 +262,19 @@ func (g *GameState) Update(deltaTime float64) {
 		}
 	}
 
-	// Переключение режима проекции камеры
 	if rl.IsKeyPressed(rl.KeyP) {
 		if g.camera.Projection == rl.CameraPerspective {
 			g.camera.Projection = rl.CameraOrthographic
-			g.camera.Fovy = config.CameraOrthoFovyDefault // Устанавливаем "зум" для ортографического вида
+			g.camera.Fovy = config.CameraOrthoFovyDefault
 		} else {
 			g.camera.Projection = rl.CameraPerspective
-			g.camera.Fovy = config.CameraFovyDefault // Возвращаем стандартный "зум" для перспективы
+			g.camera.Fovy = config.CameraFovyDefault
 		}
 	}
 
 	g.infoPanel.Update(g.game.ECS)
 
-	if rl.IsKeyPressed(rl.KeyB) { // Используем 'B' для книги рецептов, чтобы не конфликтовать с зумом
+	if rl.IsKeyPressed(rl.KeyB) {
 		g.recipeBook.Toggle()
 	}
 
@@ -255,6 +304,10 @@ func (g *GameState) Update(deltaTime float64) {
 		g.game.HandlePauseClick()
 		g.sm.SetState(NewPauseState(g.sm, g, g.font))
 		return
+	}
+
+	if rl.IsKeyPressed(rl.KeyF10) {
+		g.game.ToggleGodMode()
 	}
 
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
@@ -314,7 +367,6 @@ func (g *GameState) getHitPointUnderCursor(ray rl.Ray) (rl.Vector3, bool) {
 	if g.camera == nil {
 		return rl.Vector3{}, false
 	}
-	// Рассчитываем пересечение с плоскостью y=0
 	t := -ray.Position.Y / ray.Direction.Y
 	if t > 0 {
 		hitPoint := rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
@@ -356,7 +408,7 @@ func (g *GameState) handleUIClick(mousePos rl.Vector2) {
 		g.game.HandleSpeedClick()
 	} else if g.game.PauseButton.IsClicked(mousePos) {
 		g.game.HandlePauseClick()
-		g.sm.SetState(NewPauseState(g.sm, g, g.font)) // Переключаемся в состояние паузы
+		g.sm.SetState(NewPauseState(g.sm, g, g.font))
 	} else if g.indicator.IsClicked(mousePos) {
 		g.indicator.HandleClick()
 		g.game.HandleIndicatorClick()
@@ -364,7 +416,6 @@ func (g *GameState) handleUIClick(mousePos rl.Vector2) {
 }
 
 func (g *GameState) findEntityAtCursor(ray rl.Ray) (types.EntityID, bool) {
-	// Шаг 1: Проверка башен (быстрая, на основе гексов)
 	hex := g.getHexUnderCursor(ray)
 	for id, t := range g.game.ECS.Towers {
 		if t.Hex == hex {
@@ -372,7 +423,6 @@ func (g *GameState) findEntityAtCursor(ray rl.Ray) (types.EntityID, bool) {
 		}
 	}
 
-	// Шаг 2: Проверка врагов (медленная, на основе столкновений луча со сферой)
 	var closestEntity types.EntityID
 	closestDistance := float32(-1.0)
 	found := false
@@ -380,13 +430,9 @@ func (g *GameState) findEntityAtCursor(ray rl.Ray) (types.EntityID, bool) {
 	for id := range g.game.ECS.Enemies {
 		if pos, ok := g.game.ECS.Positions[id]; ok {
 			if renderable, okRender := g.game.ECS.Renderables[id]; okRender {
-				// Определяем Bounding Sphere для врага, точно как в RenderSystem
 				scaledRadius := renderable.Radius * float32(config.CoordScale)
 				enemyPosition := rl.NewVector3(float32(pos.X*config.CoordScale), scaledRadius, float32(pos.Y*config.CoordScale))
-
-				// Проверяем столкновение
 				collision := rl.GetRayCollisionSphere(ray, enemyPosition, scaledRadius)
-
 				if collision.Hit {
 					distance := rl.Vector3DistanceSqr(g.camera.Position, enemyPosition)
 					if !found || distance < closestDistance {
@@ -403,7 +449,6 @@ func (g *GameState) findEntityAtCursor(ray rl.Ray) (types.EntityID, bool) {
 		return closestEntity, true
 	}
 
-	// Ничего не найдено
 	return 0, false
 }
 
@@ -415,10 +460,8 @@ func (g *GameState) handleGameClick(button rl.MouseButton) {
 	if button == rl.MouseLeftButton {
 		entityID, entityFound := g.findEntityAtCursor(ray)
 		if entityFound {
-			// Проверяем, является ли сущность врагом, чтобы не сбрасывать выделение башни
 			if _, isEnemy := g.game.ECS.Enemies[entityID]; isEnemy {
 				g.infoPanel.SetTarget(entityID)
-				// Не сбрасываем выделение башни, если кликнули на врага
 			} else if _, isTower := g.game.ECS.Towers[entityID]; isTower {
 				g.infoPanel.SetTarget(entityID)
 				g.game.SetHighlightedTower(entityID)
@@ -431,7 +474,6 @@ func (g *GameState) handleGameClick(button rl.MouseButton) {
 
 	if !g.hexMap.Contains(hex) {
 		g.game.ClearAllSelections()
-		// Если мы в режиме перетаскивания и кликнули вне карты, отменяем его
 		if g.game.IsInLineDragMode() {
 			g.game.CancelLineDrag()
 		}
@@ -442,7 +484,6 @@ func (g *GameState) handleGameClick(button rl.MouseButton) {
 		if button == rl.MouseLeftButton && hasHit {
 			g.game.HandleLineDragClick(hex, hitPoint)
 		} else if button == rl.MouseRightButton {
-			// Отмена перетаскивания по правому клику
 			g.game.CancelLineDrag()
 		}
 		return
@@ -466,11 +507,19 @@ func (g *GameState) Draw() {
 	if g.camera == nil {
 		return
 	}
-	// Шаг 1: Отрисовка основной сцены (земля, башни, враги, эффекты)
-	g.renderer.Draw()
-	g.game.RenderSystem.Draw(g.game.GetGameTime(), g.game.IsInLineDragMode(), g.game.GetDragSourceTowerID(), g.game.GetHiddenLineID(), g.game.ECS.GameState.Phase, g.game.CancelLineDrag, g.game.ClearedCheckpoints, g.game.FuturePath)
 
-	// Шаг 2: Отрисовка выделения для выбранной сущности
+	g.renderer.Draw()
+	g.game.RenderSystem.Draw(
+		g.game.GetGameTime(),
+		g.game.IsInLineDragMode(),
+		g.game.GetDragSourceTowerID(),
+		g.game.GetHiddenLineID(),
+		g.game.ECS.GameState.Phase,
+		g.game.CancelLineDrag,
+		g.game.ClearedCheckpoints,
+		g.game.FuturePath,
+	)
+
 	selectedID := g.infoPanel.TargetEntity
 	if selectedID != 0 {
 		var worldPos rl.Vector3
@@ -481,87 +530,62 @@ func (g *GameState) Draw() {
 			x, y := tower.Hex.ToPixel(config.HexSize)
 			worldPos = rl.NewVector3(float32(x*config.CoordScale), 0, float32(y*config.CoordScale))
 			if renderable, ok := g.game.ECS.Renderables[selectedID]; ok {
-				radius = renderable.Radius * float32(config.CoordScale) * 2.0 // Делаем круг выделения чуть больше
+				radius = renderable.Radius * float32(config.CoordScale) * 2.0
 			} else {
 				radius = float32(config.HexSize*config.CoordScale) * 1.35
 			}
 			found = true
 		} else if pos, ok := g.game.ECS.Positions[selectedID]; ok {
-			// Это для ��рагов, если мы решим их тоже выделять кругом
 			worldPos = rl.NewVector3(float32(pos.X*config.CoordScale), 0, float32(pos.Y*config.CoordScale))
 			if renderable, ok := g.game.ECS.Renderables[selectedID]; ok {
-				radius = renderable.Radius * float32(config.CoordScale) * 1.6 // Чуть больше радиуса врага
+				radius = renderable.Radius * float32(config.CoordScale) * 1.6
 			}
 			found = true
 		}
 
 		if found {
 			highlightPos := rl.NewVector3(worldPos.X, 0.5, worldPos.Z)
-			fillColor := rl.NewColor(255, 255, 224, 100) // Полупрозрачный светло-желтый
-
-			// Рисуем заливку
+			fillColor := rl.NewColor(255, 255, 224, 100)
 			rl.DrawCylinder(highlightPos, radius, radius, 0.2, 12, fillColor)
-			// Рисуем обводку
 			rl.DrawCylinderWires(highlightPos, radius, radius, 0.2, 12, config.HighlightColorRL)
 		}
 	}
 
-	// Шаг 3: Отрисовка номеров чекпоинтов как сферических билбордов
-	rl.DrawRenderBatchActive() // Принудительно отрисовываем все, что было до этого
-	rl.DisableDepthTest()      // Отключаем тест глубины, чтобы номера были видны сквозь другие объекты
+	rl.DrawRenderBatchActive()
+	rl.DisableDepthTest()
 
 	for i, checkpoint := range g.hexMap.Checkpoints {
 		if tex, ok := g.checkpointTextures[i]; ok {
 			px, py := checkpoint.ToPixel(config.HexSize)
 			worldPos := rl.NewVector3(float32(px*config.CoordScale), 5.0, float32(py*config.CoordScale))
-			
-			// Ручная отрисовка сферического билборда с учетом соотношения сторон
 			camMatrix := rl.GetCameraMatrix(*g.camera)
-			
-			// Векторы камеры в мировом пространстве
 			camRight := rl.NewVector3(camMatrix.M0, camMatrix.M4, camMatrix.M8)
 			camUp := rl.NewVector3(camMatrix.M1, camMatrix.M5, camMatrix.M9)
-
-			// Сохраняем соотношение сторон текстуры
 			aspectRatio := float32(tex.Width) / float32(tex.Height)
-			height := float32(9.0) // Уменьшили на 10%
+			height := float32(9.0)
 			width := height * aspectRatio
-			
-			// Вычисляем 4 угла квада
-			v1 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, -width/2), rl.Vector3Scale(camUp, -height/2))) // Bottom-Left
-			v2 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, width/2), rl.Vector3Scale(camUp, -height/2)))  // Bottom-Right
-			v3 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, width/2), rl.Vector3Scale(camUp, height/2)))   // Top-Right
-			v4 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, -width/2), rl.Vector3Scale(camUp, height/2)))  // Top-Left
-
+			v1 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, -width/2), rl.Vector3Scale(camUp, -height/2)))
+			v2 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, width/2), rl.Vector3Scale(camUp, -height/2)))
+			v3 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, width/2), rl.Vector3Scale(camUp, height/2)))
+			v4 := rl.Vector3Add(worldPos, rl.Vector3Add(rl.Vector3Scale(camRight, -width/2), rl.Vector3Scale(camUp, height/2)))
 			rl.SetTexture(tex.ID)
 			rl.Begin(rl.Quads)
-			
 			rl.Color4ub(config.GridColorRL.R, config.GridColorRL.G, config.GridColorRL.B, config.GridColorRL.A)
-
-			// Bottom-left corner for texture and quad
 			rl.TexCoord2f(0.0, 1.0)
 			rl.Vertex3f(v1.X, v1.Y, v1.Z)
-
-			// Bottom-right corner for texture and quad
 			rl.TexCoord2f(1.0, 1.0)
 			rl.Vertex3f(v2.X, v2.Y, v2.Z)
-
-			// Top-right corner for texture and quad
 			rl.TexCoord2f(1.0, 0.0)
 			rl.Vertex3f(v3.X, v3.Y, v3.Z)
-
-			// Top-left corner for texture and quad
 			rl.TexCoord2f(0.0, 0.0)
 			rl.Vertex3f(v4.X, v4.Y, v4.Z)
-			
 			rl.End()
 			rl.SetTexture(0)
 		}
 	}
-	rl.DrawRenderBatchActive() // Завершаем ручную отрисовку
-	rl.EnableDepthTest()       // Включаем тест глубины обратно
+	rl.DrawRenderBatchActive()
+	rl.EnableDepthTest()
 
-	// --- Финальный рендеринг снарядов ---
 	rl.DrawRenderBatchActive()
 	rl.DisableDepthTest()
 	g.game.RenderSystem.DrawProjectiles()
@@ -571,6 +595,7 @@ func (g *GameState) Draw() {
 
 // DrawUI рисует все элементы интерфейса в 2D
 func (g *GameState) DrawUI() {
+	// Сначала рисуем основной UI
 	var stateColor rl.Color
 	switch g.game.ECS.GameState.Phase {
 	case component.BuildState:
@@ -588,9 +613,9 @@ func (g *GameState) DrawUI() {
 
 	if playerState, ok := g.game.ECS.PlayerState[g.game.PlayerID]; ok {
 		g.playerLevelIndicator.Draw(playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
+		g.playerHealthIndicator.Draw(playerState.Health, 20)
 	}
 
-	// Отрисовка номера волны
 	g.waveIndicator.Draw(g.game.Wave, g.font)
 
 	if g.recipeBook.IsVisible {
@@ -601,27 +626,53 @@ func (g *GameState) DrawUI() {
 		g.recipeBook.Draw(availableTowers)
 	}
 
-	// Отрисовка индикатора режима "U"
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		g.uIndicator.Draw(g.game.IsInLineDragMode())
 	}
+
+	// Если игра окончена, рисуем оверлей
+	if g.isGameOver {
+		rl.DrawRectangle(0, 0, int32(config.ScreenWidth), int32(config.ScreenHeight), rl.NewColor(0, 0, 0, 180))
+		
+		// Текст "Вы проиграли!"
+		gameOverText := "Вы проиграли!"
+		textSize := int32(60)
+		textWidth := rl.MeasureTextEx(g.font, gameOverText, float32(textSize), 1).X
+		rl.DrawTextEx(g.font, gameOverText, rl.NewVector2((float32(config.ScreenWidth)-textWidth)/2, float32(config.ScreenHeight)/2-80), float32(textSize), 1, rl.White)
+
+		// Кнопка "Рестарт"
+		rl.DrawRectangleRec(g.restartButton, rl.Gray)
+		rl.DrawRectangleLinesEx(g.restartButton, 2, rl.LightGray)
+		restartText := "Рестарт"
+		restartTextSize := int32(30)
+		restartTextWidth := rl.MeasureTextEx(g.font, restartText, float32(restartTextSize), 1).X
+		rl.DrawTextEx(
+			g.font,
+			restartText,
+			rl.NewVector2(
+				g.restartButton.X+(g.restartButton.Width-restartTextWidth)/2,
+				g.restartButton.Y+(g.restartButton.Height-float32(restartTextSize))/2,
+			),
+			float32(restartTextSize),
+			1,
+			rl.Black,
+		)
+	}
 }
 
-func (g *GameState) Exit() {
-}
+func (g *GameState) Exit() {}
 
 // Cleanup освобождает ресурсы, используемые состоянием
 func (g *GameState) Cleanup() {
 	g.renderer.Cleanup()
-	// Выгружаем текстуры чекпоинтов
 	for _, tex := range g.checkpointTextures {
 		rl.UnloadTexture(tex)
 	}
-	// В будущем здесь можно будет выгружать и другие ресурсы, например, шрифт
 }
 
-// GetGame возвращает текущий экземпляр игры
-func (g *GameState) GetGame() *app.Game {
+// GetGame возвращает текущий экземпляр игры.
+// Возвращаем GameInterface, чтобы соответствовать интерфейсу State.
+func (g *GameState) GetGame() GameInterface {
 	return g.game
 }
 

@@ -10,6 +10,7 @@ import (
 const (
 	xpBarHeight     = 12
 	levelRectHeight = 12
+	levelRectWidth  = 14 // Делаем квадрат чуть шире для визуальной компенсации
 	levelRectGap    = 10
 	maxPlayerLevel  = 5
 )
@@ -45,7 +46,8 @@ func (i *PlayerLevelIndicatorRL) Draw(level, currentXP, xpToNextLevel int) {
 	}
 	currentXpWidth := i.Width * progress
 	if currentXpWidth > 0 {
-		rl.DrawRectangle(int32(i.X), int32(i.Y), int32(currentXpWidth), xpBarHeight, config.XpBarForegroundColorRL)
+		// Изменен цвет на синий
+		rl.DrawRectangle(int32(i.X), int32(i.Y), int32(currentXpWidth), xpBarHeight, rl.Blue)
 	}
 
 	// Обводка
@@ -53,27 +55,28 @@ func (i *PlayerLevelIndicatorRL) Draw(level, currentXP, xpToNextLevel int) {
 
 	// 2. Отрисовка квадратов уровней
 	rectY := i.Y + xpBarHeight + 10
-	
+
 	// Общая ширина всех квадратов и промежутков
-	totalRectsWidth := float32(maxPlayerLevel*levelRectHeight + (maxPlayerLevel-1)*levelRectGap)
+	totalRectsWidth := float32(maxPlayerLevel*levelRectWidth + (maxPlayerLevel-1)*levelRectGap)
 	// Начальная позиция X для первого квадрата, чтобы вся группа была по центру
 	startX := i.X + (i.Width-totalRectsWidth)/2
 
 	for j := 0; j < maxPlayerLevel; j++ {
-		rectX := startX + float32(j)*(levelRectHeight+levelRectGap)
-		
-		// Рисуем обводку квадрата
-		rl.DrawRectangleLinesEx(rl.NewRectangle(rectX, rectY, levelRectHeight, levelRectHeight), config.UIBorderWidth, config.UIBorderColor)
-		
-		// Если уровень достигнут, рисуем заливку
+		rectX := startX + float32(j)*(levelRectWidth+levelRectGap)
+
+		// Если уровень достигнут, рисуем заливку ПОД обводкой
 		if j < level {
+			// Рисуем полный квадрат, чтобы толщина соответствовала полосе опыта
 			rl.DrawRectangle(
-				int32(rectX+config.UIBorderWidth),
-				int32(rectY+config.UIBorderWidth),
-				int32(levelRectHeight-config.UIBorderWidth*2),
-				int32(levelRectHeight-config.UIBorderWidth*2),
-				config.XpBarForegroundColorRL,
+				int32(rectX),
+				int32(rectY),
+				int32(levelRectWidth),
+				int32(levelRectHeight),
+				rl.Blue, // Используем тот же синий цвет
 			)
 		}
+
+		// Рисуем обводку квадрата поверх всего, для всех квадратов
+		rl.DrawRectangleLinesEx(rl.NewRectangle(rectX, rectY, levelRectWidth, levelRectHeight), config.UIBorderWidth, config.UIBorderColor)
 	}
 }

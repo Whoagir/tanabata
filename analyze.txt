@@ -87,6 +87,7 @@
 │   │   ├── indicator.go
 │   │   ├── info_panel.go
 │   │   ├── pause_button.go
+│   │   ├── player_health_indicator.go
 │   │   ├── player_level_indicator.go
 │   │   ├── recipe_book.go
 │   │   ├── speed_button.go
@@ -112,6 +113,8 @@
 │       └── union_find.go
 ├── .env
 ├── .gitignore
+├── 123123.txt
+├── 6767.txt
 ├── analyze.txt
 ├── analyze_project.py
 ├── game.exe
@@ -123,6 +126,8 @@
 ├── reset_env.ps1
 ├── stp_td что сделанно.txt
 ├── stp_td что сделать.txt
+├── temp_build.ps1
+├── билд.txt
 ├── генерация руды.txt
 ├── диалог.txt
 ├── дневник.txt
@@ -132,4 +137,5 @@
 ├── игра.png
 ├── игрга 2.png
 ├── история.txt
-└── ошибки.txt
+├── ошибки.txt
+└── план_улучшений.txt
