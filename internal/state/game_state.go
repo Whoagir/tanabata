@@ -32,6 +32,7 @@ type GameState struct {
 	recipeBook            *ui.RecipeBookRL
 	uIndicator            *ui.UIndicatorRL
 	waveIndicator         *ui.WaveIndicator
+	oreSectorIndicator    *ui.OreSectorIndicatorRL // Индикатор состояния жил
 	lastClickTime         time.Time
 	camera                *rl.Camera3D
 	font                  rl.Font
@@ -141,6 +142,13 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		font,
 	)
 
+	// --- Индикатор состояния жил ---
+	oreIndicatorWidth := float32(100)
+	oreIndicatorHeight := float32(80)
+	oreIndicatorX := float32(20)
+	oreIndicatorY := float32(config.ScreenHeight) - oreIndicatorHeight - 20
+	oreSectorIndicator := ui.NewOreSectorIndicatorRL(oreIndicatorX, oreIndicatorY, oreIndicatorWidth, oreIndicatorHeight)
+
 	checkpointTextures := make(map[int]rl.Texture2D)
 	for i := 0; i < len(hexMap.Checkpoints); i++ {
 		romanNumeral := intToRoman(i + 1)
@@ -173,6 +181,7 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		recipeBook:            recipeBook,
 		uIndicator:            uIndicator,
 		waveIndicator:         waveIndicator,
+		oreSectorIndicator:    oreSectorIndicator,
 		lastClickTime:         time.Now(),
 		camera:                camera,
 		font:                  font,
@@ -629,6 +638,10 @@ func (g *GameState) DrawUI() {
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
 		g.uIndicator.Draw(g.game.IsInLineDragMode())
 	}
+
+	// Отрисовка индикатора состояния жил
+	percentages := g.game.GetOreSectorPercentages()
+	g.oreSectorIndicator.Draw(percentages[0], percentages[1], percentages[2])
 
 	// Если игра окончена, рисуем оверлей
 	if g.isGameOver {

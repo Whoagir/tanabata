@@ -233,6 +233,7 @@ func (g *Game) generateOre() {
 			Power:          power,
 			MaxReserve:     power * 100, // База для расчета процентов
 			CurrentReserve: power * 100,
+			Hex:            hex,
 			Position:       component.Position{X: px, Y: py},
 			Radius:         float32(config.HexSize*0.2 + power*config.HexSize),
 			Color:          color.RGBA{0, 0, 255, 128},
@@ -245,6 +246,19 @@ func (g *Game) generateOre() {
 			IsUI:     true,
 		}
 	}
+
+	// Фильтруем veinAreas, чтобы они содержали только гексы, которые попали в finalEnergyVeins
+	finalVeinAreas := make([][]hexmap.Hex, 3)
+	for i, area := range veinAreas {
+		var finalArea []hexmap.Hex
+		for _, hex := range area {
+			if _, exists := energyVeins[hex]; exists {
+				finalArea = append(finalArea, hex)
+			}
+		}
+		finalVeinAreas[i] = finalArea
+	}
+	g.OreVeinHexes = finalVeinAreas
 }
 
 func generateEnergyCircles(area []hexmap.Hex, totalPower float64, hexSize float64) []EnergyCircle {

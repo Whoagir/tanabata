@@ -78,6 +78,7 @@ type Game struct {
 	PlayerID             types.EntityID // ID сущности игрока
 	ClearedCheckpoints   map[hexmap.Hex]bool
 	FuturePath           []hexmap.Hex
+	OreVeinHexes         [][]hexmap.Hex // Гексы, принадлежащие каждой из трех жил
 }
 
 // NewGame initializes a new game instance.
@@ -1039,4 +1040,40 @@ func (g *Game) createPlayerEntity() {
 		XPToNextLevel: config.CalculateXPForNextLevel(initialLevel),
 		Health:        20, // Устанавливаем начальное здоровье
 	}
+}
+
+// GetOreSectorPercentages вычисляет процент оставшейся руды в каждой из трех жил.
+func (g *Game) GetOreSectorPercentages() [3]float32 {
+	var percentages [3]float32
+
+	if len(g.OreVeinHexes) != 3 {
+		return percentages // Возвращаем нули, если что-то пошло не так
+	}
+
+	// Создаем быструю карту для поиска компонента руды по гексу.
+	// Теперь это намного надежнее, так как мы используем ore.Hex.
+	oreMap := make(map[hexmap.Hex]*component.Ore)
+	for _, ore := range g.ECS.Ores {
+		oreMap[ore.Hex] = ore
+	}
+
+	for i, vein := range g.OreVeinHexes {
+		var totalMaxReserve, totalCurrentReserve float64
+
+		for _, hex := range vein {
+			if ore, ok := oreMap[hex]; ok {
+				totalMaxReserve += ore.MaxReserve
+				totalCurrentReserve += ore.CurrentReserve
+			}
+		}
+
+		if totalMaxReserve > 0 {
+			percentages[i] = float32(totalCurrentReserve / totalMaxReserve)
+		} else {
+			// Если в жиле изначально не было руды, считаем ее пустой.
+			percentages[i] = 0.0
+		}
+	}
+
+	return percentages
 }
