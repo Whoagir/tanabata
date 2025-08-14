@@ -7,64 +7,102 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// OreSectorIndicatorRL отображает состояние рудных жил в трех секторах.
+// OreSectorIndicatorRL отображает состояние рудных жил в виде двух горизонтальных баров.
 type OreSectorIndicatorRL struct {
-	X, Y         float32
-	Width, Height float32
-	BarWidth     float32
-	Spacing      float32
+	X, Y          float32
+	TotalWidth    float32
+	SegmentHeight float32
+	Spacing       float32
 }
 
 // NewOreSectorIndicatorRL создает новый индикатор состояния рудных жил.
-func NewOreSectorIndicatorRL(x, y, width, height float32) *OreSectorIndicatorRL {
+func NewOreSectorIndicatorRL(x, y, totalWidth, segmentHeight float32) *OreSectorIndicatorRL {
 	return &OreSectorIndicatorRL{
-		X:        x,
-		Y:        y,
-		Width:    width,
-		Height:   height,
-		BarWidth: (width - 2*10) / 3, // 3 бара с отступами по 10
-		Spacing:  10,
+		X:             x,
+		Y:             y,
+		TotalWidth:    totalWidth,
+		SegmentHeight: segmentHeight,
+		Spacing:       2.0,
 	}
 }
 
 // Draw отрисовывает индикатор.
-// centralPct, midPct, farPct - процент оставшейся руды (от 0.0 до 1.0).
 func (i *OreSectorIndicatorRL) Draw(centralPct, midPct, farPct float32) {
-	percentages := []float32{centralPct, midPct, farPct}
-	startX := i.X
+	// --- Верхний ряд: Центральная (3) и Средняя (4) жилы ---
+	topRowSegments := 7
+	segmentWidthTop := (i.TotalWidth - float32(topRowSegments-1)*i.Spacing) / float32(topRowSegments)
+	currentX := i.X
 
-	for _, pct := range percentages {
-		// Фон для полосы (пустой)
-		rl.DrawRectangle(int32(startX), int32(i.Y), int32(i.BarWidth), int32(i.Height), config.XpBarBackgroundColorRL)
+	i.drawVeinSegments(&currentX, i.Y, segmentWidthTop, 3, centralPct)
+	i.drawVeinSegments(&currentX, i.Y, segmentWidthTop, 4, midPct)
 
-		if pct > 0 {
-			// Высота заполнения в зависимости от процента
-			fillHeight := i.Height * pct
-			// Y-координата начала заполнения (снизу вверх)
-			fillY := i.Y + (i.Height - fillHeight)
+	// --- Нижний ряд: Крайняя (7) жила ---
+	bottomRowSegments := 7
+	segmentWidthBottom := (i.TotalWidth - float32(bottomRowSegments-1)*i.Spacing) / float32(bottomRowSegments)
+	currentX = i.X
+	currentY := i.Y + i.SegmentHeight + i.Spacing*2
 
-			// Новая логика цвета
-			var fillColor rl.Color
-			if pct > 0.66 {
-				fillColor = rl.Blue // Больше 66% - синий
-			} else if pct > 0.33 {
-				fillColor = rl.Red // От 33% до 66% - красный
-			} else {
-				fillColor = rl.Yellow // Меньше 33% - желтый
-			}
+	i.drawVeinSegments(&currentX, currentY, segmentWidthBottom, 7, farPct)
+}
 
-			// Рисуем заполнение
-			rl.DrawRectangle(int32(startX), int32(fillY), int32(i.BarWidth), int32(fillHeight), fillColor)
+// getVeinState определяет, сколько сегментов должно быть пустым и какой цвет у активных.
+func (i *OreSectorIndicatorRL) getVeinState(numSegments int, percentage float32) (int, rl.Color) {
+	var emptyCount int
+	var activeColor rl.Color
+
+	// Определяем количество пустых сегментов слева направо
+	thresholds := make([]float32, numSegments)
+	for k := 0; k < numSegments; k++ {
+		thresholds[k] = 1.0 - (float32(k+1) / float32(numSegments))
+	}
+
+	emptyCount = 0
+	for _, t := range thresholds {
+		if percentage < t {
+			emptyCount++
+		}
+	}
+
+	// Определяем цвет для активных сегментов
+	// Эта логика теперь применяется только к последнему активному сегменту.
+	// Адаптируем вашу логику для 4-сегментной жилы: 40% и 20%
+	redThreshold := float32(0.40)
+	yellowThreshold := float32(0.20)
+
+	if percentage <= 0 {
+		activeColor = config.OreIndicatorDepletedColor
+	} else if percentage < yellowThreshold {
+		activeColor = config.OreIndicatorCriticalColor
+	} else if percentage < redThreshold {
+		activeColor = config.OreIndicatorWarningColor
+	} else {
+		activeColor = config.OreIndicatorFullColor
+	}
+
+	return emptyCount, activeColor
+}
+
+func (i *OreSectorIndicatorRL) drawVeinSegments(currentX *float32, currentY, segmentWidth float32, numSegments int, percentage float32) {
+	emptySegments, activeColor := i.getVeinState(numSegments, percentage)
+
+	for j := 0; j < numSegments; j++ {
+		rect := rl.NewRectangle(*currentX, currentY, segmentWidth, i.SegmentHeight)
+		var fillColor rl.Color
+
+		if j < emptySegments {
+			fillColor = config.OreIndicatorEmptyColor // Пустой
+		} else {
+			// Если сегмент не пустой, он получает общий цвет состояния жилы
+			fillColor = activeColor
 		}
 
-		// Обводка для каждой полосы
-		rl.DrawRectangleLinesEx(
-			rl.NewRectangle(startX, i.Y, i.BarWidth, i.Height),
-			config.UIBorderWidth,
-			config.UIBorderColor,
-		)
+		if percentage <= 0 {
+			fillColor = config.OreIndicatorDepletedColor
+		}
 
-		// Сдвигаем X для следующей полосы
-		startX += i.BarWidth + i.Spacing
+		rl.DrawRectangleRec(rect, fillColor)
+		rl.DrawRectangleLinesEx(rect, 2, config.UIBorderColor)
+
+		*currentX += segmentWidth + i.Spacing
 	}
 }

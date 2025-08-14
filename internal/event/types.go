@@ -8,6 +8,7 @@ const (
 	EnemyKilled                      EventType = "EnemyKilled"    // Враг убит (для игровой логики)
 	TowerRemoved                     EventType = "TowerRemoved"
 	OreDepleted                      EventType = "OreDepleted" // Руда истощена
+	OreConsumed                      EventType = "OreConsumed" // Руда потрачена (например, на выстрел)
 	BuildPhaseStarted                EventType = "BuildPhaseStarted"
 	WavePhaseStarted                 EventType = "WavePhaseStarted"
 	CombineTowersRequest             EventType = "CombineTowersRequest" // Запрос на объединение башен

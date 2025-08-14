@@ -148,11 +148,12 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		font,
 	)
 
-	oreIndicatorWidth := float32(80)
-	oreIndicatorHeight := float32(60)
+	// Новый двухстрочный индикатор руды
+	oreIndicatorWidth := float32(160) // <--- Уменьшил ширину
+	oreIndicatorHeight := float32(12) 
 	healthIndicatorWidth := float32(ui.HealthCols*(ui.HealthCircleRadius*2+ui.HealthCircleSpacing) - ui.HealthCircleSpacing)
 	oreIndicatorX := healthIndicatorX + healthIndicatorWidth/2 - oreIndicatorWidth/2
-	oreIndicatorY := healthIndicatorY + playerHealthIndicator.GetHeight() + 10
+	oreIndicatorY := healthIndicatorY + playerHealthIndicator.GetHeight() + 15
 	oreSectorIndicator := ui.NewOreSectorIndicatorRL(oreIndicatorX, oreIndicatorY, oreIndicatorWidth, oreIndicatorHeight)
 
 	checkpointTextures := make(map[int]rl.Texture2D)

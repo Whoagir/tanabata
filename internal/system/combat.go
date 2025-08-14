@@ -5,6 +5,7 @@ import (
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
+	"go-tower-defense/internal/event" // Импортируем пакет событий
 	"go-tower-defense/internal/types"
 	"go-tower-defense/pkg/hexmap"
 	"log"
@@ -16,26 +17,33 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// OreConsumptionData содержит информацию о потраченной руде.
+type OreConsumptionData struct {
+	SourceID types.EntityID
+	Amount   float64
+}
+
 // CombatSystem управляет атакой башен
 type CombatSystem struct {
 	ecs               *entity.ECS
+	eventDispatcher   *event.Dispatcher // Добавляем диспатчер
 	powerSourceFinder func(towerID types.EntityID) []types.EntityID
 	pathFinder        func(towerID types.EntityID) []types.EntityID
 }
 
-func NewCombatSystem(ecs *entity.ECS,
+func NewCombatSystem(ecs *entity.ECS, dispatcher *event.Dispatcher,
 	finder func(towerID types.EntityID) []types.EntityID,
 	pathFinder func(towerID types.EntityID) []types.EntityID) *CombatSystem {
 	rand.Seed(time.Now().UnixNano())
 	return &CombatSystem{
 		ecs:               ecs,
+		eventDispatcher:   dispatcher, // Сохраняем диспатчер
 		powerSourceFinder: finder,
 		pathFinder:        pathFinder,
 	}
 }
 
 func (s *CombatSystem) Update(deltaTime float64) {
-	// Затем обрабатываем логику атаки для всех башен
 	for id, combat := range s.ecs.Combats {
 		tower, hasTower := s.ecs.Towers[id]
 		if !hasTower || !tower.IsActive {
@@ -48,7 +56,6 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// Пропускаем башни с особыми типами атак, которые обрабатываются в других системах
 		if combat.Attack.Type == defs.BehaviorAreaOfEffect || combat.Attack.Type == defs.BehaviorNone {
 			continue
 		}
@@ -74,7 +81,6 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// --- Логика атаки ---
 		attackPerformed := false
 		switch combat.Attack.Type {
 		case defs.BehaviorProjectile:
@@ -84,7 +90,6 @@ func (s *CombatSystem) Update(deltaTime float64) {
 		default:
 			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
 		}
-		// --- Конец логики атаки ---
 
 		if attackPerformed {
 			availableSources := []types.EntityID{}
@@ -95,13 +100,18 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			}
 			if len(availableSources) > 0 {
 				chosenSourceID := availableSources[rand.Intn(len(availableSources))]
-				chosenOre := s.ecs.Ores[chosenSourceID]
-				cost := combat.ShotCost
-				if chosenOre.CurrentReserve >= cost {
-					chosenOre.CurrentReserve -= cost
-				} else {
-					chosenOre.CurrentReserve = 0
+
+				// --- ИЗМЕНЕНИЕ: Отправляем событие вместо прямого вычитания ---
+				consumptionData := OreConsumptionData{
+					SourceID: chosenSourceID,
+					Amount:   combat.ShotCost,
 				}
+				s.eventDispatcher.Dispatch(event.Event{
+					Type: event.OreConsumed,
+					Data: consumptionData,
+				})
+				// --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
 				fireRate := combat.FireRate
 				if auraEffect, ok := s.ecs.AuraEffects[id]; ok {
 					fireRate *= auraEffect.SpeedMultiplier
@@ -111,7 +121,7 @@ func (s *CombatSystem) Update(deltaTime float64) {
 		}
 	}
 }
-
+// ... (остальная часть файла без изменений)
 func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *component.Tower, combat *component.Combat, towerDef *defs.TowerDefinition) bool {
 	// 1. Найти одну ближайшую цель
 	targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, 1)
@@ -138,7 +148,7 @@ func (s *CombatSystem) handleLaserAttack(towerID types.EntityID, tower *componen
 	baseDamage := float64(towerDef.Combat.Damage)
 	finalDamage := int(math.Round(baseDamage * boostMultiplier * degradationMultiplier))
 
-	// 3. Применить ��рон и эффекты напрямую
+	// 3. Применить урон и эффекты напрямую
 	ApplyDamage(s.ecs, targetID, finalDamage, combat.Attack.DamageType)
 
 	// Применяем замедление, если оно есть

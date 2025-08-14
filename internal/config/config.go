@@ -119,6 +119,13 @@ var (
 	SelectButtonActiveColorRL   = UIColorYellow
 	UIndicatorStrikethroughColorRL = rl.NewColor(255, 255, 255, 150)
 
+	// Цвета для нового индикатора руды
+	OreIndicatorFullColor     = rl.NewColor(70, 130, 180, 220) // Насыщенный синий
+	OreIndicatorEmptyColor    = rl.NewColor(0, 0, 0, 0)       // Полностью прозрачный
+	OreIndicatorWarningColor  = rl.NewColor(217, 83, 79, 220)  // Насыщенный красный
+	OreIndicatorCriticalColor = rl.NewColor(240, 173, 78, 220) // Насыщенный желтый/оранжевый
+	OreIndicatorDepletedColor = rl.NewColor(10, 10, 10, 220)   // Очень темный серый (почти черный)
+
 	// --- Игровые цвета (НЕ ТРОГАТЬ) ---
 	BackgroundColorRL           = rl.NewColor(30, 30, 30, 255)
 	GridColorRL                 = rl.NewColor(50, 50, 50, 255)

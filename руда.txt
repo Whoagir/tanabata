@@ -1,3 +1,23 @@
+// internal/component/ore.go
+package component
+
+import (
+	"go-tower-defense/pkg/hexmap"
+	"image/color"
+)
+
+type Ore struct {
+	Power          float64    // Мощность жилы (0.05–0.70)
+	MaxReserve     float64    // Максимальный запас руды
+	CurrentReserve float64    // Текущий запас руды
+	Hex            hexmap.Hex // Гекс, на котором находится руда
+	Position       Position   // Позиция в пикселях
+	Radius         float32    // Радиус кружка
+	Color          color.RGBA // Цвет руды
+	PulseRate      float64    // Частота пульсации
+}
+
+
 // internal/system/ore.go
 package system
 
@@ -31,51 +51,14 @@ type OreSystem struct {
 	EnergyCircles   []EnergyCircle
 }
 
-// --- НОВЫЙ КОД ДЛЯ ИСПРАВЛЕНИЯ БАГА ---
-// oreSystemListener слушает события, специфичные для системы руды.
-type oreSystemListener struct {
-	system *OreSystem
-}
-
-// OnEvent обрабатывает входящие события.
-func (l *oreSystemListener) OnEvent(e event.Event) {
-	if e.Type == event.OreConsumed {
-		l.system.handleOreConsumption(e)
-	}
-}
-
-// handleOreConsumption вычитает руду из указанного источника.
-func (s *OreSystem) handleOreConsumption(e event.Event) {
-	data, ok := e.Data.(OreConsumptionData)
-	if !ok {
-		return
-	}
-
-	if ore, exists := s.ecs.Ores[data.SourceID]; exists {
-		if ore.CurrentReserve >= data.Amount {
-			ore.CurrentReserve -= data.Amount
-		} else {
-			ore.CurrentReserve = 0
-		}
-	}
-}
-
-// --- КОНЕЦ НОВОГО КОДА ---
-
 // NewOreSystem creates a new OreSystem.
 func NewOreSystem(ecs *entity.ECS, dispatcher *event.Dispatcher) *OreSystem {
-	s := &OreSystem{
+	return &OreSystem{
 		ecs:             ecs,
 		eventDispatcher: dispatcher,
 		EnergyVeins:     make(map[hexmap.Hex]float64),
 		EnergyCircles:   nil,
 	}
-	// --- НОВЫЙ КОД ДЛЯ ИСПРАВЛЕНИЯ БАГА ---
-	// Создаем и подписываем слушателя
-	listener := &oreSystemListener{system: s}
-	s.eventDispatcher.Subscribe(event.OreConsumed, listener)
-	// --- КОНЕЦ НОВОГО КОДА ---
-	return s
 }
 
 // Update is called every frame to update the state of ore components.
@@ -263,13 +246,12 @@ func (s *OreSystem) generateEnergyCircles(area []hexmap.Hex, totalPower float64,
 		// Увеличиваем радиус в 2 раза (было 0.1, стало 0.2)
 		radius := hexSize * 0.2 * (power / 5.0)
 
-		circles = append(circles,
-			EnergyCircle{
-				CenterX: cx,
-				CenterY: cy,
-				Radius:  radius,
-				Power:   power / 100.0,
-			})
+		circles = append(circles, EnergyCircle{
+			CenterX: cx,
+			CenterY: cy,
+			Radius:  radius,
+			Power:   power / 100.0,
+		})
 	}
 
 	return circles

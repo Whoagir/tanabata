@@ -109,7 +109,7 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.Tow
 	// ВАЖНО: Системы, зависящие от g, создаются после инициализации g
 	g.MovementSystem = system.NewMovementSystem(ecs, g, g.Rng)
 	g.RenderSystem = system.NewRenderSystemRL(ecs, font, modelManager) // Передаем менеджер в рендер
-	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
+	g.CombatSystem = system.NewCombatSystem(ecs, eventDispatcher, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
 	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem, towerDefs)
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
 	g.AuraSystem = system.NewAuraSystem(ecs)
