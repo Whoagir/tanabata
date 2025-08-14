@@ -3,6 +3,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/state"
@@ -10,7 +11,10 @@ import (
 	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"path/filepath"
 	"time"
+	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -20,27 +24,144 @@ func Vector3Lerp(v1, v2 rl.Vector3, t float32) rl.Vector3 {
 	return rl.Vector3Add(v1, rl.Vector3Scale(rl.Vector3Subtract(v2, v1), t))
 }
 
+// exportMeshToObj экспортирует данный меш в файл формата .obj
+func exportMeshToObj(mesh rl.Mesh, filePath string) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("could not create file: %w", err)
+	}
+	defer file.Close()
+
+	vertexCount := int(mesh.VertexCount)
+	// --- Вершины ---
+	verticesHeader := struct {
+		data unsafe.Pointer
+		len  int
+		cap  int
+	}{unsafe.Pointer(mesh.Vertices), vertexCount * 3, vertexCount * 3}
+	vertices := *(*[]float32)(unsafe.Pointer(&verticesHeader))
+
+	// --- Нормали ---
+	normalsHeader := struct {
+		data unsafe.Pointer
+		len  int
+		cap  int
+	}{unsafe.Pointer(mesh.Normals), vertexCount * 3, vertexCount * 3}
+	normals := *(*[]float32)(unsafe.Pointer(&normalsHeader))
+
+	// --- Текстурные координаты ---
+	texCoordsHeader := struct {
+		data unsafe.Pointer
+		len  int
+		cap  int
+	}{unsafe.Pointer(mesh.Texcoords), vertexCount * 2, vertexCount * 2}
+	texcoords := *(*[]float32)(unsafe.Pointer(&texCoordsHeader))
+
+	// Запись вершин
+	for i := 0; i < len(vertices); i += 3 {
+		_, err := fmt.Fprintf(file, "v %f %f %f\n", vertices[i], vertices[i+1], vertices[i+2])
+		if err != nil {
+			return err
+		}
+	}
+
+	// Запись текстурных координат
+	for i := 0; i < len(texcoords); i += 2 {
+		_, err := fmt.Fprintf(file, "vt %f %f\n", texcoords[i], texcoords[i+1])
+		if err != nil {
+			return err
+		}
+	}
+
+	// Запись нормалей
+	for i := 0; i < len(normals); i += 3 {
+		_, err := fmt.Fprintf(file, "vn %f %f %f\n", normals[i], normals[i+1], normals[i+2])
+		if err != nil {
+			return err
+		}
+	}
+
+	// Запись граней в формате v/vt/vn
+	for i := 1; i <= vertexCount; i += 3 {
+		_, err := fmt.Fprintf(file, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", i, i, i, i+1, i+1, i+1, i+2, i+2, i+2)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Printf("Successfully exported mesh to %s", filePath)
+	return nil
+}
+
+
+// exportAllTowerModels генерирует и сохраняет .obj файлы для всех башен.
+func exportAllTowerModels() {
+	log.Println("Exporting all tower models...")
+
+	// Сначала нужно загрузить определения, чтобы знать, какие башни существуют
+	if err := defs.LoadAll("assets/data/"); err != nil {
+		log.Fatalf("Failed to load definitions for export: %v", err)
+	}
+
+	for id, towerDef := range defs.TowerDefs {
+		var mesh rl.Mesh
+
+		// Пропускаем типы, для которых не нужна статическая модель
+		if towerDef.Type == defs.TowerTypeMiner {
+			continue
+		}
+
+		// Логика генерации меша, аналогичная RenderSystemRL
+		switch {
+		case towerDef.Type == defs.TowerTypeWall:
+			mesh = rl.GenMeshCylinder(1.0, 1.0, 6) // 6-сторонний цилиндр для стен
+		case towerDef.CraftingLevel >= 1:
+			mesh = rl.GenMeshCube(1.0, 1.0, 1.0) // Куб для улучшенных башен
+		default: // Обычные атакующие башни
+			mesh = rl.GenMeshCylinder(1.0, 1.0, 9) // 9-сторонний цилиндр для базовых
+		}
+
+		filePath := filepath.Join("assets", "models", fmt.Sprintf("%s.obj", id))
+
+		if err := exportMeshToObj(mesh, filePath); err != nil {
+			log.Printf("ERROR: Failed to export model for %s: %v", id, err)
+		}
+
+		rl.UnloadMesh(&mesh) // Очищаем меш после экспорта
+	}
+
+	log.Println("All tower models exported.")
+}
+
 func main() {
-	// --- Флаг для режима разработки ---
+	// --- Флаги командной строки ---
 	devMode := flag.Bool("dev", false, "Start directly in the game state for development")
+	exportModels := flag.Bool("export-models", false, "Export game models to .obj files and exit")
 	flag.Parse()
+
+	// --- Инициализация Raylib ---
+	rl.InitWindow(config.ScreenWidth, config.ScreenHeight, "Go Tower Defense")
+	defer rl.CloseWindow()
+
+	// --- Обработка флага экспорта ---
+	if *exportModels {
+		exportAllTowerModels()
+		return // Завершаем программу после экспорта
+	}
 
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
-	// --- Инициализация Raylib ---
-	rl.InitWindow(config.ScreenWidth, config.ScreenHeight, "Go Tower Defense")
 	rl.SetTargetFPS(60)
 	rl.EnableBackfaceCulling()
-	defer rl.CloseWindow()
 
 	// --- Загрузка определений ---
 	if err := defs.LoadAll("assets/data/"); err != nil {
 		log.Fatalf("Failed to load definitions: %v", err)
 	}
 
-	// --- Загрузка шрифта для меню ---
+	// --- Загрузка шрифта ---
 	var fontChars []rune
 	for i := 32; i <= 127; i++ {
 		fontChars = append(fontChars, rune(i))
@@ -50,7 +171,7 @@ func main() {
 	}
 	fontChars = append(fontChars, '₽', '«', '»', '(', ')', '.', ',')
 	font := rl.LoadFontEx("assets/fonts/arial.ttf", 64, fontChars, int32(len(fontChars)))
-	defer rl.UnloadFont(font) // Очищаем шрифт при выходе
+	defer rl.UnloadFont(font)
 
 	// --- Инициализация игры ---
 	rand.Seed(time.Now().UnixNano())
@@ -64,7 +185,7 @@ func main() {
 
 	// --- Выбор начального состояния ---
 	if *devMode {
-		log.Println("--- DEV MODE: Starting game directly ---")
+		log.Println("---" + "DEV MODE: Starting game directly" + "---")
 		towerDefPtrs := make(map[string]*defs.TowerDefinition)
 		for id, def := range defs.TowerDefs {
 			d := def
@@ -96,7 +217,7 @@ func main() {
 		}
 		lastUpdateTime = now
 
-		// --- Управление камерой (только если мы в игровом состоянии) ---
+		// --- Управление камерой ---
 		if _, isGame := sm.Current().(*state.GameState); isGame {
 			if _, isPaused := sm.Current().(*state.PauseState); !isPaused {
 				if rl.IsKeyDown(rl.KeyQ) {
@@ -127,19 +248,15 @@ func main() {
 		rl.BeginDrawing()
 		rl.ClearBackground(config.BackgroundColorRL)
 
-		// --- Отрисовка ---
 		if gs, isGame := sm.Current().(*state.GameState); isGame {
-			// 3D-режим только для основного игрового состояния
-			gs.SetCamera(&camera) // <--- ВОТ ИСПРАВЛЕНИЕ
+			gs.SetCamera(&camera)
 			rl.BeginMode3D(camera)
 			sm.Draw()
 			rl.EndMode3D()
 		} else {
-			// Для 2D-состояний, как меню, рисуем напрямую
 			sm.Draw()
 		}
 
-		// 2D UI (поверх всего)
 		if uiDrawable, ok := sm.Current().(interface{ DrawUI() }); ok {
 			uiDrawable.DrawUI()
 		}
@@ -148,7 +265,6 @@ func main() {
 		rl.EndDrawing()
 	}
 
-	// --- Очистка перед выходом ---
 	if cleanable, ok := sm.Current().(interface{ Cleanup() }); ok {
 		cleanable.Cleanup()
 	}

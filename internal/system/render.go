@@ -2,6 +2,7 @@
 package system
 
 import (
+	"go-tower-defense/internal/assets"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
@@ -25,29 +26,25 @@ type CachedRenderData struct {
 
 // RenderSystemRL - оптимизированная система рендеринга
 type RenderSystemRL struct {
-	ecs             *entity.ECS
-	font            rl.Font
-	camera          *rl.Camera3D
-	renderCache     map[types.EntityID]*CachedRenderData
-	frustum         [6]rl.Vector4 // Плоскости для frustum culling
-	towerModels     map[string]rl.Model
-	towerWireModels map[string]rl.Model
-	laserModel      rl.Model // Добавлено для оптимизации лазеров
-	ellipseModel    rl.Model // Модель для эллиптических снарядов
+	ecs          *entity.ECS
+	font         rl.Font
+	camera       *rl.Camera3D
+	modelManager *assets.ModelManager // <-- Используем менеджер
+	renderCache  map[types.EntityID]*CachedRenderData
+	frustum      [6]rl.Vector4
+	laserModel   rl.Model
+	ellipseModel rl.Model
 }
 
-// NewRenderSystemRL со��дает новую оптимизированную систему рендеринга
-func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
+// NewRenderSystemRL создает новую оптимизированную систему рендеринга
+func NewRenderSystemRL(ecs *entity.ECS, font rl.Font, modelManager *assets.ModelManager) *RenderSystemRL {
 	rs := &RenderSystemRL{
-		ecs:             ecs,
-		font:            font,
-		renderCache:     make(map[types.EntityID]*CachedRenderData),
-		towerModels:     make(map[string]rl.Model),
-		towerWireModels: make(map[string]rl.Model),
+		ecs:          ecs,
+		font:         font,
+		modelManager: modelManager, // <-- Сохраняем менеджер
+		renderCache:  make(map[types.EntityID]*CachedRenderData),
 	}
-	rs.pregenerateTowerModels()
 	rs.pregenerateLaserModel()
-	// Создаем модель для эллипса (простой куб, который будем масштабировать)
 	rs.ellipseModel = rl.LoadModelFromMesh(rl.GenMeshCube(1.0, 1.0, 1.0))
 	return rs
 }
@@ -55,17 +52,14 @@ func NewRenderSystemRL(ecs *entity.ECS, font rl.Font) *RenderSystemRL {
 // pregenerateLaserModel создает 3D-модель для лазера для оптимизации.
 func (s *RenderSystemRL) pregenerateLaserModel() {
 	mesh := rl.GenMeshCylinder(1.0, 1.0, 8)
-	// Вручную трансформируем вершины, так как rl.MeshTransform может отсутствовать
 	transform := rl.MatrixTranslate(0, 0.5, 0)
 	meshTransform(&mesh, transform)
 	s.laserModel = rl.LoadModelFromMesh(mesh)
 }
 
 // meshTransform применяет матрицу трансформации к каждой вершине меша.
-// Это ручная реализация rl.MeshTransform для совместимости.
 func meshTransform(mesh *rl.Mesh, transform rl.Matrix) {
 	vertexCount := int(mesh.VertexCount)
-	// Использ��ем unsafe.Pointer для корректного преобразования *float32 в []float32
 	sliceHeader := struct {
 		data unsafe.Pointer
 		len  int
@@ -79,48 +73,15 @@ func meshTransform(mesh *rl.Mesh, transform rl.Matrix) {
 
 	for i := 0; i < vertexCount; i++ {
 		vertexIndex := i * 3
-
 		vec := rl.NewVector3(
 			vertices[vertexIndex],
 			vertices[vertexIndex+1],
 			vertices[vertexIndex+2],
 		)
-
 		transformedVec := rl.Vector3Transform(vec, transform)
-
 		vertices[vertexIndex] = transformedVec.X
 		vertices[vertexIndex+1] = transformedVec.Y
 		vertices[vertexIndex+2] = transformedVec.Z
-	}
-}
-
-
-// pregenerateTowerModels создает 3D-модели для каждого типа башни
-func (s *RenderSystemRL) pregenerateTowerModels() {
-	for id, towerDef := range defs.TowerDefs {
-		var mesh, wireMesh rl.Mesh
-
-		// Логика создания меша в зависимости от типа башни
-		switch {
-		case towerDef.Type == defs.TowerTypeWall:
-			mesh = rl.GenMeshCylinder(1.0, 1.0, 6)
-			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 6)
-		case towerDef.Type == defs.TowerTypeMiner:
-			// Добытчики будут рендеритьс�� динам��чески для сохранения формы конуса
-			continue
-		case towerDef.CraftingLevel >= 1:
-			mesh = rl.GenMeshCube(1.0, 1.0, 1.0)
-			wireMesh = rl.GenMeshCube(1.0, 1.0, 1.0)
-		default: // Обычные атакующие башни
-			mesh = rl.GenMeshCylinder(1.0, 1.0, 9)
-			wireMesh = rl.GenMeshCylinder(1.0, 1.0, 9)
-		}
-
-		model := rl.LoadModelFromMesh(mesh)
-		wireModel := rl.LoadModelFromMesh(wireMesh)
-
-		s.towerModels[id] = model
-		s.towerWireModels[id] = wireModel
 	}
 }
 
@@ -162,38 +123,34 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 		}
 	}
 
-	// Обновление таймеров лазеров
+	// Обновление таймеров лазеров и эффектов вулкана
 	for id, laser := range s.ecs.Lasers {
 		laser.Timer += deltaTime
 		if laser.Timer >= laser.Duration {
 			delete(s.ecs.Lasers, id)
 		}
 	}
-
-	// Обновление таймеров эффектов вулкана
 	for id, effect := range s.ecs.VolcanoEffects {
 		effect.Timer += deltaTime
-		// Анимация радиуса
 		progress := effect.Timer / effect.Duration
 		if progress > 1.0 {
 			progress = 1.0
 		}
 		effect.Radius = effect.MaxRadius * progress
-
 		if effect.Timer >= effect.Duration {
 			delete(s.ecs.VolcanoEffects, id)
 		}
 	}
 }
 
-// Draw использует кэшированные данные для отрисовки всего, КРОМЕ снарядов
+// Draw использует кэшированные данные для отрисовки
 func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func(), clearedCheckpoints map[hexmap.Hex]bool, futurePath []hexmap.Hex) {
 	if s.camera == nil {
 		return
 	}
 	s.drawPulsingOres(gameTime)
-	s.drawClearedCheckpoints(clearedCheckpoints) // <-- НОВЫЙ ВЫЗОВ
-	s.drawFuturePath(futurePath)                 // <-- НОВЫЙ ВЫЗОВ
+	s.drawClearedCheckpoints(clearedCheckpoints)
+	s.drawFuturePath(futurePath)
 	s.drawSolidEntities()
 	s.drawLines(hiddenLineID)
 	s.drawLasers()
@@ -204,31 +161,29 @@ func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, 
 	s.drawCombinationIndicators()
 }
 
-// drawFuturePath затемняет гексы, по которым будут двигаться враги.
+// ... (drawFuturePath, drawClearedCheckpoints, drawBeaconSectors без изменений) ...
 func (s *RenderSystemRL) drawFuturePath(path []hexmap.Hex) {
 	if path == nil || len(path) == 0 {
 		return
 	}
-	color := rl.NewColor(0, 0, 0, 70) // Сохраняем текущий цвет по просьбе
+	color := rl.NewColor(0, 0, 0, 70)
 	for _, hex := range path {
 		pos := s.hexToWorld(hex)
-		pos.Y += 0.75 // Поднимаем выше, как у чекпоинтов
-		radius := float32(config.HexSize*config.CoordScale) * 1.05 // Делаем "жирнее", как чекпоинты
-		rl.DrawCylinder(pos, radius, radius, 1.2, 6, color) // Делаем толще, как чекпоинты
+		pos.Y += 0.75
+		radius := float32(config.HexSize*config.CoordScale) * 1.05
+		rl.DrawCylinder(pos, radius, radius, 1.2, 6, color)
 	}
 }
 
-// drawClearedCheckpoints рисует оверлей на очищенных чекпоинтах
 func (s *RenderSystemRL) drawClearedCheckpoints(clearedCheckpoints map[hexmap.Hex]bool) {
 	if clearedCheckpoints == nil || len(clearedCheckpoints) == 0 {
 		return
 	}
 	for hex := range clearedCheckpoints {
 		pos := s.hexToWorld(hex)
-		pos.Y += 0.7 // Смещаем чуть ниже
-		radius := float32(config.HexSize*config.CoordScale) * 1.05 // Увеличиваем радиус на 5%
-		color := rl.NewColor(0, 120, 0, 200)                      // Темно-зеленый, более заметный цвет
-
+		pos.Y += 0.7
+		radius := float32(config.HexSize*config.CoordScale) * 1.05
+		color := rl.NewColor(0, 120, 0, 200)
 		rl.DrawCylinder(pos, radius, radius, 1.2, 6, color)
 	}
 }
@@ -238,7 +193,6 @@ func (s *RenderSystemRL) drawBeaconSectors() {
 		if !sector.IsVisible {
 			continue
 		}
-
 		tower, okT := s.ecs.Towers[id]
 		beacon, okB := s.ecs.Beacons[id]
 		combat, okC := s.ecs.Combats[id]
@@ -246,38 +200,19 @@ func (s *RenderSystemRL) drawBeaconSectors() {
 		if !okT || !okB || !okC || !okR {
 			continue
 		}
-
-		// Параметры для отрисовки
 		towerPos := s.hexToWorld(tower.Hex)
 		towerHeight := s.GetTowerRenderHeight(tower, renderable)
 		towerTop := rl.NewVector3(towerPos.X, towerHeight, towerPos.Z)
-
 		rangePixels := float32(float64(combat.Range) * config.HexSize * config.CoordScale)
 		startAngle := float32(beacon.CurrentAngle - beacon.ArcAngle/2)
 		endAngle := float32(beacon.CurrentAngle + beacon.ArcAngle/2)
-
-		// Вершины основания пирамиды
-		v1 := towerPos // Центр основания
-		v2 := rl.NewVector3(
-			towerPos.X+rangePixels*float32(math.Cos(float64(startAngle))),
-			0,
-			towerPos.Z+rangePixels*float32(math.Sin(float64(startAngle))),
-		)
-		v3 := rl.NewVector3(
-			towerPos.X+rangePixels*float32(math.Cos(float64(endAngle))),
-			0,
-			towerPos.Z+rangePixels*float32(math.Sin(float64(endAngle))),
-		)
-
-		// Цвет с прозрачностью
-		sectorColor := rl.NewColor(255, 255, 224, 70) // Бледно-желтый, полупрозрачный
-
-		// Рисуем грани пирамиды
+		v1 := towerPos
+		v2 := rl.NewVector3(towerPos.X+rangePixels*float32(math.Cos(float64(startAngle))), 0, towerPos.Z+rangePixels*float32(math.Sin(float64(startAngle))))
+		v3 := rl.NewVector3(towerPos.X+rangePixels*float32(math.Cos(float64(endAngle))), 0, towerPos.Z+rangePixels*float32(math.Sin(float64(endAngle))))
+		sectorColor := rl.NewColor(255, 255, 224, 70)
 		rl.DrawTriangle3D(towerTop, v2, v3, sectorColor)
 		rl.DrawTriangle3D(towerTop, v3, v1, sectorColor)
 		rl.DrawTriangle3D(towerTop, v1, v2, sectorColor)
-
-		// Рисуем контур основания
 		lineColor := rl.NewColor(255, 255, 150, 150)
 		rl.DrawLine3D(v1, v2, lineColor)
 		rl.DrawLine3D(v1, v3, lineColor)
@@ -287,12 +222,7 @@ func (s *RenderSystemRL) drawBeaconSectors() {
 
 func (s *RenderSystemRL) drawSolidEntities() {
 	for id, data := range s.renderCache {
-		if !data.IsOnScreen {
-			continue
-		}
-
-		// Пропускаем снаряды, они будут отрисованы в отдельном проходе
-		if _, isProjectile := s.ecs.Projectiles[id]; isProjectile {
+		if !data.IsOnScreen || s.ecs.Projectiles[id] != nil {
 			continue
 		}
 
@@ -302,21 +232,19 @@ func (s *RenderSystemRL) drawSolidEntities() {
 		}
 
 		finalColor := colorToRL(renderable.Color)
+		// ... (логика цвета без изменений) ...
 		if _, ok := s.ecs.DamageFlashes[id]; ok {
 			finalColor = config.EnemyDamageColorRL
 		} else if poisonContainer, ok := s.ecs.JadePoisonContainers[id]; ok {
 			numStacks := len(poisonContainer.Instances)
 			if numStacks > 0 {
 				originalColor := colorToRL(renderable.Color)
-				// Целевой цвет: сине-зеленый, с преобладанием зеленого
 				targetColor := rl.NewColor(40, 220, 140, 255)
-				// Рассчитываем фактор смешивания в зависимости от кол-ва стаков
-				const maxVisualStacks = 5.0 // Уменьшаем для более быстрого достижения максимального эффекта
+				const maxVisualStacks = 5.0
 				lerpFactor := float32(numStacks) / maxVisualStacks
 				if lerpFactor > 1.0 {
 					lerpFactor = 1.0
 				}
-				// Интерполируем цвет
 				finalColor.R = uint8(float32(originalColor.R)*(1-lerpFactor) + float32(targetColor.R)*lerpFactor)
 				finalColor.G = uint8(float32(originalColor.G)*(1-lerpFactor) + float32(targetColor.G)*lerpFactor)
 				finalColor.B = uint8(float32(originalColor.B)*(1-lerpFactor) + float32(targetColor.B)*lerpFactor)
@@ -338,59 +266,42 @@ func (s *RenderSystemRL) drawSolidEntities() {
 			}
 		} else if tower, isTower := s.ecs.Towers[id]; isTower {
 			s.drawTower(tower, data, scaledRadius, finalColor, renderable.HasStroke)
-			// <<< НАЧАЛО: Отрисовка индикат��ра крафта >>>
 			if _, ok := s.ecs.Combinables[id]; ok {
 				indicatorPos := data.WorldPos
-				indicatorPos.Y = data.Height + 4.0 // Располагаем над башней
+				indicatorPos.Y = data.Height + 4.0
 				indicatorRadius := scaledRadius * 0.5
-
-				// Рисуем сам диск
 				rl.DrawCylinder(indicatorPos, indicatorRadius, indicatorRadius, 0.1, 12, rl.Gold)
-				// Рисуем обводку
 				rl.DrawCylinderWires(indicatorPos, indicatorRadius, indicatorRadius, 0.1, 12, rl.Black)
 			}
-			// <<< КОНЕЦ: Отрисовка индикатора крафта >>>
 		}
 	}
 }
 
-// DrawProjectiles рисует только снаряды. Должна вызываться отдельно с отключенным depth test.
+// ... (DrawProjectiles без изменений) ...
 func (s *RenderSystemRL) DrawProjectiles() {
 	for id, data := range s.renderCache {
 		if !data.IsOnScreen {
 			continue
 		}
-
 		proj, isProjectile := s.ecs.Projectiles[id]
 		if !isProjectile {
 			continue
 		}
-
 		renderable, ok := s.ecs.Renderables[id]
 		if !ok {
 			continue
 		}
-
 		finalColor := colorToRL(renderable.Color)
 		pos := data.WorldPos
-		pos.Y = float32(config.ProjectileRadius*config.CoordScale) + 1.0 // Поднимаем снаряды чуть выше
-
+		pos.Y = float32(config.ProjectileRadius*config.CoordScale) + 1.0
 		if proj.VisualType == "ELLIPSE" {
 			length := float32(config.ProjectileRadius*config.CoordScale) * 1.5
 			width := float32(config.ProjectileRadius*config.CoordScale) / 2.0
-			height := float32(0.2) // Сделаем чуть толще для заметности
-
-			// Масштабируем наш единичный куб до размеров эллипса
+			height := float32(0.2)
 			scale := rl.NewVector3(length, height, width)
-
-			// Угол поворота вокруг оси Y. Добавляем 90 градусов, так как "длинная" сторона куба
-			// должна быть сонаправлена с вектором движения.
 			rotationAngle := float32(proj.Direction*rl.Rad2deg) + 90
-
 			rl.DrawModelEx(s.ellipseModel, pos, rl.NewVector3(0, 1, 0), rotationAngle, scale, finalColor)
-
 		} else {
-			// Рисуем стандартную сферу
 			scaledRadius := data.Radius * float32(config.CoordScale)
 			rl.DrawSphere(pos, scaledRadius, finalColor)
 		}
@@ -400,14 +311,10 @@ func (s *RenderSystemRL) DrawProjectiles() {
 func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderData, scaledRadius float32, color rl.Color, hasStroke bool) {
 	towerDef, _ := defs.TowerDefs[tower.DefID]
 
-	// Новые множители размера
-	baseWidthMultiplier := float32(1.32)      // 1.2 * 1.1
-	attackTowerHeightMultiplier := float32(1.326) // 1.56 * 0.85
-	minerTowerHeightMultiplier := float32(1.56)   // 1.2 * 1.3 (остается без изменений)
-	wallHeightMultiplier := float32(1.68)     // 1.2 * 1.4 (остается без изменений)
-
-	// Особый случай для майнеров: рисуем динамически, чтобы получить конус
+	// Особый случай для майнеров
 	if towerDef.Type == defs.TowerTypeMiner {
+		baseWidthMultiplier := float32(1.32)
+		minerTowerHeightMultiplier := float32(1.56)
 		startPos := rl.NewVector3(data.WorldPos.X, 0, data.WorldPos.Z)
 		endPos := rl.NewVector3(data.WorldPos.X, data.Height*minerTowerHeightMultiplier, data.WorldPos.Z)
 		radius := scaledRadius * 1.2 * baseWidthMultiplier
@@ -418,21 +325,27 @@ func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderDat
 		return
 	}
 
-	// Оптимизированный путь для всех остальных башен
-	model, ok := s.towerModels[tower.DefID]
+	// --- Получение моделей из менеджера ---
+	model, ok := s.modelManager.GetModel(tower.DefID)
 	if !ok {
 		return // Модель не найдена
 	}
-	wireModel, _ := s.towerWireModels[tower.DefID]
+	wireModel, ok := s.modelManager.GetWireModel(tower.DefID)
+	if !ok {
+		return // Проволочная модель не найдена
+	}
 
 	position := data.WorldPos
 	var scale rl.Vector3
+	baseWidthMultiplier := float32(1.32)
+	attackTowerHeightMultiplier := float32(1.326)
 
-	// Логика масштабирования в зависимости от типа
 	switch {
 	case towerDef.Type == defs.TowerTypeWall:
 		radius := scaledRadius * 1.8 * baseWidthMultiplier
-		scale = rl.NewVector3(radius, data.Height*wallHeightMultiplier, radius)
+		// Используем одинаковый масштаб по всем осям, чтобы избежать растяжения текстуры
+		uniformScale := radius
+		scale = rl.NewVector3(uniformScale, uniformScale, uniformScale)
 	case tower.CraftingLevel >= 1:
 		size := scaledRadius * 2 * baseWidthMultiplier
 		scale = rl.NewVector3(size, data.Height*attackTowerHeightMultiplier, size)
@@ -441,19 +354,27 @@ func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderDat
 		scale = rl.NewVector3(radius, data.Height*attackTowerHeightMultiplier, radius)
 	}
 
-	rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, scale, color)
+	// --- Логика отрисовки с учетом текстур ---
+	if towerDef.Type == defs.TowerTypeWall {
+		// Для стен используем rl.White, чтобы не перекрашивать текстуру
+		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, scale, rl.White)
+	} else {
+		// Для остальных башен используем цвет из definitions
+		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, scale, color)
+	}
+
 	if hasStroke {
 		rl.DrawModelWiresEx(wireModel, position, rl.NewVector3(0, 1, 0), 0, scale, config.TowerWireColorRL)
 	}
 }
 
+// ... (остальные функции без существенных изменений) ...
 func (s *RenderSystemRL) GetTowerRenderHeight(tower *component.Tower, renderable *component.Renderable) float32 {
 	scaledRadius := float32(renderable.Radius * config.CoordScale)
 	towerDef, ok := defs.TowerDefs[tower.DefID]
 	if !ok {
 		return scaledRadius * 4
 	}
-
 	switch {
 	case towerDef.Type == defs.TowerTypeWall:
 		return scaledRadius * 1.5
@@ -470,7 +391,6 @@ func (s *RenderSystemRL) updateFrustum() {
 	proj := rl.MatrixPerspective(s.camera.Fovy*rl.Deg2rad, float32(rl.GetScreenWidth())/float32(rl.GetScreenHeight()), 0.1, 1000.0)
 	view := rl.MatrixLookAt(s.camera.Position, s.camera.Target, s.camera.Up)
 	clipMatrix := rl.MatrixMultiply(view, proj)
-
 	s.frustum[0].X = clipMatrix.M3 - clipMatrix.M0
 	s.frustum[0].Y = clipMatrix.M7 - clipMatrix.M4
 	s.frustum[0].Z = clipMatrix.M11 - clipMatrix.M8
@@ -495,7 +415,6 @@ func (s *RenderSystemRL) updateFrustum() {
 	s.frustum[5].Y = clipMatrix.M7 + clipMatrix.M6
 	s.frustum[5].Z = clipMatrix.M11 + clipMatrix.M10
 	s.frustum[5].W = clipMatrix.M15 + clipMatrix.M14
-
 	for i := 0; i < 6; i++ {
 		length := float32(math.Sqrt(float64(s.frustum[i].X*s.frustum[i].X + s.frustum[i].Y*s.frustum[i].Y + s.frustum[i].Z*s.frustum[i].Z)))
 		if length > 0 {
@@ -508,7 +427,6 @@ func (s *RenderSystemRL) updateFrustum() {
 }
 
 func (s *RenderSystemRL) isInFrustum(box rl.BoundingBox) bool {
-	// ... (implementation unchanged)
 	return true
 }
 
@@ -530,16 +448,13 @@ func (s *RenderSystemRL) drawPulsingOres(gameTime float64) {
 	for id, ore := range s.ecs.Ores {
 		if pos, hasPos := s.ecs.Positions[id]; hasPos {
 			worldPos := s.pixelToWorld(*pos)
-
 			scaledRadius := float32(ore.Radius * config.CoordScale)
 			pulseRadius := scaledRadius * float32(1+0.1*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
 			pulseAlpha := uint8(128 + 64*math.Sin(gameTime*ore.PulseRate*math.Pi/5))
 			oreColor := config.OreColorRL
 			oreColor.A = pulseAlpha
-
 			scaledHeight := float32(0.1 * config.CoordScale)
 			worldPos.Y = scaledHeight/2 + 2.0
-
 			rl.DrawCylinder(worldPos, pulseRadius, pulseRadius, scaledHeight, 20, oreColor)
 		}
 	}
@@ -554,26 +469,20 @@ func (s *RenderSystemRL) drawLines(hiddenLineID types.EntityID) {
 		render1, ok1r := s.ecs.Renderables[line.Tower1ID]
 		tower2, ok2 := s.ecs.Towers[line.Tower2ID]
 		render2, ok2r := s.ecs.Renderables[line.Tower2ID]
-
 		if ok1 && ok1r && ok2 && ok2r {
 			startPos := s.hexToWorld(tower1.Hex)
 			endPos := s.hexToWorld(tower2.Hex)
-
 			height1 := s.GetTowerRenderHeight(tower1, render1)
 			height2 := s.GetTowerRenderHeight(tower2, render2)
-
 			startPos.Y = height1
 			endPos.Y = height2
-
 			rl.DrawCapsule(startPos, endPos, 0.6, 8, 8, rl.Yellow)
 		}
 	}
 }
 
-// drawLasers отрисовывает лазерные лучи с использованием оптимизированной модели.
 func (s *RenderSystemRL) drawLasers() {
-	yAxis := rl.NewVector3(0, 1, 0) // Модель цилиндра по умолчанию ориентирована вдоль оси Y
-
+	yAxis := rl.NewVector3(0, 1, 0)
 	for _, laser := range s.ecs.Lasers {
 		alpha := 1.0 - (laser.Timer / laser.Duration)
 		if alpha < 0 {
@@ -581,100 +490,73 @@ func (s *RenderSystemRL) drawLasers() {
 		}
 		r, g, b, _ := laser.Color.RGBA()
 		lineColor := rl.NewColor(uint8(r>>8), uint8(g>>8), uint8(b>>8), uint8(alpha*255))
-
 		startPos := s.pixelToWorld(component.Position{X: laser.FromX, Y: laser.FromY})
 		startPos.Y = float32(laser.FromHeight)
 		endPos := s.pixelToWorld(component.Position{X: laser.ToX, Y: laser.ToY})
 		endPos.Y = float32(laser.ToHeight)
-
 		direction := rl.Vector3Subtract(endPos, startPos)
 		distance := rl.Vector3Length(direction)
-
 		if distance < 0.001 {
 			continue
 		}
-
-		// Масштаб: X и Z - толщина, Y - длина.
-		// Наша модель имеет высоту 1, поэтому масштабируем Y на всю длину.
 		scale := rl.NewVector3(1.0, distance, 1.0)
-
-		// Вращение: вычисляем ось и угол для поворота от Y-оси к вектору direction
 		rotationAxis := rl.Vector3CrossProduct(yAxis, direction)
 		if rl.Vector3LengthSqr(rotationAxis) < 0.0001 {
-			// Векторы коллинеарны (параллельны). Ось вращения может быть любой.
 			rotationAxis = rl.NewVector3(1, 0, 0)
 		}
 		dot := rl.Vector3DotProduct(yAxis, rl.Vector3Normalize(direction))
-		if dot > 1.0 { dot = 1.0 }
-		if dot < -1.0 { dot = -1.0 }
+		if dot > 1.0 {
+			dot = 1.0
+		}
+		if dot < -1.0 {
+			dot = -1.0
+		}
 		rotationAngle := float32(math.Acos(float64(dot))) * rl.Rad2deg
-
-		// Позиция: теперь это startPos, так как мы изменили pivot модели на ее основание.
-		// Модель будет отрисована в startPos и правильно повернута/растянута до endPos.
 		rl.DrawModelEx(s.laserModel, startPos, rotationAxis, rotationAngle, scale, lineColor)
 	}
 }
 
-func (s *RenderSystemRL) drawRotatingBeams() {
-	// ... (implementation from "было.txt")
-}
+func (s *RenderSystemRL) drawRotatingBeams() {}
 
 func (s *RenderSystemRL) drawDraggingLine(isDragging bool, sourceTowerID types.EntityID, cancelDrag func()) {
 	if !isDragging || sourceTowerID == 0 || s.camera == nil {
 		return
 	}
-
 	sourceTower, okT := s.ecs.Towers[sourceTowerID]
 	sourceRender, okR := s.ecs.Renderables[sourceTowerID]
 	if !okT || !okR {
-		// Если башня по какой-то причине исчезла, отменяем перетаскивание
 		cancelDrag()
 		return
 	}
-
-	// Получаем начальную позицию (верхушка башни)
 	startPos := s.hexToWorld(sourceTower.Hex)
 	startPos.Y = s.GetTowerRenderHeight(sourceTower, sourceRender)
-
-	// Получаем конечную пози��ию (курсор на плоскости y=0)
 	ray := rl.GetMouseRay(rl.GetMousePosition(), *s.camera)
 	t := -ray.Position.Y / ray.Direction.Y
 	var endPos rl.Vector3
 	if t > 0 {
 		endPos = rl.Vector3Add(ray.Position, rl.Vector3Scale(ray.Direction, t))
 	} else {
-		// Если курсор не указывает на плоскость, рисуем линию в направлении камеры
 		endPos = rl.Vector3Add(s.camera.Position, rl.Vector3Scale(ray.Direction, 100))
 	}
-
-	// Рисуем линию
 	rl.DrawCapsule(startPos, endPos, 0.6, 8, 8, rl.Yellow)
 }
 
-func (s *RenderSystemRL) drawText() {
-	// ... (implementation from "было.txt")
-}
+func (s *RenderSystemRL) drawText() {}
 
-func (s *RenderSystemRL) drawCombinationIndicators() {
-	// ... (implementation from "было.txt")
-}
+func (s *RenderSystemRL) drawCombinationIndicators() {}
 
 func (s *RenderSystemRL) drawVolcanoEffects() {
 	for _, effect := range s.ecs.VolcanoEffects {
 		pos := rl.NewVector3(float32(effect.X*config.CoordScale), float32(effect.Z), float32(effect.Y*config.CoordScale))
-		
-		// Анимация прозрачности: эффект плавно появляется и исчезает
 		progress := effect.Timer / effect.Duration
 		alpha := 0.0
 		if progress < 0.5 {
-			alpha = progress * 2 // От 0 до 1
+			alpha = progress * 2
 		} else {
-			alpha = 1.0 - (progress-0.5)*2 // От 1 до 0
+			alpha = 1.0 - (progress-0.5)*2
 		}
-
 		color := colorToRL(effect.Color)
 		color.A = uint8(alpha * 255)
-
 		rl.DrawSphere(pos, float32(effect.Radius*config.CoordScale), color)
 	}
 }

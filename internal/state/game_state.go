@@ -3,6 +3,7 @@ package state
 
 import (
 	"go-tower-defense/internal/app"
+	"go-tower-defense/internal/assets"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
@@ -25,6 +26,7 @@ type GameState struct {
 	game                  *app.Game
 	hexMap                *hexmap.HexMap
 	renderer              *render.HexRenderer
+	modelManager          *assets.ModelManager // <-- Менеджер моделей
 	indicator             *ui.StateIndicatorRL
 	playerLevelIndicator  *ui.PlayerLevelIndicatorRL
 	playerHealthIndicator *ui.PlayerHealthIndicator
@@ -32,17 +34,18 @@ type GameState struct {
 	recipeBook            *ui.RecipeBookRL
 	uIndicator            *ui.UIndicatorRL
 	waveIndicator         *ui.WaveIndicator
-	oreSectorIndicator    *ui.OreSectorIndicatorRL // Индикатор состояния жил
+	oreSectorIndicator    *ui.OreSectorIndicatorRL
 	lastClickTime         time.Time
 	camera                *rl.Camera3D
 	font                  rl.Font
 	checkpointTextures    map[int]rl.Texture2D
-	isGameOver            bool // Флаг окончания игры
+	isGameOver            bool
 	restartButton         rl.Rectangle
 }
 
-// intToRoman конвертирует целое число в римску�� цифру (для чисел от 1 до 10)
+// intToRoman конвертирует целое число в римскую цифру
 func intToRoman(num int) string {
+	// ... (реализация без изменений)
 	if num < 1 || num > 10 {
 		return ""
 	}
@@ -72,8 +75,14 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 	fontChars = append(fontChars, '₽', '«', '»', '(', ')', '.', ',')
 	font := rl.LoadFontEx("assets/fonts/arial.ttf", 64, fontChars, int32(len(fontChars)))
 
-	gameLogic := app.NewGame(hexMap, font, towerDefs)
+	// --- Инициализация и загрузка моделей ---
+	modelManager := assets.NewModelManager()
+	modelManager.LoadTowerModels(towerDefs) // Загружаем все модели
 
+	// Передаем менеджер в логику игры
+	gameLogic := app.NewGame(hexMap, font, towerDefs, modelManager)
+
+	// ... (остальная часть инициализации UI без изменений)
 	oreHexColors := make(map[hexmap.Hex]rl.Color)
 	specialHexes := make(map[hexmap.Hex]struct{})
 	specialHexes[hexMap.Entry] = struct{}{}
@@ -118,9 +127,7 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		28,
 	)
 
-	// Рассчитываем позицию для индикатора здоровья под индикатором волны
-	healthIndicatorY := waveIndicator.Y + waveIndicator.FontSize + 40 // Y волны + ее высота + отступ
-	// Центрируем по горизонтали так же, как и индикатор волны
+	healthIndicatorY := waveIndicator.Y + waveIndicator.FontSize + 40
 	healthIndicatorX := waveIndicator.X - (float32(ui.HealthCols*(ui.HealthCircleRadius*2+ui.HealthCircleSpacing)-ui.HealthCircleSpacing))/2
 
 	playerHealthIndicator := ui.NewPlayerHealthIndicator(healthIndicatorX, healthIndicatorY)
@@ -132,21 +139,20 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 	recipeBookY := (float32(config.ScreenHeight) - recipeBookHeight) / 2
 	recipeBook := ui.NewRecipeBookRL(recipeBookX, recipeBookY, recipeBookWidth, recipeBookHeight, recipeLibrary.Recipes, font)
 
-	// Размещаем индикатор "U" слева от кнопки паузы
 	uIndicatorSize := float32(30)
-	uIndicatorX := pauseButtonX - 20 - uIndicatorSize/2 // X кнопки паузы - отступ - половина размера индикатора
+	uIndicatorX := pauseButtonX - 20 - uIndicatorSize/2
 	uIndicator := ui.NewUIndicatorRL(
 		uIndicatorX,
-		float32(config.IndicatorOffsetX), // Y на том же уровне, что и другие иконки
+		float32(config.IndicatorOffsetX),
 		uIndicatorSize,
 		font,
 	)
 
-	// --- Индикатор состояния жил ---
-	oreIndicatorWidth := float32(100)
-	oreIndicatorHeight := float32(80)
-	oreIndicatorX := float32(20)
-	oreIndicatorY := float32(config.ScreenHeight) - oreIndicatorHeight - 20
+	oreIndicatorWidth := float32(80)
+	oreIndicatorHeight := float32(60)
+	healthIndicatorWidth := float32(ui.HealthCols*(ui.HealthCircleRadius*2+ui.HealthCircleSpacing) - ui.HealthCircleSpacing)
+	oreIndicatorX := healthIndicatorX + healthIndicatorWidth/2 - oreIndicatorWidth/2
+	oreIndicatorY := healthIndicatorY + playerHealthIndicator.GetHeight() + 10
 	oreSectorIndicator := ui.NewOreSectorIndicatorRL(oreIndicatorX, oreIndicatorY, oreIndicatorWidth, oreIndicatorHeight)
 
 	checkpointTextures := make(map[int]rl.Texture2D)
@@ -159,12 +165,11 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		rl.UnloadImage(img)
 	}
 
-	// --- Кнопка рестарта ---
 	btnWidth := float32(200)
 	btnHeight := float32(50)
 	restartButton := rl.NewRectangle(
 		(float32(config.ScreenWidth)-btnWidth)/2,
-		(float32(config.ScreenHeight)-btnHeight)/2+50, // Чуть ниже текста
+		(float32(config.ScreenHeight)-btnHeight)/2+50,
 		btnWidth,
 		btnHeight,
 	)
@@ -174,6 +179,7 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		game:                  gameLogic,
 		hexMap:                hexMap,
 		renderer:              renderer,
+		modelManager:          modelManager, // <-- Сохраняем менеджер
 		indicator:             indicator,
 		playerLevelIndicator:  playerLevelIndicator,
 		playerHealthIndicator: playerHealthIndicator,
@@ -192,6 +198,8 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 
 	return gs
 }
+
+// ... (методы Update, Draw, DrawUI и другие остаются без изменений) ...
 
 func (g *GameState) SetCamera(camera *rl.Camera3D) {
 	g.camera = camera
@@ -310,8 +318,7 @@ func (g *GameState) Update(deltaTime float64) {
 	}
 
 	if rl.IsKeyPressed(rl.KeyF9) {
-		g.game.HandlePauseClick()
-		g.sm.SetState(NewPauseState(g.sm, g, g.font))
+		g.sm.SetState(NewPauseState(g.sm, g, g.font, g.game.PauseButton))
 		return
 	}
 
@@ -416,8 +423,7 @@ func (g *GameState) handleUIClick(mousePos rl.Vector2) {
 	if g.game.SpeedButton.IsClicked(mousePos) {
 		g.game.HandleSpeedClick()
 	} else if g.game.PauseButton.IsClicked(mousePos) {
-		g.game.HandlePauseClick()
-		g.sm.SetState(NewPauseState(g.sm, g, g.font))
+		g.sm.SetState(NewPauseState(g.sm, g, g.font, g.game.PauseButton))
 	} else if g.indicator.IsClicked(mousePos) {
 		g.indicator.HandleClick()
 		g.game.HandleIndicatorClick()
@@ -617,7 +623,7 @@ func (g *GameState) DrawUI() {
 	g.indicator.Draw(stateColor)
 
 	g.game.SpeedButton.Draw()
-	g.game.PauseButton.Draw()
+	g.game.PauseButton.Draw(false)
 	g.infoPanel.Draw(g.game.ECS)
 
 	if playerState, ok := g.game.ECS.PlayerState[g.game.PlayerID]; ok {
@@ -678,13 +684,13 @@ func (g *GameState) Exit() {}
 // Cleanup освобождает ресурсы, используемые состоянием
 func (g *GameState) Cleanup() {
 	g.renderer.Cleanup()
+	g.modelManager.Cleanup() // <-- Очищаем модели
 	for _, tex := range g.checkpointTextures {
 		rl.UnloadTexture(tex)
 	}
 }
 
 // GetGame возвращает текущий экземпляр игры.
-// Возвращаем GameInterface, чтобы соответствовать интерфейсу State.
 func (g *GameState) GetGame() GameInterface {
 	return g.game
 }

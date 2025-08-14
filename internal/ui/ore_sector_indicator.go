@@ -34,25 +34,28 @@ func (i *OreSectorIndicatorRL) Draw(centralPct, midPct, farPct float32) {
 	startX := i.X
 
 	for _, pct := range percentages {
-		// Фон для полосы
+		// Фон для полосы (пустой)
 		rl.DrawRectangle(int32(startX), int32(i.Y), int32(i.BarWidth), int32(i.Height), config.XpBarBackgroundColorRL)
 
-		// Высота заполнения в зависимости от процента
-		fillHeight := i.Height * pct
-		// Y-координата начала заполнения (снизу вверх)
-		fillY := i.Y + (i.Height - fillHeight)
+		if pct > 0 {
+			// Высота заполнения в зависимости от процента
+			fillHeight := i.Height * pct
+			// Y-координата начала заполнения (снизу вверх)
+			fillY := i.Y + (i.Height - fillHeight)
 
-		// Цвет меняется в зависимости от истощения
-		fillColor := rl.Green
-		if pct < 0.6 {
-			fillColor = rl.Yellow
-		}
-		if pct < 0.3 {
-			fillColor = rl.Red
-		}
+			// Новая логика цвета
+			var fillColor rl.Color
+			if pct > 0.66 {
+				fillColor = rl.Blue // Больше 66% - синий
+			} else if pct > 0.33 {
+				fillColor = rl.Red // От 33% до 66% - красный
+			} else {
+				fillColor = rl.Yellow // Меньше 33% - желтый
+			}
 
-		// Рисуем заполнение
-		rl.DrawRectangle(int32(startX), int32(fillY), int32(i.BarWidth), int32(fillHeight), fillColor)
+			// Рисуем заполнение
+			rl.DrawRectangle(int32(startX), int32(fillY), int32(i.BarWidth), int32(fillHeight), fillColor)
+		}
 
 		// Обводка для каждой полосы
 		rl.DrawRectangleLinesEx(

@@ -54,6 +54,12 @@ func (i *WaveIndicator) Draw(waveNumber int, font rl.Font) {
 
 	text := toRoman(waveNumber) // Убрали "Wave: "
 
+	// Определяем цвет в зависимости от номера волны
+	textColor := i.Color
+	if waveNumber%10 == 0 && waveNumber > 0 {
+		textColor = rl.Red // Красный для босс-волн
+	}
+
 	// Центрируем текст
 	textSize := rl.MeasureTextEx(font, text, i.FontSize, 1)
 	textX := i.X - textSize.X/2
@@ -70,5 +76,5 @@ func (i *WaveIndicator) Draw(waveNumber int, font rl.Font) {
 	}
 
 	// Рисуем основной текст
-	rl.DrawTextEx(font, text, rl.NewVector2(textX, textY), i.FontSize, 1, i.Color)
+	rl.DrawTextEx(font, text, rl.NewVector2(textX, textY), i.FontSize, 1, textColor)
 }

@@ -2,6 +2,7 @@
 package app
 
 import (
+	"go-tower-defense/internal/assets"
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
 	"go-tower-defense/internal/defs"
@@ -34,7 +35,8 @@ type Game struct {
 	BaseHealth                int
 	ECS                       *entity.ECS
 	MovementSystem            *system.MovementSystem
-	RenderSystem              *system.RenderSystemRL // Изменено
+	RenderSystem              *system.RenderSystemRL
+	ModelManager              *assets.ModelManager
 	WaveSystem                *system.WaveSystem
 	CombatSystem              *system.CombatSystem
 	ProjectileSystem          *system.ProjectileSystem
@@ -53,7 +55,7 @@ type Game struct {
 	Font                      rl.Font // Изменено
 	Rng                       *utils.PRNGService
 	towersBuilt               int
-	SpeedButton               *ui.SpeedButtonRL // Изменено
+	SpeedButton               *ui.SpeedButtonRL // Изменеено
 	SpeedMultiplier           float64
 	PauseButton               *ui.PauseButtonRL // Изменено
 	DebugTowerID              string
@@ -61,7 +63,6 @@ type Game struct {
 
 	// Game state
 	gameTime               float64
-	isPaused               bool
 	isGodMode              bool // Режим бессмертия
 	gameSpeed              float64
 	currentWave            *component.Wave
@@ -82,7 +83,7 @@ type Game struct {
 }
 
 // NewGame initializes a new game instance.
-func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.TowerDefinition) *Game {
+func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.TowerDefinition, modelManager *assets.ModelManager) *Game {
 	if hexMap == nil {
 		panic("hexMap cannot be nil")
 	}
@@ -102,11 +103,12 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.Tow
 		towersBuilt:     0,
 		gameTime:        0.0,
 		DebugTowerID:    "",
-		isGodMode:       false, // Инициализируем режим бессмертия
+		isGodMode:       false,
+		ModelManager:    modelManager, // Сохраняем менеджер
 	}
-	// ВАЖНО: MovementSystem создается после инициализации g
+	// ВАЖНО: Системы, зависящие от g, создаются после инициализации g
 	g.MovementSystem = system.NewMovementSystem(ecs, g, g.Rng)
-	g.RenderSystem = system.NewRenderSystemRL(ecs, font)
+	g.RenderSystem = system.NewRenderSystemRL(ecs, font, modelManager) // Передаем менеджер в рендер
 	g.CombatSystem = system.NewCombatSystem(ecs, g.FindPowerSourcesForTower, g.FindPathToPowerSource)
 	g.ProjectileSystem = system.NewProjectileSystem(ecs, eventDispatcher, g.CombatSystem, towerDefs)
 	g.StateSystem = system.NewStateSystem(ecs, g, eventDispatcher)
@@ -244,7 +246,7 @@ func (g *Game) CombineTowers(clickedTowerID types.EntityID) {
 	g.rebuildEnergyNetwork()
 }
 
-// FindPathToPowerSource находит кратчайший путь от атакующей башни до ближ��йшего
+// FindPathToPowerSource находит кратчайший путь от атакующей башни до ближайшего
 // источника энергии (башни-добытчика на активной руде).
 func (g *Game) FindPathToPowerSource(startNode types.EntityID) []types.EntityID {
 	if _, exists := g.ECS.Towers[startNode]; !exists {
@@ -355,6 +357,17 @@ func (g *Game) placeInitialStones() {
 
 // Update progresses the game state by one frame.
 func (g *Game) Update(deltaTime float64) {
+	// Обработка перезагрузки моделей по F5
+	if rl.IsKeyPressed(rl.KeyF5) {
+		// Создаем карту указателей для передачи в менеджер моделей
+		towerDefPtrs := make(map[string]*defs.TowerDefinition)
+		for id, def := range defs.TowerDefs {
+			d := def
+			towerDefPtrs[id] = &d
+		}
+		g.ModelManager.ReloadTowerModels(towerDefPtrs)
+	}
+
 	dt := deltaTime * g.SpeedMultiplier
 	g.gameTime += dt
 	g.ECS.GameTime = g.gameTime
@@ -378,7 +391,7 @@ func (g *Game) Update(deltaTime float64) {
 	g.OreSystem.Update()
 }
 
-// UpdateCheckpointHighlighting динамически обновл��ет подсветку чекпоинтов.
+// UpdateCheckpointHighlighting динамически обновляет подсветку чекпоинтов.
 func (g *Game) UpdateCheckpointHighlighting() {
 	var lastLivingEnemy *component.Enemy
 	minProgressIndex := math.MaxInt32
@@ -470,7 +483,7 @@ func (g *Game) StartWave() {
 // --- Private Helper Functions ---
 
 func (g *Game) initUI() {
-	// Ра��считываем X-координаты кнопок, между которыми нужно вставить нашу
+	// Рассчитываем X-координаты кнопок, между которыми нужно вставить нашу
 	pauseButtonX := float32(config.ScreenWidth - config.IndicatorOffsetX - 90)
 	indicatorX := float32(config.ScreenWidth - config.IndicatorOffsetX)
 
@@ -551,16 +564,6 @@ func (g *Game) HandleSpeedClick() {
 	g.SpeedMultiplier = math.Pow(2, float64(g.SpeedButton.CurrentState))
 }
 
-func (g *Game) HandlePauseClick() {
-	g.isPaused = !g.isPaused
-	g.PauseButton.SetPaused(g.isPaused)
-}
-
-// IsPaused возвращает текущее состояние пауз��.
-func (g *Game) IsPaused() bool {
-	return g.isPaused
-}
-
 // GetTowerHexesByType возвращает гексы, сгруппированные по типу башни.
 func (g *Game) GetTowerHexesByType() ([]hexmap.Hex, []hexmap.Hex, []hexmap.Hex) {
 	var wallHexes, typeAHexes, typeBHexes []hexmap.Hex
@@ -593,7 +596,7 @@ func (g *Game) GetAllTowerHexes() []hexmap.Hex {
 	return allHexes
 }
 
-// GetTowerAtHex возвраща��т башню на указанном гексе, если она существует.
+// GetTowerAtHex возвращает башню на указанном гексе, если она существует.
 func (g *Game) GetTowerAtHex(hex hexmap.Hex) (*component.Tower, bool) {
 	for _, tower := range g.ECS.Towers {
 		if tower.Hex == hex {
