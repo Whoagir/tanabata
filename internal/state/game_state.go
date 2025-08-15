@@ -149,8 +149,8 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 	)
 
 	// Новый двухстрочный индикатор руды
-	oreIndicatorWidth := float32(160) // <--- Уменьшил ширину
-	oreIndicatorHeight := float32(12) 
+	oreIndicatorWidth := float32(120) // <--- Уменьшил ширину
+	oreIndicatorHeight := float32(12)
 	healthIndicatorWidth := float32(ui.HealthCols*(ui.HealthCircleRadius*2+ui.HealthCircleSpacing) - ui.HealthCircleSpacing)
 	oreIndicatorX := healthIndicatorX + healthIndicatorWidth/2 - oreIndicatorWidth/2
 	oreIndicatorY := healthIndicatorY + playerHealthIndicator.GetHeight() + 15
@@ -653,7 +653,7 @@ func (g *GameState) DrawUI() {
 	// Если игра окончена, рисуем оверлей
 	if g.isGameOver {
 		rl.DrawRectangle(0, 0, int32(config.ScreenWidth), int32(config.ScreenHeight), rl.NewColor(0, 0, 0, 180))
-		
+
 		// Текст "Вы проиграли!"
 		gameOverText := "Вы проиграли!"
 		textSize := int32(60)

@@ -338,7 +338,7 @@ func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderDat
 	position := data.WorldPos
 	if tower.CraftingLevel >= 1 {
 		// Приподнимаем башни 1+ уровня крафта на половину их высоты (7.2 / 2)
-		position.Y += 3.6
+		position.Y += 3.05
 	}
 	// Убираем масштабирование из рендера. Размер модели теперь определяется при создании.
 	finalScale := rl.NewVector3(1.0, 1.0, 1.0)
