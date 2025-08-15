@@ -3,6 +3,11 @@ package utils
 
 import "math"
 
+// Lerp выполняет стандартную линейную интерполяцию
+func Lerp(from, to float32, t float32) float32 {
+	return from + (to-from)*t
+}
+
 // LerpAngle выполняет линейную интерполяцию между двумя углами с учётом кратчайшего пути
 func LerpAngle(from, to float32, t float32) float32 {
 	// Нормализуем углы в диапазон [-π, π]

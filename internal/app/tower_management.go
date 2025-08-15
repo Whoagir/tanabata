@@ -198,7 +198,12 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 	// Если это башня типа 'TA', добавляем ей компонент турели.
 	if towerDefID == "TA" {
 		g.ECS.Turrets[id] = &component.TurretComponent{
-			TurnSpeed: config.TowerTurnSpeed,
+			CurrentAngle:     0,
+			TargetAngle:      0,
+			CurrentPitch:     0,
+			TargetPitch:      0,
+			TurnSpeed:        8.0, // Увеличена скорость поворота
+			AcquisitionRange: float32(def.Combat.Range) * 1.4,
 		}
 	}
 

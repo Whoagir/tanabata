@@ -300,16 +300,35 @@ func (s *RenderSystemRL) DrawProjectiles() {
 		}
 		finalColor := colorToRL(renderable.Color)
 		pos := data.WorldPos
-		pos.Y = float32(config.ProjectileRadius*config.CoordScale) + 1.0
-		if proj.VisualType == "ELLIPSE" {
-			length := float32(config.ProjectileRadius*config.CoordScale) * 1.5
-			width := float32(config.ProjectileRadius*config.CoordScale) / 2.0
-			height := float32(0.2)
-			scale := rl.NewVector3(length, height, width)
-			rotationAngle := float32(proj.Direction*rl.Rad2deg) + 90
-			rl.DrawModelEx(s.ellipseModel, pos, rl.NewVector3(0, 1, 0), rotationAngle, scale, finalColor)
+
+		// --- НОВАЯ ЛОГИКА РАЗДЕЛЕНИЯ ВЫСОТЫ ---
+		if proj.SpawnHeight > 0 {
+			// Используем предрассчитанную высоту для башен с турелью
+			pos.Y = float32(proj.SpawnHeight)
 		} else {
-			scaledRadius := data.Radius * float32(config.CoordScale)
+			// Используем старую, низкую высоту для остальных башен
+			pos.Y = float32(config.ProjectileRadius*config.CoordScale) + 1.0
+		}
+		// --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
+		// Рассчитываем масштаб снаряда в зависимости от его возраста
+		scale := float32(1.0)
+		// Применяем анимацию роста только для снарядов от башен с турелью (у которых задана высота спавна)
+		if proj.SpawnHeight > 0 {
+			if proj.ScaleUpDuration > 0 && proj.Age < proj.ScaleUpDuration {
+				scale = float32(proj.Age / proj.ScaleUpDuration)
+			}
+		}
+
+		if proj.VisualType == "ELLIPSE" {
+			length := float32(config.ProjectileRadius*config.CoordScale) * 1.5 * scale
+			width := float32(config.ProjectileRadius*config.CoordScale) / 2.0 * scale
+			height := float32(0.2)
+			modelScale := rl.NewVector3(length, height, width)
+			rotationAngle := float32(proj.Direction*rl.Rad2deg) + 90
+			rl.DrawModelEx(s.ellipseModel, pos, rl.NewVector3(0, 1, 0), rotationAngle, modelScale, finalColor)
+		} else {
+			scaledRadius := data.Radius * float32(config.CoordScale) * scale
 			rl.DrawSphere(pos, scaledRadius, finalColor)
 		}
 	}
@@ -337,19 +356,29 @@ func (s *RenderSystemRL) drawTower(id types.EntityID, tower *component.Tower, da
 				rl.DrawModelWiresEx(wireBaseModel, position, rl.NewVector3(0, 1, 0), 0, finalScale, config.TowerWireColorRL)
 			}
 
+			// --- ОБНОВЛЕННАЯ ОТРИСОВКА ГОЛОВЫ ТУРЕЛИ С ДВУМЯ ОСЯМИ ВРАЩЕНИЯ ---
 			baseHeight, ok := s.modelManager.GetBaseModelHeight(tower.DefID)
 			if !ok {
-				// Фоллбэк на случай, если высота не была вычислена (не должно происходить)
 				baseHeight = data.Height * 0.6
 			}
 			headPos := rl.NewVector3(position.X, baseHeight, position.Z)
-			// Применяем угол из логики, инвертировав его для коррекции направления вращения
-			rotationAngleDegrees := -turret.CurrentAngle * rl.Rad2deg
 
-			rl.DrawModelEx(headModel, headPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, finalScale, color)
+			// Raylib для сложных трансформаций использует матричный стек
+			rl.PushMatrix()
+			// 1. Перемещаемся в позицию, где должна быть голова
+			rl.Translatef(headPos.X, headPos.Y, headPos.Z)
+			// 2. Применяем горизонтальный поворот (Yaw)
+			rl.Rotatef(-turret.CurrentAngle*rl.Rad2deg, 0, 1, 0)
+			// 3. Применяем вертикальный поворот (Pitch) вокруг локальной оси Z
+			rl.Rotatef(turret.CurrentPitch*rl.Rad2deg, 0, 0, 1)
+			// 4. Рисуем саму модель в начале координат (т.к. мы уже переместились)
+			rl.DrawModel(headModel, rl.Vector3Zero(), 1.0, color)
 			if hasStroke {
-				rl.DrawModelWiresEx(wireHeadModel, headPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, finalScale, config.TowerWireColorRL)
+				rl.DrawModelWires(wireHeadModel, rl.Vector3Zero(), 1.0, config.TowerWireColorRL)
 			}
+			// 5. Возвращаем матрицу в исходное состояние
+			rl.PopMatrix()
+			// --- КОНЕЦ ОБНОВЛЕННОГО БЛОКА ---
 
 		} else {
 			// Фоллбэк на процедурную генерацию, если моделей нет

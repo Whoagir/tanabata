@@ -33,4 +33,9 @@ type Projectile struct {
 	ImpactBurstDamageFactor float64 // Множитель урона для новых снарядов
 
 	VisualType string // Тип визуала: "SPHERE", "ELLIPSE", etc.
+
+	// Для визуальных эффектов
+	Age             float64 // Время жизни снаряда в секундах для анимаций
+	ScaleUpDuration float64 // Длительность анимации роста
+	SpawnHeight     float64 // Высота, на которой появился снаряд
 }

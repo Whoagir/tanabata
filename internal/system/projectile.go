@@ -47,6 +47,8 @@ func (s *ProjectileSystem) OnEvent(e event.Event) {
 
 func (s *ProjectileSystem) Update(deltaTime float64) {
 	for id, proj := range s.ecs.Projectiles {
+		proj.Age += deltaTime // Увеличиваем возраст снаряда
+
 		pos := s.ecs.Positions[id]
 		if pos == nil {
 			s.removeProjectile(id)

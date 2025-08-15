@@ -51,31 +51,66 @@ func (s *CombatSystem) Update(deltaTime float64) {
 			continue
 		}
 
-		// --- ИСПРАВЛЕННЫЙ БЛОК: Логика вращения турели ---
+		// --- ОБНОВЛЕННЫЙ БЛОК: Логика вращения турели с "прилипанием" и вертикальным наведением ---
 		if turret, hasTurret := s.ecs.Turrets[id]; hasTurret {
-			// Находим ближайшую цель в радиусе, даже если башня не активна или перезаряжается
-			targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, 1)
-			if len(targets) > 0 {
-				targetID := targets[0]
-				if targetPos, ok := s.ecs.Positions[targetID]; ok {
-					towerPosX, towerPosY := tower.Hex.ToPixel(config.HexSize)
-					// Вычисляем целевой угол в радианах
-					// Угол от башни к цели
-					dx := targetPos.X - towerPosX
-					dy := targetPos.Y - towerPosY
-					turret.TargetAngle = float32(math.Atan2(dy, dx))
-					turret.TargetID = targetID
+			targetIsValid := false
+			// 1. Проверяем, есть ли у нас уже цель и валидна ли она.
+			if turret.TargetID != 0 {
+				if targetPos, exists := s.ecs.Positions[turret.TargetID]; exists {
+					if health, hasHealth := s.ecs.Healths[turret.TargetID]; hasHealth && health.Value > 0 {
+						towerPosPixelX, towerPosPixelY := tower.Hex.ToPixel(config.HexSize)
+						distSq := (targetPos.X-towerPosPixelX)*(targetPos.X-towerPosPixelX) + (targetPos.Y-towerPosPixelY)*(targetPos.Y-towerPosPixelY)
+						// Проверяем, что цель все еще в РАДИУСЕ ЗАХВАТА
+						if distSq < float64(turret.AcquisitionRange*turret.AcquisitionRange*config.HexSize*config.HexSize) {
+							targetIsValid = true
+						}
+					}
 				}
-			} else {
-				turret.TargetID = 0 // Сбрасываем цель, если врагов нет
-				// Опционально: можно добавить возврат к нейтральной позиции
-				// turret.TargetAngle = 0
 			}
 
-			// Плавный поворот турели к цели с нормализацией углов
+			// 2. Если текущая цель невалидна, ищем новую.
+			if !targetIsValid {
+				targets := s.findTargetsForSplitAttack(tower.Hex, int(turret.AcquisitionRange), 1)
+				if len(targets) > 0 {
+					turret.TargetID = targets[0]
+				} else {
+					turret.TargetID = 0 // Целей нет, сбрасываем
+				}
+			}
+
+			// 3. Если есть валидная цель (старая или новая), наводимся на нее.
+			if turret.TargetID != 0 {
+				towerPosX, towerPosY := tower.Hex.ToPixel(config.HexSize)
+				startPos := &component.Position{X: towerPosX, Y: towerPosY}
+				predictedPos := s.predictTargetPosition(turret.TargetID, startPos, config.ProjectileSpeed)
+
+				// Расчет горизонтального угла (Yaw)
+				dx := predictedPos.X - towerPosX
+				dy := predictedPos.Y - towerPosY
+				turret.TargetAngle = float32(math.Atan2(dy, dx))
+
+				// Расчет вертикального угла (Pitch)
+				if towerRenderable, ok := s.ecs.Renderables[id]; ok {
+					if targetRenderable, ok := s.ecs.Renderables[turret.TargetID]; ok {
+						turretHeadHeight := getTowerRenderHeight(tower, towerRenderable)
+						targetHeight := targetRenderable.Radius * float32(config.CoordScale)
+						deltaHeight := targetHeight - turretHeadHeight
+						horizontalDist := float32(math.Sqrt(dx*dx + dy*dy))
+						turret.TargetPitch = float32(math.Atan2(float64(deltaHeight), float64(horizontalDist)))
+					}
+				}
+			} else {
+				// Если целей нет, плавно возвращаем башню в нейтральное положение
+				turret.TargetAngle = 0 // или любой другой "домашний" угол
+				turret.TargetPitch = 0
+			}
+
+			// 4. Плавный поворот к цели
 			turret.CurrentAngle = utils.LerpAngle(turret.CurrentAngle, turret.TargetAngle, turret.TurnSpeed*float32(deltaTime))
+			// Для Pitch используем обычный Lerp, т.к. нам не нужен "заворот" через 360 градусов
+			turret.CurrentPitch = utils.Lerp(turret.CurrentPitch, turret.TargetPitch, turret.TurnSpeed*float32(deltaTime))
 		}
-		// --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
+		// --- КОНЕЦ ОБНОВЛЕННОГО БЛОКА ---
 
 		if !tower.IsActive {
 			continue
@@ -250,15 +285,37 @@ func (s *CombatSystem) handleProjectileAttack(towerID types.EntityID, tower *com
 		return true
 	}
 
-	splitCount := 1
-	if combat.Attack.Params != nil && combat.Attack.Params.SplitCount != nil {
-		splitCount = *combat.Attack.Params.SplitCount
-	}
-	if splitCount <= 0 {
-		splitCount = 1
+	var targets []types.EntityID
+
+	// --- НОВАЯ ЛОГИКА СИНХРОНИЗАЦИИ С ТУРЕЛЬЮ ---
+	// Если у башни есть турель и у нее есть валидная цель
+	if turret, hasTurret := s.ecs.Turrets[towerID]; hasTurret && turret.TargetID != 0 {
+		// Проверяем, находится ли цель турели в РАДИУСЕ АТАКИ (а не захвата)
+		if targetPos, exists := s.ecs.Positions[turret.TargetID]; exists {
+			towerPosPixelX, towerPosPixelY := tower.Hex.ToPixel(config.HexSize)
+			// Расстояние в пикселях в квадрате
+			distSq := (targetPos.X-towerPosPixelX)*(targetPos.X-towerPosPixelX) + (targetPos.Y-towerPosPixelY)*(targetPos.Y-towerPosPixelY)
+			// Сравниваем с радиусом атаки, переведенным в пиксели в квадрате
+			if distSq < float64(combat.Range*combat.Range*config.HexSize*config.HexSize) {
+				// Если да, то это наша единственная цель
+				targets = []types.EntityID{turret.TargetID}
+			}
+		}
 	}
 
-	targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, splitCount)
+	// Если после проверки турели целей нет (или это башня без турели), используем старую логику
+	if len(targets) == 0 {
+		splitCount := 1
+		if combat.Attack.Params != nil && combat.Attack.Params.SplitCount != nil {
+			splitCount = *combat.Attack.Params.SplitCount
+		}
+		if splitCount <= 0 {
+			splitCount = 1
+		}
+		targets = s.findTargetsForSplitAttack(tower.Hex, combat.Range, splitCount)
+	}
+	// --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
 	if len(targets) == 0 {
 		return false
 	}
@@ -337,6 +394,29 @@ func (s *CombatSystem) CreateProjectile(startPos *component.Position, sourceID, 
 	predictedPos := s.predictTargetPosition(targetID, startPos, config.ProjectileSpeed)
 	direction := calculateDirection(startPos, &predictedPos)
 
+	finalSpawnPos := &component.Position{X: startPos.X, Y: startPos.Y}
+	var spawnHeight float64
+
+	// --- НОВАЯ ЛОГИКА РАЗДЕЛЕНИЯ ---
+	// Проверяем, есть ли у башни турель
+	if _, hasTurret := s.ecs.Turrets[sourceID]; hasTurret {
+		// Логика для башен с турелью: смещаем позицию и рассчитываем высоту
+		offset := config.HexSize * 0.5
+		finalSpawnPos.X += math.Cos(direction) * offset
+		finalSpawnPos.Y += math.Sin(direction) * offset
+
+		if tower, ok := s.ecs.Towers[sourceID]; ok {
+			if renderable, ok := s.ecs.Renderables[sourceID]; ok {
+				spawnHeight = float64(getTowerRenderHeight(tower, renderable))
+			}
+		}
+	} else {
+		// Старая логика для башен без турели: спавн в центре (finalSpawnPos уже равен startPos),
+		// высота 0 (будет обработано в рендере как стандартная низкая высота)
+		spawnHeight = 0.0
+	}
+	// --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
 	projectileColor := getProjectileColorByAttackType(attackDef.DamageType)
 
 	proj := &component.Projectile{
@@ -347,6 +427,10 @@ func (s *CombatSystem) CreateProjectile(startPos *component.Position, sourceID, 
 		Color:      projectileColor,
 		Direction:  direction,
 		AttackType: attackDef.DamageType,
+		// Инициализация полей для визуальных эффектов
+		Age:             0.0,
+		ScaleUpDuration: 0.15, // 0.15 секунды на анимацию роста
+		SpawnHeight:     spawnHeight,
 	}
 
 	if attackDef.Params != nil {
@@ -381,7 +465,7 @@ func (s *CombatSystem) CreateProjectile(startPos *component.Position, sourceID, 
 		proj.PoisonDPS = 10
 	}
 
-	s.ecs.Positions[projID] = &component.Position{X: startPos.X, Y: startPos.Y}
+	s.ecs.Positions[projID] = &component.Position{X: finalSpawnPos.X, Y: finalSpawnPos.Y}
 	s.ecs.Projectiles[projID] = proj
 	s.ecs.Renderables[projID] = &component.Renderable{
 		Color:     proj.Color,
