@@ -4,7 +4,6 @@ package system
 import (
 	"go-tower-defense/internal/component"
 	"go-tower-defense/internal/config"
-	"go-tower-defense/internal/defs"
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/types"
 	"go-tower-defense/internal/utils"
@@ -94,12 +93,8 @@ func (s *MovementSystem) Update(deltaTime float64) {
 				if isEnemy && !enemy.ReachedEnd {
 					enemy.ReachedEnd = true
 					if !s.game.IsGodMode() {
-						log.Printf("[LOGIC] Враг %d достиг цели. Наносим урон.", id)
-						damage := s.rng.Intn(3) + 1
-						if enemyDef, ok := defs.EnemyDefs[enemy.DefID]; ok && enemyDef.ID == "ENEMY_BOSS" {
-							damage = 10
-						}
-						playerState.Health -= damage
+						log.Printf("[LOGIC] Враг %d достиг цели. Наносим урон: %d.", id, enemy.Damage)
+						playerState.Health -= enemy.Damage
 						if playerState.Health < 0 {
 							playerState.Health = 0
 						}

@@ -1,0 +1,344 @@
+Я вижу проблему с наведением турели. В вашем коде есть несколько мест, где нужны корректировки. Основная проблема в том, что углы вычисляются и применяются непоследовательно.
+
+Вот исправленный код для `CombatSystem`:
+
+```go
+// internal/system/combat.go
+package system
+
+import (
+	"go-tower-defense/internal/component"
+	"go-tower-defense/internal/config"
+	"go-tower-defense/internal/defs"
+	"go-tower-defense/internal/entity"
+	"go-tower-defense/internal/event"
+	"go-tower-defense/internal/types"
+	"go-tower-defense/internal/utils"
+	"go-tower-defense/pkg/hexmap"
+	"log"
+	"math"
+	"math/rand"
+	"sort"
+	"time"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+// ... (OreConsumptionData и начало CombatSystem без изменений) ...
+
+func (s *CombatSystem) Update(deltaTime float64) {
+	for id, combat := range s.ecs.Combats {
+		tower, hasTower := s.ecs.Towers[id]
+		if !hasTower {
+			continue
+		}
+
+		// --- ИСПРАВЛЕННЫЙ БЛОК: Логика вращения турели ---
+		if turret, hasTurret := s.ecs.Turrets[id]; hasTurret {
+			// Находим ближайшую цель в радиусе, даже если башня не активна или перезаряжается
+			targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, 1)
+			if len(targets) > 0 {
+				targetID := targets[0]
+				if targetPos, ok := s.ecs.Positions[targetID]; ok {
+					towerPosX, towerPosY := tower.Hex.ToPixel(config.HexSize)
+					// Вычисляем целевой угол в радианах
+					// Угол от башни к цели
+					dx := targetPos.X - towerPosX
+					dy := targetPos.Y - towerPosY
+					turret.TargetAngle = float32(math.Atan2(dy, dx))
+					turret.TargetID = targetID
+				}
+			} else {
+				turret.TargetID = 0 // Сбрасываем цель, если врагов нет
+				// Опционально: можно добавить возврат к нейтральной позиции
+				// turret.TargetAngle = 0
+			}
+
+			// Плавный поворот турели к цели с нормализацией углов
+			turret.CurrentAngle = utils.LerpAngle(turret.CurrentAngle, turret.TargetAngle, turret.TurnSpeed*float32(deltaTime))
+		}
+		// --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
+
+		// ... (остальная часть Update без изменений) ...
+		if !tower.IsActive {
+			continue
+		}
+
+		towerDef, ok := defs.TowerDefs[tower.DefID]
+		if !ok {
+			log.Printf("CombatSystem: Could not find tower definition for ID %s", tower.DefID)
+			continue
+		}
+
+		if combat.Attack.Type == defs.BehaviorAreaOfEffect || combat.Attack.Type == defs.BehaviorNone {
+			continue
+		}
+
+		if combat.FireCooldown > 0 {
+			combat.FireCooldown -= deltaTime
+			continue
+		}
+
+		powerSources := s.powerSourceFinder(id)
+		if len(powerSources) == 0 {
+			continue
+		}
+
+		var totalReserve float64
+		for _, sourceID := range powerSources {
+			if ore, ok := s.ecs.Ores[sourceID]; ok {
+				totalReserve += ore.CurrentReserve
+			}
+		}
+
+		if totalReserve < combat.ShotCost {
+			continue
+		}
+
+		attackPerformed := false
+		switch combat.Attack.Type {
+		case defs.BehaviorProjectile:
+			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
+		case defs.BehaviorLaser:
+			attackPerformed = s.handleLaserAttack(id, tower, combat, &towerDef)
+		default:
+			attackPerformed = s.handleProjectileAttack(id, tower, combat, &towerDef)
+		}
+
+		if attackPerformed {
+			availableSources := []types.EntityID{}
+			for _, sourceID := range powerSources {
+				if ore, ok := s.ecs.Ores[sourceID]; ok && ore.CurrentReserve > 0 {
+					availableSources = append(availableSources, sourceID)
+				}
+			}
+			if len(availableSources) > 0 {
+				chosenSourceID := availableSources[rand.Intn(len(availableSources))]
+
+				consumptionData := OreConsumptionData{
+					SourceID: chosenSourceID,
+					Amount:   combat.ShotCost,
+				}
+				s.eventDispatcher.Dispatch(event.Event{
+					Type: event.OreConsumed,
+					Data: consumptionData,
+				})
+
+				fireRate := combat.FireRate
+				if auraEffect, ok := s.ecs.AuraEffects[id]; ok {
+					fireRate *= auraEffect.SpeedMultiplier
+				}
+				combat.FireCooldown = 1.0 / fireRate
+			}
+		}
+	}
+}
+
+// ... (остальные методы без изменений) ...
+```
+
+Теперь исправим `render.go` для правильного отображения турели:
+
+```go
+// internal/system/render.go
+// ... (начало файла без изменений) ...
+
+func (s *RenderSystemRL) drawTower(id types.EntityID, tower *component.Tower, data *CachedRenderData, scaledRadius float32, color rl.Color, hasStroke bool) {
+	towerDef, _ := defs.TowerDefs[tower.DefID]
+
+	// --- ИСПРАВЛЕННАЯ логика отрисовки башен с турелью ---
+	if turret, hasTurret := s.ecs.Turrets[id]; hasTurret {
+		baseModel, hasBase := s.modelManager.GetBaseModel(tower.DefID)
+		headModel, hasHead := s.modelManager.GetHeadModel(tower.DefID)
+
+		if hasBase && hasHead {
+			wireBaseModel, _ := s.modelManager.GetWireBaseModel(tower.DefID)
+			wireHeadModel, _ := s.modelManager.GetWireHeadModel(tower.DefID)
+			
+			position := data.WorldPos
+			finalScale := rl.NewVector3(1.0, 1.0, 1.0)
+			
+			// Рисуем базу
+			rl.DrawModelEx(baseModel, position, rl.NewVector3(0, 1, 0), 0, finalScale, color)
+			if hasStroke {
+				rl.DrawModelWiresEx(wireBaseModel, position, rl.NewVector3(0, 1, 0), 0, finalScale, config.TowerWireColorRL)
+			}
+
+			// Рисуем голову с поворотом
+			baseHeight, ok := s.modelManager.GetBaseModelHeight(tower.DefID)
+			if !ok {
+				baseHeight = data.Height * 0.6 
+			}
+			headPos := rl.NewVector3(position.X, baseHeight, position.Z)
+			
+			// Конвертируем угол из радиан в градусы
+			// CurrentAngle - это угол в радианах, где 0 указывает вправо (по оси X+)
+			rotationAngleDegrees := turret.CurrentAngle * rl.Rad2deg
+			
+			// Если модель смотрит в другую сторону по умолчанию, добавьте коррекцию:
+			// Например, если модель смотрит влево по умолчанию:
+			// rotationAngleDegrees += 180.0
+			// Если модель смотрит вперёд (по оси Z-):
+			// rotationAngleDegrees -= 90.0
+			
+			rl.DrawModelEx(headModel, headPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, finalScale, color)
+			if hasStroke {
+				rl.DrawModelWiresEx(wireHeadModel, headPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, finalScale, config.TowerWireColorRL)
+			}
+
+		} else {
+			// Фоллбэк на процедурную генерацию
+			scaleFactor := float32(1.5)
+			baseHeight := data.Height * 0.6 * scaleFactor
+			baseRadius := scaledRadius * 1.1 * scaleFactor
+			basePos := data.WorldPos
+			baseTopPos := rl.NewVector3(basePos.X, baseHeight, basePos.Z)
+
+			rl.DrawCylinderEx(basePos, baseTopPos, baseRadius, baseRadius, 6, color)
+			if hasStroke {
+				rl.DrawCylinderWiresEx(basePos, baseTopPos, baseRadius, baseRadius, 6, config.TowerWireColorRL)
+			}
+
+			turretHeight := data.Height * 0.5 * scaleFactor
+			turretWidth := scaledRadius * 1.5 * scaleFactor
+			turretLength := scaledRadius * 0.7 * scaleFactor
+			turretCenterPos := rl.NewVector3(basePos.X, baseHeight+turretHeight/2, basePos.Z)
+			
+			// Для процедурной модели (куба) тоже корректируем угол
+			rotationAngleDegrees := turret.CurrentAngle * rl.Rad2deg
+			turretScale := rl.NewVector3(turretWidth, turretHeight, turretLength)
+			
+			rl.DrawModelEx(s.cubeModel, turretCenterPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, turretScale, color)
+			if hasStroke {
+				rl.DrawModelWiresEx(s.cubeModel, turretCenterPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, turretScale, config.TowerWireColorRL)
+			}
+		}
+		return
+	}
+	// --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
+
+	// Обычная отрисовка для башен без турели (без изменений)
+	model, ok := s.modelManager.GetModel(tower.DefID)
+	if !ok {
+		return
+	}
+	wireModel, ok := s.modelManager.GetWireModel(tower.DefID)
+	if !ok {
+		return
+	}
+	
+	position := data.WorldPos
+	if tower.CraftingLevel >= 1 {
+		position.Y += 3.05
+	}
+	finalScale := rl.NewVector3(1.0, 1.0, 1.0)
+
+	if towerDef.Type == defs.TowerTypeWall {
+		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, finalScale, rl.White)
+	} else {
+		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, finalScale, color)
+	}
+
+	if hasStroke {
+		rl.DrawModelWiresEx(wireModel, position, rl.NewVector3(0, 1, 0), 0, finalScale, config.TowerWireColorRL)
+	}
+}
+
+// Исправленная функция отладки
+func (s *RenderSystemRL) drawDebugTurretLines() {
+	rl.DisableDepthTest()
+	defer rl.EnableDepthTest()
+
+	for id, turret := range s.ecs.Turrets {
+		combat, hasCombat := s.ecs.Combats[id]
+		tower, hasTower := s.ecs.Towers[id]
+		renderable, hasRenderable := s.ecs.Renderables[id]
+		if !hasCombat || !hasTower || !hasRenderable {
+			continue
+		}
+
+		// Определяем начальную точку (центр турели)
+		towerPos := s.hexToWorld(tower.Hex)
+		baseHeight, ok := s.modelManager.GetBaseModelHeight(tower.DefID)
+		if !ok {
+			baseHeight = s.GetTowerRenderHeight(tower, renderable) * 0.6
+		}
+		startPos := rl.NewVector3(towerPos.X, baseHeight, towerPos.Z)
+
+		// Рисуем белую линию текущего направления турели
+		lineLength := float32(combat.Range) * float32(config.HexSize*config.CoordScale)
+		
+		// CurrentAngle - это угол в радианах
+		endPos := rl.NewVector3(
+			startPos.X+lineLength*float32(math.Cos(float64(turret.CurrentAngle))),
+			startPos.Y,
+			startPos.Z+lineLength*float32(math.Sin(float64(turret.CurrentAngle))),
+		)
+		rl.DrawLine3D(startPos, endPos, rl.White)
+
+		// Если есть цель, рисуем красную линию к ней
+		if turret.TargetID != 0 {
+			if targetPos, ok := s.ecs.Positions[turret.TargetID]; ok {
+				targetWorldPos := s.pixelToWorld(*targetPos)
+				targetWorldPos.Y = startPos.Y
+				rl.DrawLine3D(startPos, targetWorldPos, rl.Red)
+			}
+		}
+
+		// Рисуем зелёную линию целевого угла
+		targetEndPos := rl.NewVector3(
+			startPos.X+lineLength*float32(math.Cos(float64(turret.TargetAngle)))*0.9,
+			startPos.Y,
+			startPos.Z+lineLength*float32(math.Sin(float64(turret.TargetAngle)))*0.9,
+		)
+		rl.DrawLine3D(startPos, targetEndPos, rl.Green)
+	}
+}
+
+// ... (остальная часть файла без изменений) ...
+```
+
+Также добавьте вспомогательную функцию в `utils` если её ещё нет:
+
+```go
+// internal/utils/math.go
+package utils
+
+import "math"
+
+// LerpAngle выполняет линейную интерполяцию между двумя углами с учётом кратчайшего пути
+func LerpAngle(from, to float32, t float32) float32 {
+	// Нормализуем углы в диапазон [-π, π]
+	from = NormalizeAngle(from)
+	to = NormalizeAngle(to)
+	
+	// Находим кратчайшую разницу
+	diff := to - from
+	if diff > math.Pi {
+		diff -= 2 * math.Pi
+	} else if diff < -math.Pi {
+		diff += 2 * math.Pi
+	}
+	
+	return NormalizeAngle(from + diff*t)
+}
+
+// NormalizeAngle нормализует угол в диапазон [-π, π]
+func NormalizeAngle(angle float32) float32 {
+	for angle > math.Pi {
+		angle -= 2 * math.Pi
+	}
+	for angle < -math.Pi {
+		angle += 2 * math.Pi
+	}
+	return angle
+}
+```
+
+Основные исправления:
+1. Убрал лишние коррекции углов (-180°, -90°)
+2. Упростил вычисление углов - теперь используется стандартный `atan2(dy, dx)`
+3. Добавил правильную нормализацию углов через `LerpAngle`
+4. Улучшил отладочную визуализацию
+
+Теперь турель должна правильно наводиться на врагов!

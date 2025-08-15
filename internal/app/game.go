@@ -95,7 +95,6 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.Tow
 		Wave:            1,
 		BaseHealth:      config.BaseHealth,
 		ECS:             ecs,
-		WaveSystem:      system.NewWaveSystem(ecs, hexMap, eventDispatcher),
 		OreSystem:       system.NewOreSystem(ecs, eventDispatcher),
 		EventDispatcher: eventDispatcher,
 		Font:            font,
@@ -106,6 +105,7 @@ func NewGame(hexMap *hexmap.HexMap, font rl.Font, towerDefs map[string]*defs.Tow
 		isGodMode:       false,
 		ModelManager:    modelManager, // Сохраняем менеджер
 	}
+	g.WaveSystem = system.NewWaveSystem(ecs, hexMap, eventDispatcher, g.Rng)
 	// ВАЖНО: Системы, зависящие от g, создаются после инициализации g
 	g.MovementSystem = system.NewMovementSystem(ecs, g, g.Rng)
 	g.RenderSystem = system.NewRenderSystemRL(ecs, font, modelManager) // Передаем менеджер в рендер
@@ -319,6 +319,14 @@ func (l *GameEventListener) OnEvent(e event.Event) {
 		l.game.cleanupOrphanedLines()
 		l.game.updateAllTowerAppearances()
 	case event.WaveEnded:
+		// Логируем состояние руды в конце волны
+		playerState, ok := l.game.ECS.PlayerState[l.game.PlayerID]
+		if ok {
+			reserve := l.game.GetCurrentOreReserve()
+			consumption := l.game.CalculateOreConsumptionRate()
+			log.Printf("[ORE_ANALYSIS] Wave %d Ended | Level: %d, Reserve: %.1f, ConsumptionRate: %.1f/s",
+				l.game.Wave-1, playerState.Level, reserve, consumption)
+		}
 		l.game.StateSystem.SwitchToBuildState()
 	case event.CombineTowersRequest:
 		if towerID, ok := e.Data.(types.EntityID); ok {
@@ -421,6 +429,31 @@ func (g *Game) UpdateCheckpointHighlighting() {
 			}
 		}
 	}
+}
+
+// GetCurrentOreReserve возвращает общий текущий запас руды.
+func (g *Game) GetCurrentOreReserve() float64 {
+	var totalReserve float64
+	for _, ore := range g.ECS.Ores {
+		totalReserve += ore.CurrentReserve
+	}
+	return totalReserve
+}
+
+// CalculateOreConsumptionRate рассчитывает потенциальный расход руды в секунду.
+func (g *Game) CalculateOreConsumptionRate() float64 {
+	var rate float64
+	for id, combat := range g.ECS.Combats {
+		tower, ok := g.ECS.Towers[id]
+		if !ok || !tower.IsActive {
+			continue
+		}
+		// Учитываем только атакующие башни, у которых есть стоимость выстрела
+		if combat.ShotCost > 0 {
+			rate += combat.ShotCost * combat.FireRate
+		}
+	}
+	return rate
 }
 
 // UpdateFuturePath рассчитывает и сохраняет путь, по которому пойдут следующие враги.
@@ -1041,7 +1074,7 @@ func (g *Game) createPlayerEntity() {
 		Level:         initialLevel,
 		CurrentXP:     0,
 		XPToNextLevel: config.CalculateXPForNextLevel(initialLevel),
-		Health:        20, // Устанавливаем начальное здоровье
+		Health:        100, // Устанавливаем начальное здоровье
 	}
 }
 

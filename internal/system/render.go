@@ -34,6 +34,7 @@ type RenderSystemRL struct {
 	frustum      [6]rl.Vector4
 	laserModel   rl.Model
 	ellipseModel rl.Model
+	cubeModel    rl.Model // Модель куба для процедурных башен
 }
 
 // NewRenderSystemRL создает новую оптимизированную систему рендеринга
@@ -45,7 +46,9 @@ func NewRenderSystemRL(ecs *entity.ECS, font rl.Font, modelManager *assets.Model
 		renderCache:  make(map[types.EntityID]*CachedRenderData),
 	}
 	rs.pregenerateLaserModel()
+	// Генерируем модели-плейсхолдеры один раз
 	rs.ellipseModel = rl.LoadModelFromMesh(rl.GenMeshCube(1.0, 1.0, 1.0))
+	rs.cubeModel = rl.LoadModelFromMesh(rl.GenMeshCube(1.0, 1.0, 1.0))
 	return rs
 }
 
@@ -144,7 +147,7 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 }
 
 // Draw использует кэшированные данные для отрисовки
-func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func(), clearedCheckpoints map[hexmap.Hex]bool, futurePath []hexmap.Hex) {
+func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, hiddenLineID types.EntityID, gameState component.GamePhase, cancelDrag func(), clearedCheckpoints map[hexmap.Hex]bool, futurePath []hexmap.Hex, visualDebugEnabled bool) {
 	if s.camera == nil {
 		return
 	}
@@ -159,6 +162,10 @@ func (s *RenderSystemRL) Draw(gameTime float64, isDragging bool, sourceTowerID, 
 	s.drawDraggingLine(isDragging, sourceTowerID, cancelDrag)
 	s.drawText()
 	s.drawCombinationIndicators()
+
+	if visualDebugEnabled {
+		s.drawDebugTurretLines()
+	}
 }
 
 // ... (drawFuturePath, drawClearedCheckpoints, drawBeaconSectors без изменений) ...
@@ -265,7 +272,7 @@ func (s *RenderSystemRL) drawSolidEntities() {
 				rl.DrawSphereWires(pos, scaledRadius, 8, 8, rl.White)
 			}
 		} else if tower, isTower := s.ecs.Towers[id]; isTower {
-			s.drawTower(tower, data, scaledRadius, finalColor, renderable.HasStroke)
+			s.drawTower(id, tower, data, scaledRadius, finalColor, renderable.HasStroke)
 			if _, ok := s.ecs.Combinables[id]; ok {
 				indicatorPos := data.WorldPos
 				indicatorPos.Y = data.Height + 4.0
@@ -308,47 +315,92 @@ func (s *RenderSystemRL) DrawProjectiles() {
 	}
 }
 
-func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderData, scaledRadius float32, color rl.Color, hasStroke bool) {
+func (s *RenderSystemRL) drawTower(id types.EntityID, tower *component.Tower, data *CachedRenderData, scaledRadius float32, color rl.Color, hasStroke bool) {
 	towerDef, _ := defs.TowerDefs[tower.DefID]
 
-	// Особый случай для майнеров
-	if towerDef.Type == defs.TowerTypeMiner {
-		baseWidthMultiplier := float32(1.32)
-		minerTowerHeightMultiplier := float32(1.56)
-		startPos := rl.NewVector3(data.WorldPos.X, 0, data.WorldPos.Z)
-		endPos := rl.NewVector3(data.WorldPos.X, data.Height*minerTowerHeightMultiplier, data.WorldPos.Z)
-		radius := scaledRadius * 1.2 * baseWidthMultiplier
-		rl.DrawCylinderEx(startPos, endPos, radius, 0, 9, color)
-		if hasStroke {
-			rl.DrawCylinderWiresEx(startPos, endPos, radius, 0, 9, config.TowerWireColorRL)
+	// --- Логика отрисовки башен с турелью ---
+	if turret, hasTurret := s.ecs.Turrets[id]; hasTurret {
+		baseModel, hasBase := s.modelManager.GetBaseModel(tower.DefID)
+		headModel, hasHead := s.modelManager.GetHeadModel(tower.DefID)
+
+		// Если есть кастомные модели для базы и головы
+		if hasBase && hasHead {
+			wireBaseModel, _ := s.modelManager.GetWireBaseModel(tower.DefID)
+			wireHeadModel, _ := s.modelManager.GetWireHeadModel(tower.DefID)
+
+			position := data.WorldPos
+			finalScale := rl.NewVector3(1.0, 1.0, 1.0)
+
+			// Рисуем базу
+			rl.DrawModelEx(baseModel, position, rl.NewVector3(0, 1, 0), 0, finalScale, color)
+			if hasStroke {
+				rl.DrawModelWiresEx(wireBaseModel, position, rl.NewVector3(0, 1, 0), 0, finalScale, config.TowerWireColorRL)
+			}
+
+			baseHeight, ok := s.modelManager.GetBaseModelHeight(tower.DefID)
+			if !ok {
+				// Фоллбэк на случай, если высота не была вычислена (не должно происходить)
+				baseHeight = data.Height * 0.6
+			}
+			headPos := rl.NewVector3(position.X, baseHeight, position.Z)
+			// Применяем угол из логики, инвертировав его для коррекции направления вращения
+			rotationAngleDegrees := -turret.CurrentAngle * rl.Rad2deg
+
+			rl.DrawModelEx(headModel, headPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, finalScale, color)
+			if hasStroke {
+				rl.DrawModelWiresEx(wireHeadModel, headPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, finalScale, config.TowerWireColorRL)
+			}
+
+		} else {
+			// Фоллбэк на процедурную генерацию, если моделей нет
+			scaleFactor := float32(1.5)
+			baseHeight := data.Height * 0.6 * scaleFactor
+			baseRadius := scaledRadius * 1.1 * scaleFactor
+			basePos := data.WorldPos
+			baseTopPos := rl.NewVector3(basePos.X, baseHeight, basePos.Z)
+
+			rl.DrawCylinderEx(basePos, baseTopPos, baseRadius, baseRadius, 6, color)
+			if hasStroke {
+				rl.DrawCylinderWiresEx(basePos, baseTopPos, baseRadius, baseRadius, 6, config.TowerWireColorRL)
+			}
+
+			turretHeight := data.Height * 0.5 * scaleFactor
+			turretWidth := scaledRadius * 1.5 * scaleFactor
+			turretLength := scaledRadius * 0.7 * scaleFactor
+			turretCenterPos := rl.NewVector3(basePos.X, baseHeight+turretHeight/2, basePos.Z)
+
+			// Применяем инвертированный угол и к процедурной модели
+			rotationAngleDegrees := -turret.CurrentAngle * rl.Rad2deg
+			turretScale := rl.NewVector3(turretWidth, turretHeight, turretLength)
+
+			rl.DrawModelEx(s.cubeModel, turretCenterPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, turretScale, color)
+			if hasStroke {
+				rl.DrawModelWiresEx(s.cubeModel, turretCenterPos, rl.NewVector3(0, 1, 0), rotationAngleDegrees, turretScale, config.TowerWireColorRL)
+			}
 		}
 		return
 	}
+	// --- КОНЕЦ БЛОКА ---
 
-	// --- Получение моделей из менеджера ---
+	// Обычная отрисовка для башен без турели
 	model, ok := s.modelManager.GetModel(tower.DefID)
 	if !ok {
-		return // Модель не найдена
+		return
 	}
 	wireModel, ok := s.modelManager.GetWireModel(tower.DefID)
 	if !ok {
-		return // Проволочная модель не найдена
+		return
 	}
 
 	position := data.WorldPos
 	if tower.CraftingLevel >= 1 {
-		// Приподнимаем башни 1+ уровня крафта на половину их высоты (7.2 / 2)
 		position.Y += 3.05
 	}
-	// Убираем масштабирование из рендера. Размер модели теперь определяется при создании.
 	finalScale := rl.NewVector3(1.0, 1.0, 1.0)
 
-	// --- Логика отрисовки с учетом текстур ---
 	if towerDef.Type == defs.TowerTypeWall {
-		// Для стен используем rl.White, чтобы не перекрашивать текстуру
 		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, finalScale, rl.White)
 	} else {
-		// Для остальных башен используем цвет из definitions
 		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, finalScale, color)
 	}
 
@@ -367,8 +419,6 @@ func (s *RenderSystemRL) GetTowerRenderHeight(tower *component.Tower, renderable
 	switch {
 	case towerDef.Type == defs.TowerTypeWall:
 		return scaledRadius * 1.5
-	case towerDef.Type == defs.TowerTypeMiner:
-		return scaledRadius * 9.0
 	case tower.CraftingLevel >= 1:
 		return scaledRadius * 4.0
 	default:
@@ -547,5 +597,65 @@ func (s *RenderSystemRL) drawVolcanoEffects() {
 		color := colorToRL(effect.Color)
 		color.A = uint8(alpha * 255)
 		rl.DrawSphere(pos, float32(effect.Radius*config.CoordScale), color)
+	}
+}
+
+func (s *RenderSystemRL) drawDebugTurretLines() {
+	rl.DisableDepthTest()
+	defer rl.EnableDepthTest()
+
+	for id, turret := range s.ecs.Turrets {
+		combat, hasCombat := s.ecs.Combats[id]
+		tower, hasTower := s.ecs.Towers[id]
+		renderable, hasRenderable := s.ecs.Renderables[id]
+		if !hasCombat || !hasTower || !hasRenderable {
+			continue
+		}
+
+		// --- 1. Определяем начальную точку (центр турели) ---
+		var startPos rl.Vector3
+		towerPos := s.hexToWorld(tower.Hex)
+
+		baseHeight, ok := s.modelManager.GetBaseModelHeight(tower.DefID)
+		if !ok {
+			// Фоллбэк для процедурных башен
+			baseHeight = s.GetTowerRenderHeight(tower, renderable) * 0.6
+		}
+
+		// Предполагаем, что "голова" находится на вершине базы
+		startPos = rl.NewVector3(towerPos.X, baseHeight, towerPos.Z)
+
+		// --- 2. Рисуем белую линию "идеального" направления ---
+		idealLength := float32(combat.Range) * float32(config.HexSize*config.CoordScale)
+		idealAngle := turret.CurrentAngle // Угол из логики игры
+
+		idealEndPos := rl.NewVector3(
+			startPos.X+idealLength*float32(math.Cos(float64(idealAngle))),
+			startPos.Y, // Линия рисуется на той же высоте
+			startPos.Z+idealLength*float32(math.Sin(float64(idealAngle))),
+		)
+		rl.DrawLine3D(startPos, idealEndPos, rl.White)
+
+		// --- 3. Рисуем локальные оси модели ---
+		axisLength := float32(10.0)                               // Длина осей для наглядности
+		modelAngleRad := turret.CurrentAngle - (180 * rl.Deg2rad) // Угол, который применяется к модели
+
+		cos := float32(math.Cos(float64(modelAngleRad)))
+		sin := float32(math.Sin(float64(modelAngleRad)))
+
+		// Локальная ось X модели (Красная)
+		rotatedX := rl.NewVector3(cos, 0, sin)
+		endPosX := rl.Vector3Add(startPos, rl.Vector3Scale(rotatedX, axisLength))
+		rl.DrawLine3D(startPos, endPosX, rl.Red)
+
+		// Локальная ось Y модели (Зеленая) - "вверх"
+		rotatedY := rl.NewVector3(0, 1, 0)
+		endPosY := rl.Vector3Add(startPos, rl.Vector3Scale(rotatedY, axisLength))
+		rl.DrawLine3D(startPos, endPosY, rl.Green)
+
+		// Локальная ось Z модели (Синяя)
+		rotatedZ := rl.NewVector3(-sin, 0, cos)
+		endPosZ := rl.Vector3Add(startPos, rl.Vector3Scale(rotatedZ, axisLength))
+		rl.DrawLine3D(startPos, endPosZ, rl.Blue)
 	}
 }

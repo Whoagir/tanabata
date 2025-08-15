@@ -16,14 +16,16 @@ type WaveSystem struct {
 	ecs             *entity.ECS
 	hexMap          *hexmap.HexMap
 	eventDispatcher *event.Dispatcher
+	rng             *utils.PRNGService // Добавляем PRNG
 	activeEnemies   int
 }
 
-func NewWaveSystem(ecs *entity.ECS, hexMap *hexmap.HexMap, eventDispatcher *event.Dispatcher) *WaveSystem {
+func NewWaveSystem(ecs *entity.ECS, hexMap *hexmap.HexMap, eventDispatcher *event.Dispatcher, rng *utils.PRNGService) *WaveSystem {
 	ws := &WaveSystem{
 		ecs:             ecs,
 		hexMap:          hexMap,
 		eventDispatcher: eventDispatcher,
+		rng:             rng, // Инициализируем PRNG
 		activeEnemies:   0,
 	}
 	eventDispatcher.Subscribe(event.EnemyRemovedFromGame, ws)
@@ -57,6 +59,13 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 		return
 	}
 
+	// Берем урон из заранее рассчитанного списка
+	damage := 0
+	if len(wave.DamagePerEnemy) > 0 {
+		damage = wave.DamagePerEnemy[0]
+		wave.DamagePerEnemy = wave.DamagePerEnemy[1:]
+	}
+
 	id := s.ecs.NewEntity()
 	x, y := utils.HexToScreen(s.hexMap.Entry)
 	s.ecs.Positions[id] = &component.Position{X: x, Y: y}
@@ -74,7 +83,8 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 		LineDamageCooldown:  0,
 		PhysicalArmor:       def.PhysicalArmor,
 		MagicalArmor:        def.MagicalArmor,
-		LastCheckpointIndex: -1, // Явно устанавливаем -1, чтобы избежать бага с подсветкой
+		Damage:              damage, // Устанавливаем урон
+		LastCheckpointIndex: -1,
 	}
 	s.activeEnemies++
 }
@@ -82,12 +92,10 @@ func (s *WaveSystem) spawnEnemy(wave *component.Wave) {
 func (s *WaveSystem) StartWave(waveNumber int) *component.Wave {
 	waveDef, ok := defs.WavePatterns[waveNumber]
 	if !ok {
-		// Логика для волн после 10-й: повторяем с 6-й по 10-ю
 		repeatingWaveNumber := ((waveNumber - 6) % 5) + 6
 		waveDef, ok = defs.WavePatterns[repeatingWaveNumber]
 		if !ok {
 			log.Printf("Критическая ошибка: не найдено определение для повторяющейся волны %d", repeatingWaveNumber)
-			// В качестве запасного варианта, используем первую волну
 			waveDef = defs.WavePatterns[1]
 		}
 	}
@@ -98,6 +106,27 @@ func (s *WaveSystem) StartWave(waveNumber int) *component.Wave {
 		return nil
 	}
 
+	// --- Расчет урона для каждого врага ---
+	totalDamage := 100
+	enemyCount := waveDef.Count
+	baseDamage := totalDamage / enemyCount
+	remainder := totalDamage % enemyCount
+
+	damageList := make([]int, enemyCount)
+	for i := 0; i < enemyCount; i++ {
+		damageList[i] = baseDamage
+	}
+	// Распределяем остаток случайным образом
+	perm := s.rng.Perm(enemyCount)
+	for i := 0; i < remainder; i++ {
+		damageList[perm[i]]++
+	}
+	// Перемешиваем еще раз для большей случайности
+	s.rng.Shuffle(len(damageList), func(i, j int) {
+		damageList[i], damageList[j] = damageList[j], damageList[i]
+	})
+	// -----------------------------------------
+
 	return &component.Wave{
 		Number:         waveNumber,
 		EnemiesToSpawn: waveDef.Count,
@@ -105,10 +134,12 @@ func (s *WaveSystem) StartWave(waveNumber int) *component.Wave {
 		SpawnInterval:  waveDef.SpawnInterval.Seconds(),
 		CurrentPath:    fullPath,
 		EnemyID:        waveDef.EnemyID,
+		DamagePerEnemy: damageList, // Сохраняем список уронов
 	}
 }
 
 func (s *WaveSystem) calculatePath() []hexmap.Hex {
+	// ... (код расчета пути остается без изменений)
 	fullPath := []hexmap.Hex{}
 	if len(s.hexMap.Checkpoints) == 0 {
 		path := hexmap.AStar(s.hexMap.Entry, s.hexMap.Exit, s.hexMap)

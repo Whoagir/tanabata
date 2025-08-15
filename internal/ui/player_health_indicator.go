@@ -2,77 +2,110 @@
 package ui
 
 import (
-	"strconv"
+	"go-tower-defense/internal/config"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 const (
-	HealthRows          = 5
-	HealthCols          = 4
-	HealthCircleRadius  = 8.0
-	HealthCircleSpacing = 4.0
+	HealthSegments    = 7
+	HealthBarHeight   = 10.0
+	HealthBarSpacing  = 2.0
+	HealthBarYOffset  = 25.0
+	HealthTotalWidth  = 120.0 // Ширина, аналогичная одной жиле в индикаторе руды
 )
 
-// PlayerHealthIndicator отображает здоровье игрока.
+// PlayerHealthIndicator отображает здоровье игрока в виде сегментированного бара.
 type PlayerHealthIndicator struct {
-	Position rl.Vector2
+	X, Y float32
 }
 
 // NewPlayerHealthIndicator создает новый индикатор здоровья.
 func NewPlayerHealthIndicator(x, y float32) *PlayerHealthIndicator {
 	return &PlayerHealthIndicator{
-		Position: rl.NewVector2(x, y),
+		X: x,
+		Y: y,
 	}
 }
 
-// Draw рисует индикатор здоровья игрока в виде сетки кружков.
+// Draw рисует индикатор здоровья игрока в виде сегментированного бара.
 func (i *PlayerHealthIndicator) Draw(health int, maxHealth int) {
-	startX := i.Position.X
-	startY := i.Position.Y
-	halfHealth := maxHealth / 2
-
-	for j := 0; j < maxHealth; j++ {
-		row := j / HealthCols
-		col := j % HealthCols
-
-		x := startX + float32(col*(HealthCircleRadius*2+HealthCircleSpacing))
-		y := startY + float32(row*(HealthCircleRadius*2+HealthCircleSpacing))
-
-		var color rl.Color
-		if j < health {
-			// Если текущий кружок меньше или равен половине здоровья, он красный
-			if health <= halfHealth {
-				color = rl.Red
-			} else {
-				// Если здоровье больше половины, то "избыток" синий, остальное красное
-				if j < (health - halfHealth) {
-					color = rl.Blue
-				} else {
-					color = rl.Red
-				}
-			}
-		} else {
-			// Пустые ячейки - черные
-			color = rl.Black
-		}
-
-		// Рисуем сам кружок
-		rl.DrawCircle(int32(x+HealthCircleRadius), int32(y+HealthCircleRadius), HealthCircleRadius, color)
-		// Рисуем белую обводку
-		rl.DrawCircleLines(int32(x+HealthCircleRadius), int32(y+HealthCircleRadius), HealthCircleRadius, rl.White)
+	percentage := float32(health) / float32(maxHealth)
+	if health < 0 {
+		percentage = 0
 	}
 
-	// Текстовое отображение здоровья над сеткой
-	healthText := strconv.Itoa(health) + "/" + strconv.Itoa(maxHealth)
-	textWidth := rl.MeasureText(healthText, 20)
-	rl.DrawText(healthText, int32(startX+((HealthCols*(HealthCircleRadius*2+HealthCircleSpacing))-float32(textWidth))/2), int32(startY)-25, 20, rl.White)
+	segmentWidth := (HealthTotalWidth - float32(HealthSegments-1)*HealthBarSpacing) / float32(HealthSegments)
+	currentX := i.X
+
+	emptySegments, activeColor := i.getHealthState(percentage)
+
+	for j := 0; j < HealthSegments; j++ {
+		rect := rl.NewRectangle(currentX, i.Y, segmentWidth, HealthBarHeight)
+		var fillColor rl.Color
+
+		if j < emptySegments {
+			fillColor = config.HealthIndicatorEmptyColor
+		} else {
+			fillColor = activeColor
+		}
+
+		if health <= 0 {
+			fillColor = config.OreIndicatorDepletedColor
+		}
+
+		rl.DrawRectangleRec(rect, fillColor)
+		rl.DrawRectangleLinesEx(rect, 2, config.UIBorderColor)
+
+		currentX += segmentWidth + HealthBarSpacing
+	}
+}
+
+// getHealthState определяет, сколько сегментов должно быть пустым и какой цвет у активных.
+func (i *PlayerHealthIndicator) getHealthState(percentage float32) (int, rl.Color) {
+	var emptyCount int
+	var activeColor rl.Color
+
+	// Определяем количество пустых сегментов (справа налево)
+	thresholds := make([]float32, HealthSegments)
+	for k := 0; k < HealthSegments; k++ {
+		// Сегменты пустеют справа налево
+		thresholds[k] = (float32(k) / float32(HealthSegments))
+	}
+
+	activeSegments := 0
+	for _, t := range thresholds {
+		if percentage > t {
+			activeSegments++
+		}
+	}
+    // Инвертируем, так как мы считаем пустые сегменты СЛЕВА
+    emptyCount = HealthSegments - activeSegments
+
+
+	// Определяем цвет для активных сегментов
+	redThreshold := float32(0.20)
+	yellowThreshold := float32(0.50)
+
+	if percentage <= 0 {
+		activeColor = config.OreIndicatorDepletedColor
+	} else if percentage < redThreshold {
+		activeColor = config.HealthIndicatorCriticalColor
+	} else if percentage < yellowThreshold {
+		activeColor = config.HealthIndicatorWarningColor
+	} else {
+		activeColor = config.HealthIndicatorFullColor
+	}
+
+	return emptyCount, activeColor
 }
 
 // GetHeight возвращает общую высоту индикатора.
 func (i *PlayerHealthIndicator) GetHeight() float32 {
-	// Высота текста над сеткой + отступ + высота самой сетки
-	textHeight := float32(25)
-	gridHeight := float32(HealthRows*(HealthCircleRadius*2+HealthCircleSpacing))
-	return textHeight + gridHeight
+	return HealthBarHeight
+}
+
+// GetWidth возвращает общую ширину индикатора.
+func (i *PlayerHealthIndicator) GetWidth() float32 {
+	return HealthTotalWidth
 }

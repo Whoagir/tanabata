@@ -61,6 +61,8 @@ const (
 	CameraOrthoZoomStep    = 10.0  // Шаг "зума" для орто-режима
 
 	UIBorderWidth = 2.0 // Ширина обводки для элементов UI
+
+	TowerTurnSpeed = 3.14 // Скорость поворота башни в радианах в секунду (PI = 180 градусов/сек)
 )
 
 // Цвета для Ebiten (останутся для справки или если где-то еще используются)
@@ -120,11 +122,17 @@ var (
 	UIndicatorStrikethroughColorRL = rl.NewColor(255, 255, 255, 150)
 
 	// Цвета для нового индикатора руды
-	OreIndicatorFullColor     = rl.NewColor(70, 130, 180, 220) // Насыщенный синий
+	OreIndicatorFullColor     = UIColorBlue // Насыщенный синий
 	OreIndicatorEmptyColor    = rl.NewColor(0, 0, 0, 0)        // Полностью прозрачный
 	OreIndicatorWarningColor  = rl.NewColor(217, 83, 79, 220)  // Насыщенный красный
 	OreIndicatorCriticalColor = rl.NewColor(240, 173, 78, 220) // Насыщенный желтый/оранжевый
 	OreIndicatorDepletedColor = rl.NewColor(10, 10, 10, 220)   // Очень темный серый (почти черный)
+
+	// Цвета для нового индикатора здоровья
+	HealthIndicatorFullColor     = UIColorBlue  // Приглушенный синий
+	HealthIndicatorWarningColor  = rl.NewColor(240, 173, 78, 220) // Насыщенный желтый/оранжевый
+	HealthIndicatorCriticalColor = rl.NewColor(217, 83, 79, 220)  // Насыщенный красный
+	HealthIndicatorEmptyColor    = rl.NewColor(0, 0, 0, 0)        // Полностью прозрачный
 
 	// --- Игровые цвета (НЕ ТРОГАТЬ) ---
 	BackgroundColorRL       = rl.NewColor(30, 30, 30, 255)

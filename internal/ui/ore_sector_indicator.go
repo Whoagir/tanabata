@@ -26,6 +26,31 @@ func NewOreSectorIndicatorRL(x, y, totalWidth, segmentHeight float32) *OreSector
 	}
 }
 
+// getCentralVeinColors определяет цвета для трех сегментов центральной жилы.
+// Эта функция реализует нелинейную шкалу, предоставленную пользователем.
+// С=Синий, Ч=Черный, К=Красный, Ж=Желтый
+// 100-96=ССС | 96-84=ЧСС | 84-64=ЧЧС | 64-36=ЧЧК | 36-1=ЧЧЖ | 1-0=ЧЧЧ
+func getCentralVeinColors(percentage float32) [3]rl.Color {
+	blue := config.OreIndicatorFullColor
+	black := config.OreIndicatorDepletedColor
+	red := config.OreIndicatorWarningColor
+	yellow := config.OreIndicatorCriticalColor
+
+	if percentage >= 0.98 {
+		return [3]rl.Color{blue, blue, blue} // ССС
+	} else if percentage >= 0.78 {
+		return [3]rl.Color{black, blue, blue} // ЧСС
+	} else if percentage >= 0.60 {
+		return [3]rl.Color{black, black, blue} // ЧЧС
+	} else if percentage >= 0.30 {
+		return [3]rl.Color{black, black, red} // ЧЧК
+	} else if percentage > 0 {
+		return [3]rl.Color{black, black, yellow} // ЧЧЖ
+	} else {
+		return [3]rl.Color{black, black, black} // ЧЧЧ
+	}
+}
+
 // Draw отрисовывает индикатор.
 func (i *OreSectorIndicatorRL) Draw(centralPct, midPct, farPct float32) {
 	// --- Верхний ряд: Центральная (3) и Средняя (4) жилы ---
@@ -33,7 +58,16 @@ func (i *OreSectorIndicatorRL) Draw(centralPct, midPct, farPct float32) {
 	segmentWidthTop := (i.TotalWidth - float32(topRowSegments-1)*i.Spacing) / float32(topRowSegments)
 	currentX := i.X
 
-	i.drawVeinSegments(&currentX, i.Y, segmentWidthTop, 3, centralPct)
+	// Новая логика для центральной жилы (первые 3 сегмента)
+	centralColors := getCentralVeinColors(centralPct)
+	for _, color := range centralColors {
+		rect := rl.NewRectangle(currentX, i.Y, segmentWidthTop, i.SegmentHeight)
+		rl.DrawRectangleRec(rect, color)
+		rl.DrawRectangleLinesEx(rect, 2, config.UIBorderColor)
+		currentX += segmentWidthTop + i.Spacing
+	}
+
+	// Старая логика для средней жилы (следующие 4 сегмента)
 	i.drawVeinSegments(&currentX, i.Y, segmentWidthTop, 4, midPct)
 
 	// --- Нижний ряд: Крайняя (7) жила ---

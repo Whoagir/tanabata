@@ -7,6 +7,7 @@ import (
 	"go-tower-defense/internal/entity"
 	"go-tower-defense/internal/event" // Импортируем пакет событий
 	"go-tower-defense/internal/types"
+	"go-tower-defense/internal/utils"
 	"go-tower-defense/pkg/hexmap"
 	"log"
 	"math"
@@ -46,7 +47,37 @@ func NewCombatSystem(ecs *entity.ECS, dispatcher *event.Dispatcher,
 func (s *CombatSystem) Update(deltaTime float64) {
 	for id, combat := range s.ecs.Combats {
 		tower, hasTower := s.ecs.Towers[id]
-		if !hasTower || !tower.IsActive {
+		if !hasTower {
+			continue
+		}
+
+		// --- ИСПРАВЛЕННЫЙ БЛОК: Логика вращения турели ---
+		if turret, hasTurret := s.ecs.Turrets[id]; hasTurret {
+			// Находим ближайшую цель в радиусе, даже если башня не активна или перезаряжается
+			targets := s.findTargetsForSplitAttack(tower.Hex, combat.Range, 1)
+			if len(targets) > 0 {
+				targetID := targets[0]
+				if targetPos, ok := s.ecs.Positions[targetID]; ok {
+					towerPosX, towerPosY := tower.Hex.ToPixel(config.HexSize)
+					// Вычисляем целевой угол в радианах
+					// Угол от башни к цели
+					dx := targetPos.X - towerPosX
+					dy := targetPos.Y - towerPosY
+					turret.TargetAngle = float32(math.Atan2(dy, dx))
+					turret.TargetID = targetID
+				}
+			} else {
+				turret.TargetID = 0 // Сбрасываем цель, если врагов нет
+				// Опционально: можно добавить возврат к нейтральной позиции
+				// turret.TargetAngle = 0
+			}
+
+			// Плавный поворот турели к цели с нормализацией углов
+			turret.CurrentAngle = utils.LerpAngle(turret.CurrentAngle, turret.TargetAngle, turret.TurnSpeed*float32(deltaTime))
+		}
+		// --- КОНЕЦ ИСПРАВЛЕННОГО БЛОКА ---
+
+		if !tower.IsActive {
 			continue
 		}
 

@@ -163,7 +163,7 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 	g.ECS.Positions[id] = &component.Position{X: px, Y: py}
 
 	g.ECS.Towers[id] = &component.Tower{
-		DefID:         towerDefID, // <-- Сохраняем ID определения
+		DefID:         towerDefID,
 		Level:         def.Level,
 		CraftingLevel: def.CraftingLevel,
 		Hex:           hex,
@@ -194,6 +194,14 @@ func (g *Game) createTowerEntity(hex hexmap.Hex, towerDefID string) types.Entity
 		Radius:    float32(config.HexSize * def.Visuals.RadiusFactor),
 		HasStroke: true,
 	}
+
+	// Если это башня типа 'TA', добавляем ей компонент турели.
+	if towerDefID == "TA" {
+		g.ECS.Turrets[id] = &component.TurretComponent{
+			TurnSpeed: config.TowerTurnSpeed,
+		}
+	}
+
 	return id
 }
 

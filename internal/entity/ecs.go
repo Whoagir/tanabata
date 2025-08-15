@@ -36,6 +36,7 @@ type ECS struct {
 	PlayerState            map[types.EntityID]*component.PlayerStateComponent // <<< Новый компонент
 	Beacons                map[types.EntityID]*component.Beacon
 	BeaconAttackSectors    map[types.EntityID]*component.BeaconAttackSector
+	Turrets                map[types.EntityID]*component.TurretComponent
 	Wave                   *component.Wave
 	GameState              *component.GameState
 }
@@ -70,6 +71,7 @@ func NewECS() *ECS {
 		PlayerState:            make(map[types.EntityID]*component.PlayerStateComponent), // <<< Инициализация
 		Beacons:                make(map[types.EntityID]*component.Beacon),
 		BeaconAttackSectors:    make(map[types.EntityID]*component.BeaconAttackSector),
+		Turrets:                make(map[types.EntityID]*component.TurretComponent),
 		Wave:                   nil,
 		GameState: &component.GameState{
 			Phase:        component.BuildState,

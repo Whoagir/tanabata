@@ -41,6 +41,7 @@ type GameState struct {
 	checkpointTextures    map[int]rl.Texture2D
 	isGameOver            bool
 	restartButton         rl.Rectangle
+	visualDebugEnabled    bool // Флаг для режима визуальной отладки
 }
 
 // intToRoman конвертирует целое число в римскую цифру
@@ -114,23 +115,44 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		float32(config.IndicatorOffsetX),
 		indicatorRadius,
 	)
+
+	// --- UI-элементы под кнопками паузы/скорости ---
+	// Новый порядок: Руда -> ХП -> Уровень -> Волна
+
+	// Центральная X-координата для выравнивания всех индикаторов
+	centralX := levelIndicatorLeftEdge + levelIndicatorWidth/2
+
+	// 1. Индикатор руды
+	oreIndicatorWidth := float32(120)
+	oreIndicatorHeight := float32(12)
+	oreIndicatorY := float32(config.IndicatorOffsetX + 35) // Начальная Y-позиция
+	oreIndicatorX := centralX - oreIndicatorWidth/2
+	oreSectorIndicator := ui.NewOreSectorIndicatorRL(oreIndicatorX, oreIndicatorY, oreIndicatorWidth, oreIndicatorHeight)
+
+	// 2. Индикатор здоровья
+	// Высота индикатора руды = 2 * высота сегмента + 2 * отступ
+	oreTotalHeight := (oreIndicatorHeight * 2) + (2 * 2)
+	healthIndicatorY := oreIndicatorY + oreTotalHeight + 15 // Y руды + высота руды + отступ
+	tempHealthIndicator := ui.NewPlayerHealthIndicator(0, 0) // Для получения ширины
+	healthIndicatorX := centralX - tempHealthIndicator.GetWidth()/2
+	playerHealthIndicator := ui.NewPlayerHealthIndicator(healthIndicatorX, healthIndicatorY)
+
+	// 3. Индикатор уровня игрока
+	levelIndicatorY := healthIndicatorY + playerHealthIndicator.GetHeight() + 20 // Y здоровья + высота здоровья + отступ
 	playerLevelIndicator := ui.NewPlayerLevelIndicatorRL(
 		levelIndicatorLeftEdge,
-		float32(config.IndicatorOffsetX+35),
+		levelIndicatorY,
 		levelIndicatorWidth,
 	)
 
-	waveIndicatorY := playerLevelIndicator.Y + 44
+	// 4. Индикатор волны
+	waveIndicatorY := levelIndicatorY + 44 // Y уровня + отступ (как было)
 	waveIndicator := ui.NewWaveIndicator(
-		levelIndicatorLeftEdge+levelIndicatorWidth/2,
+		centralX,
 		waveIndicatorY,
 		28,
 	)
 
-	healthIndicatorY := waveIndicator.Y + waveIndicator.FontSize + 40
-	healthIndicatorX := waveIndicator.X - (float32(ui.HealthCols*(ui.HealthCircleRadius*2+ui.HealthCircleSpacing)-ui.HealthCircleSpacing))/2
-
-	playerHealthIndicator := ui.NewPlayerHealthIndicator(healthIndicatorX, healthIndicatorY)
 	infoPanel := ui.NewInfoPanelRL(font, gameLogic.EventDispatcher)
 
 	recipeBookWidth := float32(400)
@@ -147,14 +169,6 @@ func NewGameState(sm *StateMachine, recipeLibrary *defs.CraftingRecipeLibrary, t
 		uIndicatorSize,
 		font,
 	)
-
-	// Новый двухстрочный индикатор руды
-	oreIndicatorWidth := float32(120) // <--- Уменьшил ширину
-	oreIndicatorHeight := float32(12)
-	healthIndicatorWidth := float32(ui.HealthCols*(ui.HealthCircleRadius*2+ui.HealthCircleSpacing) - ui.HealthCircleSpacing)
-	oreIndicatorX := healthIndicatorX + healthIndicatorWidth/2 - oreIndicatorWidth/2
-	oreIndicatorY := healthIndicatorY + playerHealthIndicator.GetHeight() + 15
-	oreSectorIndicator := ui.NewOreSectorIndicatorRL(oreIndicatorX, oreIndicatorY, oreIndicatorWidth, oreIndicatorHeight)
 
 	checkpointTextures := make(map[int]rl.Texture2D)
 	for i := 0; i < len(hexMap.Checkpoints); i++ {
@@ -325,6 +339,11 @@ func (g *GameState) Update(deltaTime float64) {
 
 	if rl.IsKeyPressed(rl.KeyF10) {
 		g.game.ToggleGodMode()
+	}
+
+	// Переключение режима визуальной отладки
+	if rl.IsKeyPressed(rl.KeyF3) {
+		g.visualDebugEnabled = !g.visualDebugEnabled
 	}
 
 	if g.game.ECS.GameState.Phase == component.BuildState || g.game.ECS.GameState.Phase == component.TowerSelectionState {
@@ -534,6 +553,7 @@ func (g *GameState) Draw() {
 		g.game.CancelLineDrag,
 		g.game.ClearedCheckpoints,
 		g.game.FuturePath,
+		g.visualDebugEnabled, // Передаем флаг
 	)
 
 	selectedID := g.infoPanel.TargetEntity
@@ -629,7 +649,7 @@ func (g *GameState) DrawUI() {
 
 	if playerState, ok := g.game.ECS.PlayerState[g.game.PlayerID]; ok {
 		g.playerLevelIndicator.Draw(playerState.Level, playerState.CurrentXP, playerState.XPToNextLevel)
-		g.playerHealthIndicator.Draw(playerState.Health, 20)
+		g.playerHealthIndicator.Draw(playerState.Health, 100)
 	}
 
 	g.waveIndicator.Draw(g.game.Wave, g.font)

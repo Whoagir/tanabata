@@ -35,8 +35,21 @@ func (s *PRNGService) Float64() float64 {
 	return s.rng.Float64()
 }
 
+// Perm возвращает псевдослучайную перестановку целых чисел [0, n).
+func (s *PRNGService) Perm(n int) []int {
+	return s.rng.Perm(n)
+}
+
+// Shuffle псевдослучайно перемешивает элементы.
+// n - количество элементов.
+// swap - функция, которая меняет местами элементы с индексами i и j.
+func (s *PRNGService) Shuffle(n int, swap func(i, j int)) {
+	s.rng.Shuffle(n, swap)
+}
+
+
 // ChooseWeighted выполняет взвешенный случайный выбор из таблицы выпадения.
-// Он суммирует все веса, выбирает случайное число в этом диапазоне,
+// Он суммирует все веса, выбирает случайное число в этом диапазо-не,
 // а затем находит элемент, которому соответствует это число.
 func (s *PRNGService) ChooseWeighted(entries []defs.LootEntry) string {
 	if len(entries) == 0 {

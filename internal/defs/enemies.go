@@ -9,6 +9,7 @@ type EnemyDefinition struct {
 	Speed         float64 `json:"speed"`
 	PhysicalArmor int     `json:"physical_armor"`
 	MagicalArmor  int     `json:"magical_armor"`
+	Damage        int     `json:"damage"`
 	Visuals       Visuals `json:"visuals"`
 }
 
