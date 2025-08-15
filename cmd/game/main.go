@@ -33,6 +33,7 @@ func exportMeshToObj(mesh rl.Mesh, filePath string) error {
 	defer file.Close()
 
 	vertexCount := int(mesh.VertexCount)
+
 	// --- Вершины ---
 	verticesHeader := struct {
 		data unsafe.Pointer
@@ -81,18 +82,40 @@ func exportMeshToObj(mesh rl.Mesh, filePath string) error {
 		}
 	}
 
-	// Запись граней в формате v/vt/vn
-	for i := 1; i <= vertexCount; i += 3 {
-		_, err := fmt.Fprintf(file, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", i, i, i, i+1, i+1, i+1, i+2, i+2, i+2)
-		if err != nil {
-			return err
+	// Запись граней
+	if mesh.Indices != nil {
+		// Продвинутый метод: используем индексы, если они есть
+		triangleCount := int(mesh.TriangleCount)
+		indicesHeader := struct {
+			data unsafe.Pointer
+			len  int
+			cap  int
+		}{unsafe.Pointer(mesh.Indices), triangleCount * 3, triangleCount * 3}
+		indices := *(*[]uint16)(unsafe.Pointer(&indicesHeader))
+
+		for i := 0; i < len(indices); i += 3 {
+			// OBJ формат использует 1-based индексацию, поэтому добавляем 1
+			i1 := indices[i] + 1
+			i2 := indices[i+1] + 1
+			i3 := indices[i+2] + 1
+			_, err := fmt.Fprintf(file, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", i1, i1, i1, i2, i2, i2, i3, i3, i3)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// Базовый метод: для мешей без индексов (менее надежно)
+		for i := 1; i <= vertexCount; i += 3 {
+			_, err := fmt.Fprintf(file, "f %d/%d/%d %d/%d/%d %d/%d/%d\n", i, i, i, i+1, i+1, i+1, i+2, i+2, i+2)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	log.Printf("Successfully exported mesh to %s", filePath)
 	return nil
 }
-
 
 // exportAllTowerModels генерирует и сохраняет .obj файлы для всех башен.
 func exportAllTowerModels() {
@@ -111,14 +134,17 @@ func exportAllTowerModels() {
 			continue
 		}
 
-		// Логика генерации меша, аналогичная RenderSystemRL
+		// Логика генерации меша с финальными размерами
 		switch {
 		case towerDef.Type == defs.TowerTypeWall:
-			mesh = rl.GenMeshCylinder(1.0, 1.0, 6) // 6-сторонний цилиндр для стен
+			// Стены
+			mesh = rl.GenMeshCylinder(4.59, 5.7, 6)
 		case towerDef.CraftingLevel >= 1:
-			mesh = rl.GenMeshCube(1.0, 1.0, 1.0) // Куб для улучшенных башен
+			// Улучшенные башни
+			mesh = rl.GenMeshCube(6.1, 6.1, 6.1)
 		default: // Обычные атакующие башни
-			mesh = rl.GenMeshCylinder(1.0, 1.0, 9) // 9-сторонний цилиндр для базовых
+			// Базовые башни
+			mesh = rl.GenMeshCylinder(2.45, 13.87, 9)
 		}
 
 		filePath := filepath.Join("assets", "models", fmt.Sprintf("%s.obj", id))

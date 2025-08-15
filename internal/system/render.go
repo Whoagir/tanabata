@@ -336,35 +336,24 @@ func (s *RenderSystemRL) drawTower(tower *component.Tower, data *CachedRenderDat
 	}
 
 	position := data.WorldPos
-	var scale rl.Vector3
-	baseWidthMultiplier := float32(1.32)
-	attackTowerHeightMultiplier := float32(1.326)
-
-	switch {
-	case towerDef.Type == defs.TowerTypeWall:
-		radius := scaledRadius * 1.8 * baseWidthMultiplier
-		// Используем одинаковый масштаб по всем осям, чтобы избежать растяжения текстуры
-		uniformScale := radius
-		scale = rl.NewVector3(uniformScale, uniformScale, uniformScale)
-	case tower.CraftingLevel >= 1:
-		size := scaledRadius * 2 * baseWidthMultiplier
-		scale = rl.NewVector3(size, data.Height*attackTowerHeightMultiplier, size)
-	default:
-		radius := scaledRadius * 1.2 * baseWidthMultiplier
-		scale = rl.NewVector3(radius, data.Height*attackTowerHeightMultiplier, radius)
+	if tower.CraftingLevel >= 1 {
+		// Приподнимаем башни 1+ уровня крафта на половину их высоты (7.2 / 2)
+		position.Y += 3.6
 	}
+	// Убираем масштабирование из рендера. Размер модели теперь определяется при создании.
+	finalScale := rl.NewVector3(1.0, 1.0, 1.0)
 
 	// --- Логика отрисовки с учетом текстур ---
 	if towerDef.Type == defs.TowerTypeWall {
 		// Для стен используем rl.White, чтобы не перекрашивать текстуру
-		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, scale, rl.White)
+		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, finalScale, rl.White)
 	} else {
 		// Для остальных башен используем цвет из definitions
-		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, scale, color)
+		rl.DrawModelEx(model, position, rl.NewVector3(0, 1, 0), 0, finalScale, color)
 	}
 
 	if hasStroke {
-		rl.DrawModelWiresEx(wireModel, position, rl.NewVector3(0, 1, 0), 0, scale, config.TowerWireColorRL)
+		rl.DrawModelWiresEx(wireModel, position, rl.NewVector3(0, 1, 0), 0, finalScale, config.TowerWireColorRL)
 	}
 }
 
