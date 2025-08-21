@@ -108,8 +108,8 @@ func (s *RenderSystemRL) Update(deltaTime float64) {
 		} else if pos, ok := s.ecs.Positions[id]; ok {
 			worldPos = s.pixelToWorld(*pos)
 		} else {
-			delete(s.renderCache, id)
-			continue
+			delete(s.renderCache, id) //abc
+			continue                  //fdfd
 		}
 
 		height := float32(0)
