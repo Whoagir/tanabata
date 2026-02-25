@@ -1,0 +1,93 @@
+[
+  {
+    "id": "ENEMY_NORMAL_WEAK",
+    "name": "Слабый",
+    "health": 35,
+    "speed": 80.0,
+    "physical_armor": 5,
+    "magical_armor": 0,
+    "visuals": {
+      "color": {"r": 150, "g": 150, "b": 150, "a": 255},
+      "radius_factor": 0.4,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_NORMAL",
+    "name": "Обычный",
+    "health": 115,
+    "speed": 80.0,
+    "physical_armor": 10,
+    "magical_armor": 5,
+    "visuals": {
+      "color": {"r": 128, "g": 128, "b": 128, "a": 255},
+      "radius_factor": 0.5,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_TOUGH",
+    "name": "Крепкий",
+    "health": 280,
+    "speed": 75.0,
+    "physical_armor": 25,
+    "magical_armor": 15,
+    "visuals": {
+      "color": {"r": 200, "g": 100, "b": 100, "a": 255},
+      "radius_factor": 0.55,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_MAGIC_RESIST",
+    "name": "Магический щит",
+    "health": 240,
+    "speed": 80.0,
+    "physical_armor": -20,
+    "magical_armor": 80,
+    "visuals": {
+      "color": {"r": 180, "g": 50, "b": 230, "a": 255},
+      "radius_factor": 0.53,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_PHYSICAL_RESIST",
+    "name": "Физический щит",
+    "health": 240,
+    "speed": 80.0,
+    "physical_armor": 80,
+    "magical_armor": -20,
+    "visuals": {
+      "color": {"r": 230, "g": 180, "b": 50, "a": 255},
+      "radius_factor": 0.53,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_FAST",
+    "name": "Быстрый",
+    "health": 140,
+    "speed": 160.0,
+    "physical_armor": 5,
+    "magical_armor": 10,
+    "visuals": {
+      "color": {"r": 50, "g": 230, "b": 180, "a": 255},
+      "radius_factor": 0.45,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_BOSS",
+    "name": "Босс",
+    "health": 6000,
+    "speed": 60.0,
+    "physical_armor": 40,
+    "magical_armor": 40,
+    "visuals": {
+      "color": {"r": 255, "g": 0, "b": 0, "a": 255},
+      "radius_factor": 0.8,
+      "stroke_width": 2
+    }
+  }
+]

@@ -1,0 +1,367 @@
+[
+  {
+    "id": "TA",
+    "name": "TA (Физ. атака)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 25,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.06,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 80, "b": 0, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TE",
+    "name": "TE (Маг. атака)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 25,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.07,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {"r": 160, "g": 32, "b": 240, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TO",
+    "name": "TO (Чист. атака)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 20,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.04,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
+    },
+    "visuals": {
+      "color": {"r": 173, "g": 216, "b": 230, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PA",
+    "name": "PA (Сплит-физ.)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 18,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.08,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 140, "b": 0, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PE",
+    "name": "PE (Сплит-маг.)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 18,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.06,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 221, "g": 160, "b": 221, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+    {
+    "id": "PO",
+    "name": "PO (Сплит-чист.)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 15,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.1,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 224, "g": 255, "b": 255, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_SILVER",
+    "name": "Сильвер",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 55,
+      "fire_rate": 1.2,
+      "range": 4,
+      "shot_cost": 0.15,
+      "attack": {
+        "type": "LASER",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {"r": 192, "g": 192, "b": 192, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_MALACHITE",
+    "name": "Малахит",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 20,
+      "fire_rate": 1.1,
+      "range": 4,
+      "shot_cost": 0.3,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 3,
+          "impact_burst": {
+            "radius": 1.5,
+            "target_count": 4,
+            "damage_factor": 0.4
+          }
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 11, "g": 128, "b": 96, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "DE",
+    "name": "DE (Аура)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.05,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 2.0
+    },
+    "visuals": {
+      "color": {"r": 50, "g": 205, "b": 50, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NI",
+    "name": "NI (Замедление)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.09,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW"
+      }
+    },
+    "visuals": {
+      "color": {"r": 0, "g": 191, "b": 255, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NU",
+    "name": "NU (Яд)",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.07,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON"
+      }
+    },
+    "visuals": {
+      "color": {"r": 127, "g": 255, "b": 0, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_MINER",
+    "name": "Шахтер",
+    "type": "MINER",
+    "crafting_level": 0,
+    "level": 1,
+    "energy": {
+      "transfer_radius": 3,
+      "line_degradation_factor": 0.6
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 215, "b": 0, "a": 255},
+      "radius_factor": 0.3,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_WALL",
+    "name": "Стена",
+    "type": "WALL",
+    "crafting_level": 0,
+    "level": 1,
+    "visuals": {
+      "color": {"r": 105, "g": 105, "b": 105, "a": 255},
+      "radius_factor": 0.4,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "TOWER_VOLCANO",
+    "name": "Вулкан",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 40,
+      "fire_rate": 0.5,
+      "range": 2,
+      "shot_cost": 0.25,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {"r": 255, "g": 69, "b": 0, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_LIGHTHOUSE",
+    "name": "Маяк",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 35,
+      "fire_rate": 1.0,
+      "range": 4,
+      "shot_cost": 0.20,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "PURE",
+        "params": {
+          "rotation_speed": 1.5,
+          "arc_angle": 90
+        }
+      }
+    },
+    "visuals": {
+      "color": { "r": 255, "g": 255, "b": 102, "a": 255 },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_JADE",
+    "name": "Jade (Яд)",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 5,
+      "fire_rate": 1.0,
+      "range": 4,
+      "shot_cost": 0.12,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "effect": "JADE_POISON",
+          "visual_type": "ELLIPSE"
+        }
+      }
+    },
+    "visuals": {
+      "color": {"r": 152, "g": 251, "b": 152, "a": 255},
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  }
+]

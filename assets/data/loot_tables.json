@@ -1,0 +1,16 @@
+[
+  {
+    "player_level": 1,
+    "entries": [
+      { "tower_id": "TA", "weight": 10 },
+      { "tower_id": "TE", "weight": 10 },
+      { "tower_id": "TO", "weight": 10 },
+      { "tower_id": "PA", "weight": 10 },
+      { "tower_id": "PE", "weight": 10 },
+      { "tower_id": "PO", "weight": 10 },
+      { "tower_id": "DE", "weight": 8 },
+      { "tower_id": "NI", "weight": 8 },
+      { "tower_id": "NU", "weight": 8 }
+    ]
+  }
+]

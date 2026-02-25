@@ -1,0 +1,141 @@
+Структура проекта:
+├── assets
+│   ├── data
+│   │   ├── enemies.json
+│   │   ├── loot_tables.json
+│   │   ├── recipes.json
+│   │   └── towers.json
+│   └── fonts
+│       └── arial.ttf
+├── cmd
+│   ├── game
+│   │   └── main.go
+│   └── map_viewer_raylib
+│       └── main.go
+├── internal
+│   ├── app
+│   │   ├── energy_network.go
+│   │   ├── game.go
+│   │   ├── ore_generation.go
+│   │   └── tower_management.go
+│   ├── component
+│   │   ├── aura.go
+│   │   ├── beacon.go
+│   │   ├── combat.go
+│   │   ├── crafting.go
+│   │   ├── enemy.go
+│   │   ├── game_state.go
+│   │   ├── line.go
+│   │   ├── manual_selection.go
+│   │   ├── movement.go
+│   │   ├── ore.go
+│   │   ├── player.go
+│   │   ├── projectile.go
+│   │   ├── render.go
+│   │   ├── rotating_beam.go
+│   │   ├── selection.go
+│   │   ├── status_effect.go
+│   │   ├── text.go
+│   │   ├── tower.go
+│   │   ├── visual.go
+│   │   ├── volcano.go
+│   │   └── wave.go
+│   ├── config
+│   │   └── config.go
+│   ├── defs
+│   │   ├── enemies.go
+│   │   ├── loader.go
+│   │   ├── loot_tables.go
+│   │   ├── recipes.go
+│   │   ├── towers.go
+│   │   ├── types.go
+│   │   └── waves.go
+│   ├── entity
+│   │   └── ecs.go
+│   ├── event
+│   │   ├── event.go
+│   │   └── types.go
+│   ├── interfaces
+│   │   ├── game.go
+│   │   └── game_context.go
+│   ├── state
+│   │   ├── game_state.go
+│   │   ├── menu_state.go
+│   │   ├── pause_state.go
+│   │   └── state.go
+│   ├── system
+│   │   ├── area_attack_system.go
+│   │   ├── aura.go
+│   │   ├── beacon_system.go
+│   │   ├── combat.go
+│   │   ├── crafting.go
+│   │   ├── environmental_damage.go
+│   │   ├── movement.go
+│   │   ├── ore.go
+│   │   ├── player_system.go
+│   │   ├── projectile.go
+│   │   ├── render.go
+│   │   ├── state.go
+│   │   ├── status_effect.go
+│   │   ├── utils.go
+│   │   ├── visual_effect.go
+│   │   ├── volcano_system.go
+│   │   └── wave.go
+│   ├── types
+│   │   └── types.go
+│   ├── ui
+│   │   ├── indicator.go
+│   │   ├── info_panel.go
+│   │   ├── pause_button.go
+│   │   ├── player_health_indicator.go
+│   │   ├── player_level_indicator.go
+│   │   ├── recipe_book.go
+│   │   ├── speed_button.go
+│   │   ├── u_indicator.go
+│   │   └── wave_indicator.go
+│   └── utils
+│       ├── coords.go
+│       ├── prng.go
+│       └── union_find.go
+├── pkg
+│   ├── hexmap
+│   │   ├── hex.go
+│   │   ├── map.go
+│   │   ├── map_3d.go
+│   │   ├── ore_generation_3d.go
+│   │   ├── pathfinding.go
+│   │   └── utils.go
+│   ├── render
+│   │   ├── color.go
+│   │   └── hex_renderer.go
+│   └── utils
+│       ├── math.go
+│       └── union_find.go
+├── .env
+├── .gitignore
+├── 123123.txt
+├── 6767.txt
+├── analyze.txt
+├── analyze_project.py
+├── game.exe
+├── GEMINI.md
+├── go.mod
+├── go.sum
+├── main.exe
+├── profile
+├── reset_env.ps1
+├── stp_td что сделанно.txt
+├── stp_td что сделать.txt
+├── temp_build.ps1
+├── билд.txt
+├── генерация руды.txt
+├── диалог.txt
+├── дневник.txt
+├── игра 3.png
+├── игра 4.png
+├── игра 5.png
+├── игра.png
+├── игрга 2.png
+├── история.txt
+├── ошибки.txt
+└── план_улучшений.txt
