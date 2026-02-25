@@ -1,0 +1,1879 @@
+
+
+# Анализ проекта Tanabata — Рекомендации для соло-разработчика
+
+Бро, я внимательно прочитал всё. У тебя серьёзная база — архитектура продумана, ECS есть, слои разделены, data-driven подход на месте. Но есть конкретные места, где ты можешь сэкономить себе кучу времени и нервов. Разберём по порядку.
+
+---
+
+## 1. 🔴 Критичные проблемы (исправить первыми)
+
+### 1.1. Логика переходов фаз размазана по 3+ файлам
+
+Это твоя главная архитектурная боль прямо сейчас.
+
+**Проблема:** переходы BUILD → SELECTION → WAVE и связанные действия (очистка сущностей, финализация выбора, сброс счётчиков) живут одновременно в `game_root.gd`, `game_hud.gd` и `info_panel.gd`. Ты сам это отметил в документации. Когда ты добавишь новую фазу или изменишь логику перехода — придётся менять в трёх местах, и ты обязательно забудешь одно из них.
+
+**Решение — PhaseController (один файл, одна ответственность):**
+
+```gdscript
+# core/systems/phase_controller.gd
+class_name PhaseController
+
+var ecs: ECSWorld
+var hex_map: HexMap
+var energy_network: EnergyNetworkSystem
+
+func transition_to(new_phase: int) -> bool:
+    var current = ecs.game_state["phase"]
+    
+    # Валидация перехода
+    if not _is_valid_transition(current, new_phase):
+        return false
+    
+    # Выход из текущей фазы
+    _exit_phase(current)
+    
+    # Вход в новую
+    ecs.game_state["phase"] = new_phase
+    _enter_phase(new_phase)
+    
+    return true
+
+func _exit_phase(phase: int):
+    match phase:
+        GameTypes.BUILD_STATE:
+            pass  # Ничего особенного
+        GameTypes.TOWER_SELECTION_STATE:
+            _finalize_selection()  # Вся логика в одном месте
+        GameTypes.WAVE_STATE:
+            _cleanup_wave_entities()
+
+func _enter_phase(phase: int):
+    match phase:
+        GameTypes.BUILD_STATE:
+            ecs.game_state["towers_built_this_phase"] = 0
+        GameTypes.TOWER_SELECTION_STATE:
+            pass
+        GameTypes.WAVE_STATE:
+            # wave_system сам подхватит
+
+func _finalize_selection():
+    # ВСЯ логика финализации — ЗДЕСЬ и ТОЛЬКО ЗДЕСЬ
+    for entity_id in ecs.towers.keys():
+        var tower = ecs.towers[entity_id]
+        if tower.get("is_temporary", false):
+            if tower.get("is_selected", false):
+                tower["is_temporary"] = false
+                tower["is_permanent"] = true
+            else:
+                _convert_to_wall(entity_id)
+
+func _cleanup_wave_entities():
+    # Удаление снарядов, лазеров и т.д.
+    for id in ecs.projectiles.keys():
+        ecs.destroy_entity(id)
+
+func _is_valid_transition(from: int, to: int) -> bool:
+    var valid = {
+        GameTypes.BUILD_STATE: [GameTypes.TOWER_SELECTION_STATE],
+        GameTypes.TOWER_SELECTION_STATE: [GameTypes.WAVE_STATE],
+        GameTypes.WAVE_STATE: [GameTypes.BUILD_STATE],
+    }
+    return to in valid.get(from, [])
+```
+
+Теперь `game_hud.gd` и `info_panel.gd` просто вызывают:
+```gdscript
+phase_controller.transition_to(GameTypes.WAVE_STATE)
+```
+
+Никакой логики фаз в UI. Вообще.
+
+---
+
+### 1.2. ECS на словарях — бомба замедленного действия
+
+**Проблема:** в GDScript словари не типизированы. Ты будешь ловить баги вида `tower["is_selectd"]` (опечатка) только в рантайме, через 20 минут игры, когда дойдёшь до нужной фазы.
+
+**Решение — Resource-классы как компоненты:**
+
+```gdscript
+# core/components/tower_component.gd
+class_name TowerComponent extends Resource
+
+@export var def_id: String = ""
+@export var level: int = 1
+@export var hex_q: int = 0
+@export var hex_r: int = 0
+@export var is_active: bool = false
+@export var is_temporary: bool = true
+@export var is_permanent: bool = false
+@export var is_selected: bool = false
+@export var tower_type: int = GameTypes.TowerType.ATTACK
+```
+
+```gdscript
+# core/components/combat_component.gd
+class_name CombatComponent extends Resource
+
+@export var damage: int = 10
+@export var fire_rate: float = 1.0
+@export var range_radius: float = 3.0
+@export var cooldown: float = 0.0
+@export var attack_type: int = GameTypes.AttackType.PROJECTILE
+@export var damage_type: int = GameTypes.DamageType.PHYSICAL
+@export var shot_cost: float = 1.0
+@export var split_count: int = 1
+```
+
+```gdscript
+# core/components/health_component.gd
+class_name HealthComponent extends Resource
+
+@export var current: int = 100
+@export var max_hp: int = 100
+
+func is_alive() -> bool:
+    return current > 0
+
+func take_damage(amount: int) -> int:
+    var actual = mini(amount, current)
+    current -= actual
+    return actual
+
+func heal(amount: int):
+    current = mini(current + amount, max_hp)
+```
+
+**Почему Resource, а не RefCounted:**
+- Автокомплит в редакторе (даже если ты пишешь кодом — LSP подхватит)
+- Можно сохранять/загружать через `ResourceSaver` если понадобится save/load
+- Типизация на уровне движка
+
+**ECS World тогда:**
+```gdscript
+# core/ecs/ecs_world.gd
+class_name ECSWorld
+
+var next_id: int = 0
+var entities: Array[int] = []
+
+# Типизированные хранилища
+var positions: Dictionary = {}      # int -> Vector2
+var towers: Dictionary = {}         # int -> TowerComponent
+var combats: Dictionary = {}        # int -> CombatComponent
+var healths: Dictionary = {}        # int -> HealthComponent
+var enemies: Dictionary = {}        # int -> EnemyComponent
+var projectiles: Dictionary = {}    # int -> ProjectileComponent
+var paths: Dictionary = {}          # int -> PathComponent
+var ores: Dictionary = {}           # int -> OreComponent
+var energy_lines: Dictionary = {}   # int -> EnergyLineComponent
+var renderables: Dictionary = {}    # int -> RenderableComponent
+
+# Синглтон-состояние
+var game_state: GameStateComponent = GameStateComponent.new()
+var player_state: PlayerStateComponent = PlayerStateComponent.new()
+
+func create_entity() -> int:
+    var id = next_id
+    next_id += 1
+    entities.append(id)
+    return id
+
+func destroy_entity(id: int):
+    positions.erase(id)
+    towers.erase(id)
+    combats.erase(id)
+    healths.erase(id)
+    enemies.erase(id)
+    projectiles.erase(id)
+    paths.erase(id)
+    ores.erase(id)
+    renderables.erase(id)
+    entities.erase(id)
+
+# Быстрые запросы — кэшируемые
+func get_active_towers() -> Array[int]:
+    var result: Array[int] = []
+    for id in towers:
+        if towers[id].is_active:
+            result.append(id)
+    return result
+
+func get_living_enemies() -> Array[int]:
+    var result: Array[int] = []
+    for id in enemies:
+        if id in healths and healths[id].is_alive():
+            result.append(id)
+    return result
+```
+
+---
+
+### 1.3. GameManager — God Object
+
+**Проблема:** `GameManager` сейчас делает всё: загружает данные, хранит ECS, генерирует руду, управляет паузой, хранит определения, создаёт энергосеть. Это классический God Object. Когда он вырастет до 500+ строк — ты перестанешь понимать, что где.
+
+**Решение — разбить на 3 autoload:**
+
+```
+autoload/
+├── Config.gd           # Константы (уже есть, ок)
+├── GameManager.gd      # Только оркестрация: init, pause, phase
+└── DataRepository.gd   # Только данные: tower_defs, enemy_defs, wave_defs
+```
+
+```gdscript
+# autoload/data_repository.gd
+extends Node
+
+var tower_defs: Dictionary = {}
+var enemy_defs: Dictionary = {}
+var wave_defs: Dictionary = {}
+var recipe_defs: Array = []
+var loot_tables: Dictionary = {}
+
+func _ready():
+    _load_all()
+
+func _load_all():
+    tower_defs = _load_and_index("res://data/towers.json", "id")
+    enemy_defs = _load_and_index("res://data/enemies.json", "id")
+    wave_defs = _load_and_index_by_number("res://data/waves.json")
+    recipe_defs = Config.load_json("res://data/recipes.json")
+    loot_tables = Config.load_json("res://data/loot_tables.json")
+
+func get_tower_def(id: String) -> Dictionary:
+    return tower_defs.get(id, {})
+
+func get_enemy_def(id: String) -> Dictionary:
+    return enemy_defs.get(id, {})
+
+func get_wave_def(wave_number: int) -> Dictionary:
+    # Циклический повтор после 10
+    if wave_number > 10:
+        var cycled = 6 + ((wave_number - 6) % 5)
+        return wave_defs.get(cycled, {})
+    return wave_defs.get(wave_number, {})
+
+func get_random_attack_tower_id() -> String:
+    var attack_towers = tower_defs.values().filter(
+        func(d): return d.get("type", "") == "ATTACK"
+    )
+    if attack_towers.is_empty():
+        return "TA"
+    return attack_towers.pick_random()["id"]
+
+func _load_and_index(path: String, key: String) -> Dictionary:
+    var raw = Config.load_json(path)
+    var result = {}
+    for item in raw:
+        result[item[key]] = item
+    return result
+
+func _load_and_index_by_number(path: String) -> Dictionary:
+    var raw = Config.load_json(path)
+    var result = {}
+    for item in raw:
+        result[item["wave_number"]] = item
+    return result
+```
+
+Теперь `GameManager` становится тонким:
+```gdscript
+# autoload/game_manager.gd
+extends Node
+
+var ecs: ECSWorld
+var hex_map: HexMap
+var phase_controller: PhaseController
+var energy_network: EnergyNetworkSystem
+
+func _ready():
+    ecs = ECSWorld.new()
+    hex_map = HexMap.new()
+    hex_map.generate(Config.MAP_RADIUS)
+    
+    energy_network = EnergyNetworkSystem.new(ecs, hex_map)
+    phase_controller = PhaseController.new()
+    phase_controller.ecs = ecs
+    phase_controller.hex_map = hex_map
+    phase_controller.energy_network = energy_network
+    
+    _create_player()
+    _generate_initial_walls()
+    OreGenerationSystem.generate(ecs, hex_map)
+
+func toggle_pause():
+    ecs.game_state.paused = not ecs.game_state.paused
+
+func set_time_speed(speed: float):
+    ecs.game_state.time_speed = speed
+```
+
+---
+
+## 2. 🟡 Оптимизации производительности
+
+### 2.1. Spatial Hashing для поиска целей
+
+**Проблема:** `CombatSystem` каждый кадр для каждой башни перебирает ВСЕХ врагов, чтобы найти тех, кто в радиусе. При 50 башнях и 100 врагах — это 5000 проверок расстояния каждый кадр.
+
+**Решение:**
+
+```gdscript
+# core/utils/spatial_hash.gd
+class_name SpatialHash
+
+var cell_size: float
+var cells: Dictionary = {}  # Vector2i -> Array[int]
+
+func _init(p_cell_size: float = 60.0):
+    cell_size = p_cell_size
+
+func clear():
+    cells.clear()
+
+func _get_cell(pos: Vector2) -> Vector2i:
+    return Vector2i(
+        floori(pos.x / cell_size),
+        floori(pos.y / cell_size)
+    )
+
+func insert(entity_id: int, pos: Vector2):
+    var cell = _get_cell(pos)
+    if cell not in cells:
+        cells[cell] = []
+    cells[cell].append(entity_id)
+
+func query_radius(center: Vector2, radius: float) -> Array[int]:
+    var result: Array[int] = []
+    var min_cell = _get_cell(center - Vector2(radius, radius))
+    var max_cell = _get_cell(center + Vector2(radius, radius))
+    var radius_sq = radius * radius
+    
+    for cx in range(min_cell.x, max_cell.x + 1):
+        for cy in range(min_cell.y, max_cell.y + 1):
+            var cell = Vector2i(cx, cy)
+            if cell in cells:
+                for id in cells[cell]:
+                    # Позицию берём снаружи при использовании
+                    result.append(id)
+    
+    return result
+```
+
+**Использование в CombatSystem:**
+
+```gdscript
+# В начале каждого update():
+var enemy_grid = SpatialHash.new(Config.HEX_SIZE * 4)
+for enemy_id in ecs.get_living_enemies():
+    enemy_grid.insert(enemy_id, ecs.positions[enemy_id])
+
+# При поиске целей для башни:
+var candidates = enemy_grid.query_radius(tower_pos, combat.range_radius)
+# Дальше фильтруем только candidates, а не всех врагов
+```
+
+### 2.2. Кэширование запросов ECS
+
+**Проблема:** `get_living_enemies()` и `get_active_towers()` вызываются многократно за кадр, каждый раз итерируя все сущности.
+
+```gdscript
+# В ECSWorld добавить:
+var _cache_dirty: bool = true
+var _cached_living_enemies: Array[int] = []
+var _cached_active_towers: Array[int] = []
+
+func mark_dirty():
+    _cache_dirty = true
+
+func get_living_enemies() -> Array[int]:
+    if _cache_dirty:
+        _rebuild_cache()
+    return _cached_living_enemies
+
+func get_active_towers() -> Array[int]:
+    if _cache_dirty:
+        _rebuild_cache()
+    return _cached_active_towers
+
+func _rebuild_cache():
+    _cached_living_enemies.clear()
+    for id in enemies:
+        if id in healths and healths[id].is_alive():
+            _cached_living_enemies.append(id)
+    
+    _cached_active_towers.clear()
+    for id in towers:
+        if towers[id].is_active:
+            _cached_active_towers.append(id)
+    
+    _cache_dirty = false
+
+# Вызывать mark_dirty() при:
+# - create_entity / destroy_entity
+# - изменении health
+# - изменении tower.is_active
+```
+
+### 2.3. Object Pool — ты уже заложил, но формализуй
+
+```gdscript
+# core/utils/node_pool.gd
+class_name NodePool
+
+var _scene: PackedScene
+var _pool: Array[Node] = []
+var _parent: Node
+var _active_count: int = 0
+
+func _init(scene: PackedScene, parent: Node, prealloc: int = 0):
+    _scene = scene
+    _parent = parent
+    for i in prealloc:
+        var node = _scene.instantiate()
+        node.visible = false
+        _parent.add_child(node)
+        _pool.append(node)
+
+func acquire() -> Node:
+    var node: Node
+    if _pool.size() > 0:
+        node = _pool.pop_back()
+    else:
+        node = _scene.instantiate()
+        _parent.add_child(node)
+    node.visible = true
+    _active_count += 1
+    return node
+
+func release(node: Node):
+    node.visible = false
+    # Reset state
+    if node is Node2D:
+        node.position = Vector2.ZERO
+        node.rotation = 0
+        node.scale = Vector2.ONE
+    _pool.append(node)
+    _active_count -= 1
+
+func get_active_count() -> int:
+    return _active_count
+```
+
+---
+
+## 3. 🟢 Паттерны и улучшения для соло-разработчика
+
+### 3.1. Signal Bus — замени разбросанные сигналы
+
+Вместо того чтобы каждая система знала о каждой другой, сделай один глобальный шину событий:
+
+```gdscript
+# autoload/event_bus.gd
+extends Node
+
+# Игровые события
+signal enemy_killed(enemy_id: int, position: Vector2)
+signal enemy_reached_exit(enemy_id: int)
+signal tower_placed(tower_id: int, hex_q: int, hex_r: int)
+signal tower_removed(tower_id: int)
+signal wave_started(wave_number: int)
+signal wave_completed(wave_number: int)
+signal phase_changed(old_phase: int, new_phase: int)
+signal ore_depleted(ore_id: int)
+signal player_damaged(amount: int, remaining: int)
+signal player_level_up(new_level: int)
+
+# UI события
+signal tower_selected(tower_id: int)
+signal tower_deselected(tower_id: int)
+signal show_info_panel(entity_id: int)
+signal hide_info_panel()
+```
+
+**Использование:**
+
+```gdscript
+# В CombatSystem при убийстве врага:
+EventBus.enemy_killed.emit(enemy_id, ecs.positions[enemy_id])
+
+# В GameHUD — подписка:
+func _ready():
+    EventBus.enemy_killed.connect(_on_enemy_killed)
+    EventBus.phase_changed.connect(_on_phase_changed)
+
+# В системе опыта (когда сделаешь):
+func _ready():
+    EventBus.enemy_killed.connect(_on_enemy_killed)
+
+func _on_enemy_killed(enemy_id: int, pos: Vector2):
+    var xp = DataRepository.get_enemy_def(
+        ecs.enemies[enemy_id].def_id
+    ).get("xp_reward", 10)
+    ecs.player_state.xp += xp
+```
+
+**Зачем:** ты соло, и тебе нужно быстро добавлять реакции на события. С Signal Bus ты просто подписываешься в новом месте, не трогая существующий код.
+
+### 3.2. Фабрика сущностей — не размазывай создание по системам
+
+```gdscript
+# core/ecs/entity_factory.gd
+class_name EntityFactory
+
+static func create_tower(ecs: ECSWorld, hex: Vector2i, def_id: String) -> int:
+    var def = DataRepository.get_tower_def(def_id)
+    var id = ecs.create_entity()
+    
+    # Position
+    var pixel_pos = Hex.to_pixel(hex.x, hex.y, Config.HEX_SIZE)
+    ecs.positions[id] = pixel_pos
+    
+    # Tower component
+    var tower = TowerComponent.new()
+    tower.def_id = def_id
+    tower.hex_q = hex.x
+    tower.hex_r = hex.y
+    tower.tower_type = GameTypes.string_to_tower_type(def.get("type", "ATTACK"))
+    tower.is_temporary = true
+    ecs.towers[id] = tower
+    
+    # Combat (если атакующая)
+    if tower.tower_type == GameTypes.TowerType.ATTACK:
+        var combat = CombatComponent.new()
+        var combat_def = def.get("combat", {})
+        combat.damage = combat_def.get("damage", 10)
+        combat.fire_rate = combat_def.get("fire_rate", 1.0)
+        combat.range_radius = combat_def.get("range", 3.0) * Config.HEX_SIZE
+        combat.attack_type = GameTypes.string_to_attack_type(
+            combat_def.get("attack", "PROJECTILE")
+        )
+        combat.damage_type = GameTypes.string_to_damage_type(
+            combat_def.get("damage_type", "PHYSICAL")
+        )
+        combat.shot_cost = combat_def.get("shot_cost", 1.0)
+        combat.split_count = combat_def.get("split_count", 1)
+        ecs.combats[id] = combat
+    
+    # Renderable
+    var renderable = RenderableComponent.new()
+    var visuals = def.get("visuals", {})
+    renderable.color = Color(visuals.get("color", "#FF8C00"))
+    renderable.radius_factor = visuals.get("radius_factor", 1.0)
+    ecs.renderables[id] = renderable
+    
+    return id
+
+static func create_enemy(ecs: ECSWorld, def_id: String, path_hexes: Array) -> int:
+    var def = DataRepository.get_enemy_def(def_id)
+    var id = ecs.create_entity()
+    
+    # Position — на Entry
+    var start_hex = path_hexes[0]
+    ecs.positions[id] = Hex.to_pixel(start_hex.x, start_hex.y, Config.HEX_SIZE)
+    
+    # Health
+    var health = HealthComponent.new()
+    health.max_hp = def.get("health", 100)
+    health.current = health.max_hp
+    ecs.healths[id] = health
+    
+    # Enemy
+    var enemy = EnemyComponent.new()
+    enemy.def_id = def_id
+    enemy.physical_armor = def.get("physical_armor", 0)
+    enemy.magical_armor = def.get("magical_armor", 0)
+    enemy.base_speed = def.get("speed", 80.0)
+    ecs.enemies[id] = enemy
+    
+    # Path
+    var path = PathComponent.new()
+    path.hexes = path_hexes
+    path.current_index = 0
+    ecs.paths[id] = path
+    
+    # Renderable
+    var renderable = RenderableComponent.new()
+    renderable.color = Color(def.get("color", "#FF0000"))
+    ecs.renderables[id] = renderable
+    
+    return id
+
+static func create_projectile(
+    ecs: ECSWorld, 
+    source_id: int, 
+    target_id: int, 
+    damage: int,
+    damage_type: int,
+    start_pos: Vector2
+) -> int:
+    var id = ecs.create_entity()
+    
+    ecs.positions[id] = start_pos
+    
+    var proj = ProjectileComponent.new()
+    proj.source_id = source_id
+    proj.target_id = target_id
+    proj.damage = damage
+    proj.damage_type = damage_type
+    proj.speed = Config.PROJECTILE_SPEED
+    ecs.projectiles[id] = proj
+    
+    var renderable = RenderableComponent.new()
+    renderable.color = GameTypes.get_damage_type_color(damage_type)
+    renderable.radius_factor = 0.3
+    ecs.renderables[id] = renderable
+    
+    return id
+```
+
+**Зачем:** сейчас создание башни/врага размазано по `InputSystem`, `WaveSystem`, и потенциально другим местам. С фабрикой — одно место, одна правда.
+
+### 3.3. Система дебага — ты уже заложил, усиль
+
+```gdscript
+# autoload/debug_console.gd (или в Config)
+extends Node
+
+var _log_enabled: bool = true
+var _log_categories: Dictionary = {
+    "combat": false,
+    "wave": true,
+    "energy": false,
+    "phase": true,
+    "input": false,
+}
+
+func log(category: String, message: String):
+    if _log_enabled and _log_categories.get(category, false):
+        print("[%s][%.2f] %s" % [
+            category.to_upper(), 
+            Time.get_ticks_msec() / 1000.0,
+            message
+        ])
+
+func toggle_category(category: String):
+    _log_categories[category] = not _log_categories.get(category, false)
+
+# Использование:
+# DebugConsole.log("combat", "Tower %d hit enemy %d for %d damage" % [t, e, dmg])
+# DebugConsole.log("wave", "Wave %d started, %d enemies" % [num, count])
+```
+
+---
+
+## 4. 🔵 Структура проекта — финальная рекомендация
+
+```
+tanabata-godot/
+├── autoload/
+│   ├── config.gd              # Константы
+│   ├── game_manager.gd        # Оркестрация (тонкий)
+│   ├── data_repository.gd     # Загрузка и доступ к данным
+│   └── event_bus.gd           # Глобальные сигналы
+│
+├── core/
+│   ├── ecs/
+│   │   ├── ecs_world.gd       # Хранилище сущностей
+│   │   └── entity_factory.gd  # Создание сущностей
+│   │
+│   ├── components/             # Типизированные Resource-компоненты
+│   │   ├── tower_component.gd
+│   │   ├── combat_component.gd
+│   │   ├── health_component.gd
+│   │   ├── enemy_component.gd
+│   │   ├── path_component.gd
+│   │   ├── projectile_component.gd
+│   │   ├── ore_component.gd
+│   │   ├── energy_line_component.gd
+│   │   ├── renderable_component.gd
+│   │   ├── game_state_component.gd
+│   │   └── player_state_component.gd
+│   │
+│   ├── systems/
+│   │   ├── phase_controller.gd    # ← НОВЫЙ: единая точка переходов
+│   │   ├── input_system.gd
+│   │   ├── wave_system.gd
+│   │   ├── movement_system.gd
+│   │   ├── combat_system.gd
+│   │   ├── projectile_system.gd
+│   │   ├── status_effect_system.gd
+│   │   ├── aura_system.gd
+│   │   ├── energy_network_system.gd
+│   │   └── ore_generation_system.gd
+│   │
+│   ├── hexmap/
+│   │   ├── hex.gd
+│   │   ├── hex_map.gd
+│   │   └── pathfinding.gd
+│   │
+│   ├── types/
+│   │   └── game_types.gd
+│   │
+│   └── utils/
+│       ├── union_find.gd
+│       ├── spatial_hash.gd     # ← НОВЫЙ
+│       └── node_pool.gd
+│
+├── godot_adapter/
+│   ├── rendering/
+│   │   ├── entity_renderer.gd
+│   │   ├── wall_renderer.gd
+│   │   ├── ore_renderer.gd
+│   │   ├── energy_line_renderer.gd
+│   │   ├── aura_renderer.gd
+│   │   └── tower_preview.gd
+│   │
+│   └── ui/
+│       ├── game_hud.gd
+│       └── info_panel.gd
+│
+├── scenes/
+│   ├── main.tscn / main.gd
+│   └── game_root.tscn / game_root.gd
+│
+├── data/
+│   ├── towers.json
+│   ├── enemies.json
+│   ├── waves.json
+│   ├── recipes.json
+│   └── loot_tables.json
+│
+└── project.godot
+```
+
+---
+
+## 5. 📋 Приоритетный план действий
+
+Ты соло, поэтому порядок важен. Не делай всё сразу.
+
+### Неделя 1: Фундамент (без нового геймплея)
+| # | Задача | Зачем |
+|---|--------|-------|
+| 1 | Создать Resource-компоненты (tower, combat, health, enemy, path, projectile) | Автокомплит, типобезопасность, меньше багов |
+| 2 | Создать `EntityFactory` | Одно место создания сущностей |
+| 3 | Создать `PhaseController` | Убрать логику фаз из UI |
+| 4 | Создать `EventBus` autoload | Развязка систем |
+| 5 | Вынести `DataRepository` из GameManager | Тонкий GameManager |
+
+### Неделя 2: MVP геймплей
+| # | Задача |
+|---|--------|
+| 6 | `WaveSystem` — спавн врагов через EntityFactory |
+| 7 | `MovementSystem` — движение по path |
+| 8 | `CombatSystem` — поиск целей, создание снарядов |
+| 9 | `ProjectileSystem` — полёт и попадание |
+| 10 | `EntityRenderer` — отрисовка всего (placeholder-ы) |
+
+### Неделя 3: Энергосеть + руда
+| # | Задача |
+|---|--------|
+| 11 | `OreGenerationSystem` |
+| 12 | `EnergyNetworkSystem` (MST, связи) |
+| 13 | Интеграция энергии в CombatSystem |
+| 14 | `EnergyLineRenderer` + `OreRenderer` |
+
+### Неделя 4: Полировка MVP
+| # | Задача |
+|---|--------|
+| 15 | `SpatialHash` для поиска целей |
+| 16 | Кэширование запросов ECS |
+| 17 | HUD (здоровье, волна, фаза) |
+| 18 | Статус-эффекты (slow, poison) |
+
+---
+
+## 6. ⚠️ Чего НЕ делать (антипаттерны для соло)
+
+| ❌ Не делай | ✅ Делай вместо этого |
+|------------|----------------------|
+| Не пиши юнит-тесты на каждый метод | Пиши интеграционные: запусти волну, проверь что враги умирают |
+| Не делай абстрактные интерфейсы "на будущее" | Рефактори когда реально нужно (YAGNI) |
+| Не оптимизируй рендер до 100+ врагов на экране | Сначала сделай чтобы 20 работали правильно |
+| Не трогай визуал (шейдеры, частицы) до работающего геймплея | Placeholder-ы — это нормально |
+| Не делай save/load до полного MVP | Это отдельная большая задача |
+| Не делай меню/настройки до полного MVP | F-клавиши для дебага достаточно |
+
+---
+
+## 7. 💡 Специфичные советы по Godot для "кодера без GUI"
+
+Раз ты ненавидишь GUI движка и пишешь всё кодом:
+
+### 7.1. Создавай сцены кодом
+```gdscript
+# В game_root.gd _ready():
+func _setup_layers():
+    var hex_layer = Node2D.new()
+    hex_layer.name = "HexLayer"
+    hex_layer.z_index = 0
+    add_child(hex_layer)
+    
+    var tower_layer = Node2D.new()
+    tower_layer.name = "TowerLayer"
+    tower_layer.z_index = 10
+    add_child(tower_layer)
+    
+    # ... и т.д.
+```
+
+### 7.2. Минимальный .tscn
+Тебе нужно буквально 2 файла .tscn:
+- `main.tscn` — пустая сцена с одним Node и скриптом
+- `game_root.tscn` — пустая сцена с Node2D и скриптом
+
+Всё остальное — кодом. Это нормально и это работает.
+
+### 7.3. Используй `@tool` для визуального дебага
+```gdscript
+@tool
+extends Node2D
+
+func _draw():
+    if Engine.is_editor_hint():
+        # Рисуй гексы прямо в редакторе для проверки
+        draw_circle(Vector2.ZERO, 10, Color.RED)
+```
+
+### 7.4. Горячая перезагрузка
+```gdscript
+# В game_root.gd:
+func _input(event):
+    if event.is_action_pressed("ui_home"):  # Home key
+        get_tree().reload_current_scene()
+```
+
+---
+
+## Итого
+
+Твой проект архитектурно неплохой. Главные проблемы:
+
+1. **Логика фаз размазана** → `PhaseController`
+2. **Словари без типов** → `Resource`-компоненты
+3. **GameManager — God Object** → разбить на 3
+4. **Нет единой шины событий** → `EventBus`
+5. **Нет фабрики сущностей** → `EntityFactory`
+6. **Поиск целей O(n*m)** → `SpatialHash`
+
+Всё остальное — итеративно, по плану. Ты mid+ Python разработчик, GDScript для тебя будет как дома. Удачи, бро 💪
+
+
+Бро, 10000+ сущностей + онлайн + сложные взаимодействия — это меняет вообще всё. Давай честно и по делу.
+
+---
+
+# Жёсткая правда: GDScript не потянет
+
+## Почему
+
+GDScript — интерпретируемый язык. На 500 сущностях ты начнёшь ощущать просадки, на 2000 — будет больно, 10000 — невозможно. Каждый кадр перебирать 10000 словарей в GDScript — это смерть.
+
+**Твои варианты (от лучшего к худшему):**
+
+| Вариант | 10K сущностей | Онлайн | Сложность | Для тебя |
+|---------|--------------|--------|-----------|----------|
+| **Godot + GDExtension (C++)** | Да | Да | Высокая | Ты с Go, C++ освоишь |
+| **Godot + C#** | 5-8K | Да | Средняя | Быстрый старт |
+| **Свой сервер на Go + Godot как клиент** | Да | Да | Средняя | Идеально для тебя |
+| **Чистый GDScript** | 500-1000 макс | Больно | Низкая | Не для твоих целей |
+
+## Моя рекомендация: гибрид
+
+```
+┌─────────────────────────────────────────────┐
+│              АРХИТЕКТУРА                     │
+│                                              │
+│  Go сервер (авторитарный)                   │
+│  ├── ECS (вся симуляция)                    │
+│  ├── Энергосеть, бой, волны, эффекты        │
+│  ├── Сетевой протокол (WebSocket/UDP)       │
+│  └── Валидация действий игрока              │
+│                                              │
+│  Godot клиент (тупой рендерер)              │
+│  ├── Получает состояние от сервера          │
+│  ├── Рендерит                               │
+│  ├── Отправляет команды игрока              │
+│  ├── Интерполяция/предсказание              │
+│  └── UI, эффекты, звук                      │
+│                                              │
+│  GDExtension (C++) — горячие пути           │
+│  ├── Spatial Hash на клиенте                │
+│  ├── Батч-рендеринг 10K спрайтов            │
+│  └── Интерполяция позиций                   │
+└─────────────────────────────────────────────┘
+```
+
+**Почему это идеально для тебя:**
+- Ты уже написал ECS на Go — не выбрасывай
+- Go сервер = авторитарный мультиплеер из коробки
+- Godot = только визуализатор (ты сам сказал что так хочешь)
+- Масштабируется до любого количества сущностей
+
+---
+
+# Системы и паттерны которые тебе нужны
+
+## 1. Архитектура команд (Command Pattern + CQRS)
+
+Это фундамент для онлайна и для чистоты кода.
+
+**Суть:** игрок никогда не меняет состояние напрямую. Он отправляет команду. Сервер валидирует и применяет.
+
+```
+Игрок кликнул "поставить башню"
+    → Command { type: PLACE_TOWER, hex: {3,5}, tower_id: "TA" }
+        → Сервер валидирует (фаза? лимит? гекс свободен?)
+            → Применяет к ECS
+                → Отправляет StateUpdate клиенту
+                    → Клиент рендерит
+```
+
+```gdscript
+# Клиент — только отправка команд
+class_name CommandSender
+
+enum CommandType {
+    PLACE_TOWER,
+    REMOVE_TOWER,
+    SELECT_TOWER,
+    START_WAVE,
+    CHANGE_PHASE,
+    PAUSE,
+}
+
+# Локальная игра — выполняем сразу
+# Онлайн — отправляем на сервер
+func send(cmd: Dictionary):
+    if is_online:
+        network.send_command(cmd)
+    else:
+        local_simulation.execute_command(cmd)
+```
+
+```go
+// Сервер на Go — приём и валидация
+type Command struct {
+    Type      CommandType `json:"type"`
+    PlayerID  int         `json:"player_id"`
+    HexQ      int         `json:"hex_q,omitempty"`
+    HexR      int         `json:"hex_r,omitempty"`
+    TowerID   string      `json:"tower_id,omitempty"`
+    Timestamp int64       `json:"timestamp"`
+}
+
+func (g *Game) ExecuteCommand(cmd Command) error {
+    switch cmd.Type {
+    case CmdPlaceTower:
+        return g.validateAndPlaceTower(cmd)
+    case CmdRemoveTower:
+        return g.validateAndRemoveTower(cmd)
+    // ...
+    }
+}
+```
+
+**Зачем тебе это сейчас:** даже без онлайна — replay, undo, дебаг, детерминизм. Потом онлайн добавляется заменой одной строки.
+
+---
+
+## 2. Data-Oriented Design (DOD) — не путать с ECS
+
+ECS — это паттерн. DOD — это философия. Тебе нужна именно философия.
+
+**Принцип:** данные лежат в плоских массивах, обрабатываются линейно, без виртуальных вызовов.
+
+```go
+// ПЛОХО — Object-Oriented
+type Enemy struct {
+    Position  Vector2
+    Health    int
+    Speed     float64
+    Armor     int
+    Path      []Hex
+    Effects   []StatusEffect  // указатель, аллокация
+    // ...
+}
+enemies := []*Enemy{...}  // массив указателей = cache miss
+
+// ХОРОШО — Data-Oriented
+type Positions struct {
+    X []float32
+    Y []float32
+}
+type Healths struct {
+    Current []int32
+    Max     []int32
+}
+type Speeds struct {
+    Base    []float32
+    Current []float32
+}
+// Линейный обход = кэш CPU счастлив
+for i := 0; i < count; i++ {
+    positions.X[i] += velocities.X[i] * delta
+    positions.Y[i] += velocities.Y[i] * delta
+}
+```
+
+**На 10000 сущностей разница:**
+- OOP с указателями: ~15-30ms на кадр
+- DOD с плоскими массивами: ~0.5-2ms на кадр
+
+---
+
+## 3. Spatial Partitioning — обязательно
+
+Без этого 10000 сущностей невозможны. Тебе нужны ДВЕ структуры:
+
+### Spatial Hash Grid (для динамических сущностей)
+
+```go
+// Сервер
+type SpatialGrid struct {
+    CellSize float32
+    Cells    map[CellKey][]EntityID
+}
+
+// Перестраивается каждый кадр (дёшево)
+func (g *SpatialGrid) Rebuild(positions *Positions, count int) {
+    // clear all cells
+    for k := range g.Cells {
+        g.Cells[k] = g.Cells[k][:0]
+    }
+    for i := 0; i < count; i++ {
+        key := CellKey{
+            X: int(positions.X[i] / g.CellSize),
+            Y: int(positions.Y[i] / g.CellSize),
+        }
+        g.Cells[key] = append(g.Cells[key], EntityID(i))
+    }
+}
+
+// Запрос: все враги в радиусе
+func (g *SpatialGrid) QueryRadius(cx, cy, radius float32) []EntityID {
+    // Проверяем только 9-25 ячеек вместо 10000 сущностей
+}
+```
+
+### Статическая сетка (для башен, стен, руды)
+
+```go
+// Башни не двигаются — просто массив по гексам
+type TowerGrid struct {
+    Towers map[HexKey]EntityID  // O(1) lookup
+}
+```
+
+**Без этого:**
+- 50 башен × 10000 врагов = 500,000 проверок/кадр
+  
+**С этим:**
+- 50 башен × ~20 кандидатов = 1,000 проверок/кадр
+
+---
+
+## 4. Dirty Flag + Reactive Systems
+
+**Проблема:** энергосеть, ауры, пути — пересчитывать каждый кадр дорого, а меняются они редко.
+
+```go
+type DirtyFlags struct {
+    EnergyNetwork bool
+    Pathfinding   bool
+    AuraZones     bool
+    TowerRanges   bool
+}
+
+// Ставится при изменении
+func (g *Game) PlaceTower(cmd Command) {
+    // ... создание башни ...
+    g.Dirty.EnergyNetwork = true
+    g.Dirty.Pathfinding = true
+    g.Dirty.AuraZones = true
+}
+
+// Проверяется в начале кадра
+func (g *Game) Update(delta float64) {
+    if g.Dirty.EnergyNetwork {
+        g.energySystem.Rebuild()
+        g.Dirty.EnergyNetwork = false
+    }
+    if g.Dirty.Pathfinding {
+        g.pathCache.Invalidate()
+        g.Dirty.Pathfinding = false
+    }
+    // Движение и бой — каждый кадр (дешёвые с DOD)
+    g.movementSystem.Update(delta)
+    g.combatSystem.Update(delta)
+}
+```
+
+---
+
+## 5. Effect System (Composition over Inheritance)
+
+У тебя куча эффектов: slow, poison, jade poison, aura speed, damage boost, ore bonus. Это будет расти. Не делай отдельную систему на каждый эффект.
+
+```go
+type EffectType int
+const (
+    EffectSlow EffectType = iota
+    EffectPoison
+    EffectDamageBoost
+    EffectSpeedAura
+    EffectArmorReduce
+    // Добавляй сколько хочешь
+)
+
+type Effect struct {
+    Type       EffectType
+    Value      float32    // сила эффекта
+    Duration   float32    // оставшееся время (-1 = бесконечно)
+    SourceID   EntityID   // кто наложил
+    StackCount int        // стаки
+    MaxStacks  int
+}
+
+// Все эффекты на сущности — плоский массив
+type EffectContainer struct {
+    Effects [MaxEffectsPerEntity]Effect
+    Count   int
+}
+
+// Одна система обрабатывает ВСЕ эффекты
+type EffectSystem struct{}
+
+func (s *EffectSystem) Update(delta float64, ecs *ECS) {
+    for i := 0; i < ecs.EntityCount; i++ {
+        container := &ecs.Effects[i]
+        
+        // Агрегируем модификаторы
+        speedMult := 1.0
+        poisonDPS := 0.0
+        
+        alive := 0
+        for j := 0; j < container.Count; j++ {
+            e := &container.Effects[j]
+            e.Duration -= float32(delta)
+            
+            if e.Duration > 0 || e.Duration == -1 {
+                switch e.Type {
+                case EffectSlow:
+                    speedMult *= (1.0 - float64(e.Value))
+                case EffectPoison:
+                    poisonDPS += float64(e.Value) * float64(e.StackCount)
+                case EffectArmorReduce:
+                    // ...
+                }
+                container.Effects[alive] = *e
+                alive++
+            }
+        }
+        container.Count = alive
+        
+        // Применяем
+        ecs.Speeds.Current[i] = ecs.Speeds.Base[i] * float32(speedMult)
+        if poisonDPS > 0 {
+            ecs.Healths.Current[i] -= int32(poisonDPS * delta)
+        }
+    }
+}
+```
+
+**Зачем:** добавить новый эффект = добавить `const` + `case` в switch. Не новый файл, не новую систему, не новый компонент.
+
+---
+
+## 6. Event Sourcing (лёгкая версия)
+
+Все значимые события записываются. Это даёт тебе replay, дебаг, аналитику и основу для онлайна.
+
+```go
+type GameEvent struct {
+    Tick      uint64
+    Type      EventType
+    EntityA   EntityID
+    EntityB   EntityID
+    ValueI    int32
+    ValueF    float32
+    HexQ, HexR int16
+}
+
+type EventLog struct {
+    Events []GameEvent
+    // Кольцевой буфер последних N для сети
+}
+
+func (log *EventLog) Record(e GameEvent) {
+    log.Events = append(log.Events, e)
+}
+
+// При убийстве врага:
+eventLog.Record(GameEvent{
+    Tick:    currentTick,
+    Type:    EventEnemyKilled,
+    EntityA: towerID,
+    EntityB: enemyID,
+    ValueI:  damage,
+})
+```
+
+---
+
+## 7. Network Layer (когда дойдёшь до онлайна)
+
+### Архитектура: авторитарный сервер
+
+```
+┌──────────┐     Commands      ┌──────────┐
+│  Client  │ ───────────────→  │  Server  │
+│ (Godot)  │                   │  (Go)    │
+│          │  ←───────────────  │          │
+│  Render  │   State Snapshots │  ECS     │
+│  UI      │   + Events        │  Logic   │
+│  Input   │                   │  Auth    │
+└──────────┘                   └──────────┘
+```
+
+### Протокол: Delta Compression
+
+```go
+// Не отправляй 10000 позиций каждый кадр
+// Отправляй только изменения
+
+type StateSnapshot struct {
+    Tick           uint64
+    ChangedEntities []EntityDelta
+    NewEntities     []EntityFull
+    DeadEntities    []EntityID
+    Events          []GameEvent
+}
+
+type EntityDelta struct {
+    ID    EntityID
+    Flags uint16    // битовая маска: что изменилось
+    PosX  int16     // если Flags & POS_CHANGED
+    PosY  int16
+    HP    int16     // если Flags & HP_CHANGED
+}
+```
+
+### Tick Rate
+
+```go
+const (
+    ServerTickRate = 20   // 20 тиков/сек для логики
+    ClientFPS     = 60    // 60 кадров/сек для рендера
+    // Клиент интерполирует между тиками сервера
+)
+```
+
+---
+
+## 8. Rendering Pipeline (Godot сторона)
+
+Для 10000 спрайтов обычные Node2D/Sprite2D — смерть. Тебе нужен **MultiMeshInstance2D**.
+
+```gdscript
+# godot_adapter/rendering/batch_renderer.gd
+extends MultiMeshInstance2D
+
+var entity_count: int = 0
+
+func _ready():
+    multimesh = MultiMesh.new()
+    multimesh.transform_format = MultiMesh.TRANSFORM_2D
+    multimesh.use_colors = true
+    multimesh.instance_count = 0  # Динамически
+    multimesh.visible_instance_count = 0
+    multimesh.mesh = _create_quad_mesh()
+
+func update_from_snapshot(snapshot: Dictionary):
+    var positions: PackedFloat32Array = snapshot["positions"]
+    var colors: PackedColorArray = snapshot["colors"]
+    var count = positions.size() / 2
+    
+    if count > multimesh.instance_count:
+        multimesh.instance_count = count + 1000  # с запасом
+    multimesh.visible_instance_count = count
+    
+    for i in count:
+        var t = Transform2D()
+        t.origin = Vector2(positions[i * 2], positions[i * 2 + 1])
+        multimesh.set_instance_transform_2d(i, t)
+        multimesh.set_instance_color(i, colors[i])
+```
+
+**Результат:** 10000 врагов = 1 draw call. Вместо 10000 нод.
+
+---
+
+## Общий план (по этапам)
+
+```
+ЭТАП 0 (сейчас): Определись с архитектурой
+├── Решение: Go сервер + Godot клиент
+├── Или: всё в Godot, но горячие пути на GDExtension (C++)
+└── Или: всё в Godot C# (потолок ~5K сущностей)
+
+ЭТАП 1: Симуляция на Go (2-3 недели)
+├── Забери свой ECS с Go-проекта
+├── Переведи на DOD (SoA вместо AoS)
+├── Command Pattern для всех действий
+├── Spatial Hash Grid
+├── Effect System (единая)
+├── Event Log
+└── Тесты: 10000 врагов, замер производительности
+
+ЭТАП 2: Godot клиент — тупой рендерер (2 недели)
+├── MultiMeshInstance2D для батч-рендера
+├── Получение состояния (сначала локально, потом по сети)
+├── Интерполяция позиций между тиками
+├── Отправка команд
+├── UI (HUD, панели)
+└── Эффекты (частицы, вспышки)
+
+ЭТАП 3: Связка (1-2 недели)
+├── WebSocket между Go и Godot
+├── Сериализация (Protocol Buffers или MessagePack)
+├── Delta Compression
+├── Client-side prediction для размещения башен
+└── Лаг-компенсация
+
+ЭТАП 4: Контент и полировка (ongoing)
+├── Все типы башен
+├── Все типы врагов
+├── Крафт
+├── Энергосеть
+├── Баланс
+└── Визуал
+```
+
+---
+
+## Паттерны — итоговая таблица
+
+| Паттерн | Зачем | Когда внедрять |
+|---------|-------|----------------|
+| **Command Pattern** | Онлайн, replay, undo, детерминизм | Сразу |
+| **DOD / SoA** | 10K+ сущностей без лагов | Сразу |
+| **Spatial Hash** | O(1) поиск соседей вместо O(n²) | Сразу |
+| **Dirty Flags** | Не пересчитывать сеть/пути каждый кадр | Сразу |
+| **Unified Effect System** | Бесконечные эффекты без бесконечных систем | Сразу |
+| **Event Sourcing** | Дебаг, replay, аналитика, сеть | Этап 1 |
+| **Delta Compression** | Сеть: 10K сущностей по WebSocket | Этап 3 |
+| **MultiMesh Batching** | Рендер 10K спрайтов = 1 draw call | Этап 2 |
+| **Object Pool** | Меньше аллокаций, меньше GC | Этап 2 |
+| **State Machine** | Фазы игры, AI врагов (если будет) | Есть |
+| **CQRS** | Чтение ≠ запись, сервер ≠ клиент | Этап 3 |
+
+---
+
+## Главный совет
+
+Ты Go-разработчик. Ты ненавидишь движки. Ты хочешь 10K сущностей и онлайн.
+
+**Не пиши симуляцию в Godot.** Godot — твой рендерер. Go — твой мозг. Это разделение даст тебе:
+
+- Перформанс (Go быстрее GDScript в 50-100 раз на логике)
+- Онлайн (Go сервер уже авторитарный)
+- Тестируемость (Go тесты без запуска движка)
+- Свободу (завтра захочешь 3D — меняешь только клиент)
+
+Ты уже написал половину этого на Go. Не выбрасывай — развивай.
+
+
+# Быстрый план на локальное MVP
+
+Забудь пока про Go-сервер, онлайн, 10K сущностей. Всё это потом. Сейчас цель одна — **играбельный прототип за 2 недели**.
+
+---
+
+## Принцип: всё в Godot, всё на GDScript, рефактор потом
+
+```
+Сейчас:  GDScript монолит → работающая игра
+Потом:   Выносишь симуляцию в Go, Godot = рендерер
+```
+
+Главное правило — **Command Pattern с первого дня**. Это единственное что ты внедряешь "на будущее". Остальное — максимально тупо и быстро.
+
+---
+
+## Что у тебя уже есть (работает)
+
+```
+✅ ECS World
+✅ Гексагональная карта + генерация
+✅ A* pathfinding
+✅ JSON данные (башни, враги, волны)
+✅ Камера (WASD, zoom)
+✅ Config
+✅ GameManager
+✅ Отрисовка гексов, entry, exit, checkpoints
+```
+
+---
+
+## Что нужно для MVP (минимум)
+
+```
+Игрок кликает → башня ставится → враги спавнятся →
+→ враги идут → башни стреляют → враги умирают →
+→ волна кончается → новая фаза строительства
+```
+
+**7 файлов. Всё.**
+
+---
+
+## День 1: Команды + размещение башен
+
+Один файл — вся обработка ввода:
+
+```gdscript
+# core/systems/input_system.gd
+class_name InputSystem
+
+var ecs: ECSWorld
+var hex_map: HexMap
+
+func handle_click(world_pos: Vector2, button: int):
+    var hex = Hex.pixel_to_hex(world_pos, Config.HEX_SIZE)
+    
+    if button == MOUSE_BUTTON_LEFT:
+        _try_place_tower(hex)
+    elif button == MOUSE_BUTTON_RIGHT:
+        _try_remove_tower(hex)
+
+func _try_place_tower(hex: Vector2i):
+    # Проверки
+    var tile = hex_map.get_tile(hex)
+    if tile == null or not tile.passable or tile.has_tower:
+        return
+    if ecs.game_state["phase"] != GameTypes.BUILD_STATE:
+        return
+    if ecs.game_state["towers_built"] >= 5:
+        return
+    
+    # Создаём
+    var id = ecs.create_entity()
+    var pos = Hex.to_pixel(hex.x, hex.y, Config.HEX_SIZE)
+    ecs.positions[id] = pos
+    ecs.towers[id] = {
+        "def_id": "TA",
+        "hex": hex,
+        "type": "ATTACK",
+        "damage": 25,
+        "range": Config.HEX_SIZE * 3,
+        "fire_rate": 1.0,
+        "cooldown": 0.0,
+    }
+    
+    tile.has_tower = true
+    tile.tower_id = id
+    ecs.game_state["towers_built"] += 1
+```
+
+**Подключение в game_root.gd:**
+
+```gdscript
+func _unhandled_input(event):
+    if event is InputEventMouseButton and event.pressed:
+        var world_pos = get_global_mouse_position()
+        input_system.handle_click(world_pos, event.button_index)
+```
+
+**Результат дня 1:** кликаешь — на гексе появляется башня.
+
+---
+
+## День 2: Рендер башен и врагов (тупой)
+
+Один файл — рисует всё:
+
+```gdscript
+# godot_adapter/rendering/entity_renderer.gd
+extends Node2D
+
+var ecs: ECSWorld
+var tower_nodes: Dictionary = {}   # entity_id -> Node2D
+var enemy_nodes: Dictionary = {}
+
+func _process(_delta):
+    _sync_towers()
+    _sync_enemies()
+
+func _sync_towers():
+    # Добавить новые
+    for id in ecs.towers:
+        if id not in tower_nodes:
+            var node = _make_circle(12.0, Color.ORANGE)
+            node.position = ecs.positions[id]
+            add_child(node)
+            tower_nodes[id] = node
+    
+    # Удалить мёртвые
+    for id in tower_nodes.keys():
+        if id not in ecs.towers:
+            tower_nodes[id].queue_free()
+            tower_nodes.erase(id)
+
+func _sync_enemies():
+    for id in ecs.enemies:
+        if id not in enemy_nodes:
+            var node = _make_circle(8.0, Color.RED)
+            add_child(node)
+            enemy_nodes[id] = node
+        enemy_nodes[id].position = ecs.positions[id]
+    
+    for id in enemy_nodes.keys():
+        if id not in ecs.enemies:
+            enemy_nodes[id].queue_free()
+            enemy_nodes.erase(id)
+
+func _make_circle(radius: float, color: Color) -> Node2D:
+    var node = Node2D.new()
+    var polygon = Polygon2D.new()
+    var points = PackedVector2Array()
+    for i in 16:
+        var angle = TAU * i / 16.0
+        points.append(Vector2(cos(angle), sin(angle)) * radius)
+    polygon.polygon = points
+    polygon.color = color
+    node.add_child(polygon)
+    return node
+```
+
+**Результат дня 2:** видишь башни (оранжевые круги) и врагов (красные круги).
+
+---
+
+## День 3: Спавн врагов
+
+```gdscript
+# core/systems/wave_system.gd
+class_name WaveSystem
+
+var ecs: ECSWorld
+var hex_map: HexMap
+var spawn_timer: float = 0.0
+var enemies_to_spawn: int = 0
+var current_enemy_def: Dictionary = {}
+var spawn_path: Array = []
+
+func start_wave(wave_number: int):
+    var wave_def = GameManager.get_wave_def(wave_number)
+    current_enemy_def = GameManager.get_enemy_def(wave_def["enemy_id"])
+    enemies_to_spawn = wave_def["count"]
+    spawn_timer = 0.0
+    
+    # Считаем путь один раз
+    spawn_path = _build_full_path()
+
+func update(delta: float):
+    if ecs.game_state["phase"] != GameTypes.WAVE_STATE:
+        return
+    if enemies_to_spawn <= 0:
+        _check_wave_complete()
+        return
+    
+    spawn_timer -= delta
+    if spawn_timer <= 0:
+        _spawn_one_enemy()
+        spawn_timer = 0.8  # интервал спавна
+        enemies_to_spawn -= 1
+
+func _spawn_one_enemy():
+    var id = ecs.create_entity()
+    var start_hex = spawn_path[0]
+    ecs.positions[id] = Hex.to_pixel(start_hex.x, start_hex.y, Config.HEX_SIZE)
+    ecs.enemies[id] = {
+        "def_id": current_enemy_def["id"],
+        "speed": current_enemy_def.get("speed", 80.0),
+        "physical_armor": current_enemy_def.get("physical_armor", 0),
+        "magical_armor": current_enemy_def.get("magical_armor", 0),
+    }
+    ecs.healths[id] = {
+        "current": current_enemy_def.get("health", 100),
+        "max": current_enemy_def.get("health", 100),
+    }
+    ecs.paths[id] = {
+        "hexes": spawn_path.duplicate(),
+        "index": 0,
+    }
+
+func _build_full_path() -> Array:
+    var full_path = []
+    var waypoints = [hex_map.entry] + hex_map.checkpoints + [hex_map.exit]
+    for i in range(waypoints.size() - 1):
+        var segment = Pathfinding.a_star(hex_map, waypoints[i], waypoints[i + 1])
+        if i > 0 and segment.size() > 0:
+            segment.remove_at(0)  # убрать дубликат
+        full_path.append_array(segment)
+    return full_path
+
+func _check_wave_complete():
+    if ecs.enemies.is_empty():
+        ecs.game_state["phase"] = GameTypes.BUILD_STATE
+        ecs.game_state["towers_built"] = 0
+        ecs.game_state["current_wave"] += 1
+```
+
+**Результат дня 3:** враги появляются на входе.
+
+---
+
+## День 4: Движение врагов
+
+```gdscript
+# core/systems/movement_system.gd
+class_name MovementSystem
+
+var ecs: ECSWorld
+var hex_map: HexMap
+
+func update(delta: float):
+    if ecs.game_state["phase"] != GameTypes.WAVE_STATE:
+        return
+    
+    var dead_enemies = []
+    
+    for id in ecs.enemies:
+        var path = ecs.paths.get(id)
+        if path == null:
+            continue
+        
+        var target_hex = path["hexes"][path["index"]]
+        var target_pos = Hex.to_pixel(
+            target_hex.x, target_hex.y, Config.HEX_SIZE
+        )
+        var current_pos: Vector2 = ecs.positions[id]
+        var direction = (target_pos - current_pos)
+        var distance = direction.length()
+        
+        var speed = ecs.enemies[id]["speed"]
+        
+        if distance < speed * delta:
+            # Достигли точки
+            ecs.positions[id] = target_pos
+            path["index"] += 1
+            
+            # Конец пути — урон игроку
+            if path["index"] >= path["hexes"].size():
+                ecs.player_states["health"] -= 1
+                dead_enemies.append(id)
+        else:
+            ecs.positions[id] = current_pos + direction.normalized() * speed * delta
+    
+    for id in dead_enemies:
+        ecs.destroy_entity(id)
+```
+
+**Результат дня 4:** враги идут от входа через чекпоинты к выходу.
+
+---
+
+## День 5: Башни стреляют
+
+```gdscript
+# core/systems/combat_system.gd
+class_name CombatSystem
+
+var ecs: ECSWorld
+
+func update(delta: float):
+    if ecs.game_state["phase"] != GameTypes.WAVE_STATE:
+        return
+    
+    for tower_id in ecs.towers:
+        var tower = ecs.towers[tower_id]
+        tower["cooldown"] = max(0.0, tower["cooldown"] - delta)
+        
+        if tower["cooldown"] > 0:
+            continue
+        
+        # Найти ближайшего врага в радиусе
+        var tower_pos: Vector2 = ecs.positions[tower_id]
+        var best_id = -1
+        var best_dist = tower["range"]
+        
+        for enemy_id in ecs.enemies:
+            var dist = tower_pos.distance_to(ecs.positions[enemy_id])
+            if dist < best_dist:
+                best_dist = dist
+                best_id = enemy_id
+        
+        if best_id == -1:
+            continue
+        
+        # Стреляем — создаём снаряд
+        var proj_id = ecs.create_entity()
+        ecs.positions[proj_id] = tower_pos
+        ecs.projectiles[proj_id] = {
+            "target_id": best_id,
+            "damage": tower["damage"],
+            "speed": 300.0,
+        }
+        
+        tower["cooldown"] = 1.0 / tower["fire_rate"]
+```
+
+---
+
+## День 6: Снаряды летят и попадают
+
+```gdscript
+# core/systems/projectile_system.gd
+class_name ProjectileSystem
+
+var ecs: ECSWorld
+
+func update(delta: float):
+    var to_remove = []
+    
+    for proj_id in ecs.projectiles:
+        var proj = ecs.projectiles[proj_id]
+        var target_id = proj["target_id"]
+        
+        # Цель умерла — удалить снаряд
+        if target_id not in ecs.positions:
+            to_remove.append(proj_id)
+            continue
+        
+        var pos: Vector2 = ecs.positions[proj_id]
+        var target_pos: Vector2 = ecs.positions[target_id]
+        var direction = (target_pos - pos)
+        var dist = direction.length()
+        
+        # Попадание
+        if dist < 10.0:
+            _hit(proj, target_id)
+            to_remove.append(proj_id)
+            continue
+        
+        # Движение
+        ecs.positions[proj_id] = pos + direction.normalized() * proj["speed"] * delta
+    
+    for id in to_remove:
+        ecs.destroy_entity(id)
+
+func _hit(proj: Dictionary, target_id: int):
+    if target_id not in ecs.healths:
+        return
+    
+    var health = ecs.healths[target_id]
+    var armor = ecs.enemies[target_id].get("physical_armor", 0)
+    var final_damage = max(proj["damage"] - armor, 1)
+    
+    health["current"] -= final_damage
+    
+    if health["current"] <= 0:
+        ecs.destroy_entity(target_id)
+        ecs.game_state["total_kills"] = ecs.game_state.get("total_kills", 0) + 1
+```
+
+**Результат дня 6:** башни стреляют, враги умирают.
+
+---
+
+## День 7: Смена фаз + минимальный HUD
+
+```gdscript
+# В game_root.gd — добавить переключение фаз
+func _input(event):
+    if event.is_action_pressed("ui_accept"):  # Space
+        match ecs.game_state["phase"]:
+            GameTypes.BUILD_STATE:
+                ecs.game_state["phase"] = GameTypes.WAVE_STATE
+                wave_system.start_wave(ecs.game_state["current_wave"])
+            GameTypes.WAVE_STATE:
+                pass  # Ждём завершения
+```
+
+HUD — один Label:
+
+```gdscript
+# godot_adapter/ui/game_hud.gd
+extends CanvasLayer
+
+var label: Label
+
+func _ready():
+    label = Label.new()
+    label.position = Vector2(10, 10)
+    label.add_theme_font_size_override("font_size", 20)
+    add_child(label)
+
+func _process(_delta):
+    var gs = GameManager.ecs.game_state
+    var ps = GameManager.ecs.player_states
+    label.text = "HP: %d | Wave: %d | Phase: %s | Kills: %d | Towers: %d/5" % [
+        ps.get("health", 10),
+        gs.get("current_wave", 1),
+        _phase_name(gs.get("phase", 0)),
+        gs.get("total_kills", 0),
+        gs.get("towers_built", 0),
+    ]
+
+func _phase_name(phase: int) -> String:
+    match phase:
+        GameTypes.BUILD_STATE: return "BUILD"
+        GameTypes.WAVE_STATE: return "WAVE"
+        _: return "???"
+```
+
+---
+
+## Итого: 7 дней → играбельный прототип
+
+```
+День 1: Клик → башня на карте              ✓ input_system.gd
+День 2: Видишь башни и врагов              ✓ entity_renderer.gd
+День 3: Враги спавнятся                    ✓ wave_system.gd
+День 4: Враги идут по пути                 ✓ movement_system.gd
+День 5: Башни стреляют                     ✓ combat_system.gd
+День 6: Снаряды попадают, враги умирают    ✓ projectile_system.gd
+День 7: Фазы + HUD                        ✓ game_hud.gd
+```
+
+**7 новых файлов. ~400 строк кода. Рабочая игра.**
+
+---
+
+## Неделя 2: добавляем мясо
+
+```
+День 8:  Разные типы башен (читаем из JSON вместо хардкода)
+День 9:  Удаление башен + стены блокируют путь
+День 10: Фаза SELECTION (выбор 2 из 5)
+День 11: Энергосеть (упрощённая: майнер рядом = башня активна)
+День 12: Руда на карте (3 жилы, визуал)
+День 13: Slow + Poison эффекты
+День 14: Полировка, баланс, фикс багов
+```
+
+---
+
+## Что НЕ делать в эти 2 недели
+
+```
+❌ Resource-компоненты      → словари ок для MVP
+❌ PhaseController           → match в game_root хватит
+❌ EventBus                  → прямые вызовы ок
+❌ DataRepository            → GameManager хватит
+❌ SpatialHash               → brute force на 50 врагах ок
+❌ MultiMesh                 → Polygon2D на 50 врагах ок
+❌ Онлайн                    → потом
+❌ Красивые спрайты          → круги и квадраты
+❌ Звук                      → потом
+❌ Сохранение                → потом
+```
+
+Сначала играешь. Потом рефакторишь. Потом масштабируешь.

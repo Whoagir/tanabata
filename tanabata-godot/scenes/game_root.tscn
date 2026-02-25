@@ -1,0 +1,20 @@
+[gd_scene load_steps=2 format=3 uid="uid://c2xl5hyfk3vph8"]
+
+[ext_resource type="Script" path="res://scenes/game_root.gd" id="1_3fqkw"]
+
+[node name="GameRoot" type="Node2D"]
+script = ExtResource("1_3fqkw")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="HexLayer" type="Node2D" parent="."]
+
+[node name="TowerLayer" type="Node2D" parent="."]
+
+[node name="EnemyLayer" type="Node2D" parent="."]
+
+[node name="ProjectileLayer" type="Node2D" parent="."]
+
+[node name="EffectLayer" type="Node2D" parent="."]
+
+[node name="UILayer" type="CanvasLayer" parent="."]

@@ -1,0 +1,699 @@
+# Слои архитектуры и паттерны проектирования
+
+Аналогия с веб-приложением: есть «ручки» (ввод и отображение), слой приложения (сценарии использования), доменная логика и инфраструктура. Ниже — как это устроено в проекте и какие паттерны используются.
+
+---
+
+## Аналогия с веб-приложением
+
+| Веб | Tanabata (Godot) |
+|-----|------------------|
+| **HTTP handlers / Controllers** | Точки ввода и UI: `game_root.gd` (_unhandled_input, _input), `game_hud.gd`, `info_panel.gd` — принимают клики/клавиши и решают, куда передать |
+| **Application layer / Use cases** | Оркестрация: `GameManager` (загрузка данных, создание игрока, стен, руды), `InputSystem` (команды «поставить башню», «выбрать башню») — координируют домен и не содержат правил игры |
+| **Domain / Business logic** | ECS + системы: `ecs_world.gd`, `*_system.gd` (wave, movement, combat, projectile, aura, status_effect, energy_network, ore_generation), `hexmap`, `game_types.gd` — правила игры, без Godot и без прямого I/O |
+| **Data access / Config** | Конфиг и данные: `config.gd` (константы, `load_json`), JSON в `data/`, определения башен/врагов/волн в `GameManager` (tower_defs, get_tower_def, get_wave_def) |
+| **Rendering / Adapters** | `godot_adapter/rendering/*` — читают состояние из ECS и рисуют в Godot (EntityRenderer, WallRenderer, OreRenderer и т.д.). Аналог «сериализации в ответ» — преобразование доменного состояния в картинку |
+
+---
+
+## Слои (сверху вниз)
+
+### 1. Presentation (представление)
+
+**Назначение:** принять ввод пользователя и отобразить состояние. Не содержит правил игры.
+
+**Файлы и роли:**
+
+- **scenes/game_root.gd**
+  - Перехват ввода: `_unhandled_input` (клики мыши), `_input` (Space, P, I, 1–3, 0).
+  - Фильтрация: «клик не в UI» (`_is_ui_area`), «не в InfoPanel».
+  - Вызов: `input_system.handle_mouse_click(mouse_pos, button)` — передача в слой приложения.
+  - Управление камерой (WASD, zoom) — чисто представление.
+  - Хоткеи фазы (Space) и паузы (P) вызывают `_cycle_phase()` и `GameManager.toggle_pause()` — тонкая связка с приложением/доменом.
+  - Хранение ссылок на слои (HexLayer, TowerLayer, …) и рендереры; создание систем и рендереров в `_ready()` — композиция корня сцены.
+- **godot_adapter/ui/game_hud.gd**
+  - Построение UI (здоровье, волна, счётчик башен, убийства, индикатор фазы, кнопки скорости и паузы).
+  - Обновление текста из `ecs.game_state` и `ecs.player_states` (чтение — только отображение).
+  - Обработчики кнопок: смена фазы, пауза, скорость — вызывают методы GameManager или напрямую меняют `ecs.game_state` и выполняют очистку сущностей/финализацию выбора. Здесь смешаны представление и сценарии перехода фаз (см. EXTENSION_RISKS.md).
+- **godot_adapter/ui/info_panel.gd**
+  - Показ информации о выбранной сущности (башня/враг) по данным из `ecs`.
+  - Кнопки «Сохранить» / переход в WAVE при сохранении двух башен — снова логика перехода фазы и финализации выбора внутри UI.
+
+**Граница:** слой не должен содержать формул урона, правил волн, условий победы/поражения. Сейчас часть логики переходов фаз и очистки сущностей живёт в game_root и game_hud/info_panel — её логично вынести в один оркестратор фаз (Application).
+
+---
+
+### 2. Application (приложение / use cases)
+
+**Назначение:** сценарии использования: «поставить башню», «начать волну», «сменить фазу», «загрузить игру». Координирует домен и данные, но не реализует правила игры.
+
+**Файлы и роли:**
+
+- **autoload/game_manager.gd**
+  - Старт игры: создание ECS, карты, игрока, начальных стен, генерация руды, создание EnergyNetworkSystem, загрузка JSON (load_game_data).
+  - Данные: хранение tower_defs, enemy_defs, recipe_defs, loot_table_defs, wave_defs; методы get_tower_def, get_wave_def, get_loot_table_for_level — по сути «доступ к данным» для домена и UI.
+  - Пауза/скорость: toggle_pause(), изменение game_state["paused"] и time_speed.
+  - Сигнал event_dispatched — задел под события; подписчиков нет.
+  - Fixed timestep (accumulator, update_simulation) объявлен, но **игровой цикл систем реально вызывается из GameRoot._process** (input_system.update, wave_system.update, …). Массив `systems` в GameManager не заполняется из game_root — дублирование концепции «цикла».
+- **core/systems/input_system.gd**
+  - Приём ввода: `handle_mouse_click` переводит клик в «команду» (place_tower, remove_tower, select_tower, toggle_selection, …) и кладёт в `command_queue`.
+  - Выполнение: `update()` достаёт команды из очереди и вызывает `place_tower(hex)`, `select_tower(tower_id)` и т.д. — это уже вызов доменных операций (создание/удаление сущностей, изменение компонентов в ECS).
+  - Явная зависимость от GameManager (get_tower_def, info_panel) и от ecs/hex_map — граница между Application и Domain здесь размыта: InputSystem и создаёт сущности в ECS, и знает фазы/лимиты. По идее «сценарий» только координирует, а «как создать башню» и «можно ли ставить» — домен или отдельный фасад.
+
+**Граница:** слой не должен содержать формул боя, движения по гексам, расчёта MST энергосети. Логику «какая башня ставится» (RANDOM_ATTACK, дебаг-режим) и «сколько башен сохранять» лучше держать в одном месте (конфиг + фасад), а не размазывать по InputSystem и UI.
+
+---
+
+### 3. Domain (домен / бизнес-логика)
+
+**Назначение:** правила игры: сущности, компоненты, симуляция волн, движения, боя, энергосети, руды. Без привязки к Godot и к конкретному способу ввода/вывода.
+
+**Файлы и роли:**
+
+- **core/ecs/ecs_world.gd**
+  - Хранилище сущностей и компонентов (словари: positions, towers, enemies, projectiles, ores, healths, combat, …).
+  - create_entity / destroy_entity, add_component.
+  - game_state (phase, current_wave, towers_built_this_phase, total_enemies_killed, paused, time_speed) — глобальное состояние одной партии.
+  - init_game_state() — инициализация ключей состояния.
+- **core/systems/*.gd**
+  - **wave_system:** спавн врагов по волнам (get_wave_def через GameManager), создание сущностей врагов с path, health, enemy def.
+  - **movement_system:** движение по path, обновление positions, достижение чекпоинта/базы (урон игроку).
+  - **combat_system:** поиск целей, создание снарядов/лазеров, нанесение урона, применение slow/poison, инкремент total_enemies_killed.
+  - **projectile_system:** полёт снарядов, попадание по врагу, урон, уничтожение сущностей.
+  - **status_effect_system:** таймеры slow/poison, урон по времени.
+  - **aura_system:** расчёт aura_effects от башен с аурой (скорость врагов).
+  - **energy_network_system:** построение графа башен, MST, энерголинии, активность майнеров на руде, деградация по цепям.
+  - **ore_generation_system:** процедурная генерация руды на карте (вызывается при старте из GameManager).
+- **core/hexmap/*.gd**
+  - Hex, HexMap: геометрия гексов, соседи, путь, чекпоинты, get_tile, set_tile, get_tower_id, passable, генерация начальных стен.
+- **core/types/game_types.gd**
+  - Энумы и константы: GamePhase, TowerType, AttackType, DamageType, EventType; INVALID_ENTITY_ID — общий контракт для всех слоёв.
+- **core/utils/union_find.gd**
+  - Структура данных для объединения компонент связности (энергосеть).
+
+**Граница:** слой не обращается к Node, SceneTree, файлам (кроме через переданные параметры). Загрузка определений (get_tower_def, get_wave_def) вызывается из систем через GameManager — зависимость «домен → приложение/данные» в одну сторону допустима; лучше бы фасад «данные для симуляции» с минимальным API.
+
+---
+
+### 4. Infrastructure (инфраструктура)
+
+**Назначение:** константы, загрузка файлов, отрисовка состояния в движке.
+
+**Файлы и роли:**
+
+- **autoload/config.gd**
+  - Константы: экран, гекс, карта, тик, здоровье, лимиты башен, энергосеть, руда, враги, снаряды, цвета, пути к JSON.
+  - load_json(path) — чтение файлов.
+  - Визуальные флаги (visual_debug_mode) — для отладки.
+- **data/*.json**
+  - Определения башен, врагов, рецептов, loot tables, волн — «сырые» данные, которые обрабатывает GameManager и отдаёт домену/UI через tower_defs, get_wave_def и т.д.
+- **godot_adapter/rendering/*.gd**
+  - **entity_renderer:** по ecs.towers, ecs.enemies, ecs.projectiles создаёт/обновляет Node2D (Polygon2D, Line2D), пулы врагов и снарядов, подсветка выбора и майнеров на руде.
+  - **wall_renderer:** отрисовка стен по ecs.towers (type WALL) и карте.
+  - **ore_renderer:** отрисовка руды по ecs.ores.
+  - **energy_line_renderer:** линии энергосети по ecs.energy_lines и positions.
+  - **aura_renderer:** визуал аур по ecs.auras и positions.
+  - **tower_preview:** превью башни под курсором при размещении.
+- **godot_adapter/utils (если есть)** — например Object Pool для нод (NodePool).
+
+Рендереры только читают ECS и карту (GameManager.ecs, GameManager.hex_map), не меняют логическое состояние игры — это корректная односторонняя зависимость Infrastructure → Domain (чтение).
+
+---
+
+## Поток данных (упрощённо)
+
+1. **Ввод:** мышь/клавиатура → `game_root` (_input / _unhandled_input) → проверка UI-зоны → `input_system.handle_mouse_click` (или хоткей фазы/паузы).
+2. **Команда:** InputSystem кладёт в command_queue команду (place_tower, select_tower, …); в следующем кадре `input_system.update()` выполняет её, вызывая методы, которые меняют ECS (create_entity, add_component, hex_map.set_tile и т.д.).
+3. **Симуляция:** в `game_root._process` по очереди вызываются wave_system.update, movement_system.update, status_effect_system.update, aura_system.update, combat_system.update, projectile_system.update. Energy network пересчитывается при изменении башен (из InputSystem при place_tower/remove_tower). Все системы читают/пишут только ECS и hex_map.
+4. **Отрисовка:** каждый кадр entity_renderer, wall_renderer, ore_renderer, energy_line_renderer, aura_renderer, tower_preview в _process / _physics_process читают ecs и hex_map и обновляют ноды в сцене.
+5. **UI:** game_hud и info_panel в _process или по сигналам читают ecs.game_state, ecs.player_states, ecs.towers и обновляют подписи/кнопки.
+
+Итого: ввод → Presentation → Application (InputSystem, при необходимости GameManager) → Domain (ECS + системы) → состояние обновлено; Presentation и Infrastructure читают состояние и рисуют/показывают UI.
+
+---
+
+## Паттерны проектирования
+
+| Паттерн | Где используется |
+|--------|-------------------|
+| **Singleton (Autoload)** | `GameManager`, `Config` — одна точка доступа к данным, конфигу и ECS/hex_map. |
+| **ECS (Entity-Component-System)** | `ecs_world.gd` — сущности и компоненты; системы в `core/systems/` — логика без наследования, данные в словарях. |
+| **Command / Очередь команд** | `InputSystem.command_queue`: клик превращается в команду (place_tower, select_tower, …), выполняется в update() — батчинг и отложенное выполнение. |
+| **Object Pool** | `NodePool` в entity_renderer для врагов и снарядов — переиспользование нод вместо создания/удаления. |
+| **Data-driven design** | Башни, враги, волны заданы в JSON; код обращается по id (get_tower_def, get_wave_def). Логика типов частично в данных (type, attack_type), частично в жёстких if по строке (см. EXTENSION_RISKS.md). |
+| **Adapter** | Папка `godot_adapter/`: рендереры адаптируют доменное состояние (ECS, HexMap) к Godot (Node2D, Polygon2D, Line2D). Core не знает о Godot. |
+| **State (простой)** | `game_state` в ECS — один словарь с phase, current_wave, paused, time_speed и т.д. Переходы фаз разбросаны по game_root, game_hud, info_panel (нет единого State Machine объекта). |
+| **Repository-like** | Определения (tower_defs, enemy_defs, wave_defs) и методы get_tower_def, get_wave_def в GameManager — аналог доступа к данным без отдельного слоя репозиториев. |
+
+---
+
+## Зависимости между слоями (идеально)
+
+- **Presentation** → Application (вызов handle_mouse_click, toggle_pause, смена фазы через будущий PhaseController).
+- **Application** → Domain (вызов ECS и систем), Application → Infrastructure/Config (чтение констант и данных).
+- **Domain** → только типы (GameTypes) и, при необходимости, фасад данных (get_tower_def и т.п. через интерфейс, а не напрямую GameManager).
+- **Infrastructure** → Domain (чтение ECS/hex_map для рендера), Infrastructure → Config.
+
+Сейчас: UI и game_root иногда напрямую пишут в `ecs.game_state` и вызывают очистку сущностей — это смещение логики приложения в слой представления. Рекомендация: вынести переходы фаз и связанные действия в один Application-модуль (PhaseController/GameManager), а из UI только вызывать его.
+
+---
+
+## Краткая таблица: файл → слой
+
+| Слой | Файлы / папки |
+|------|----------------|
+| **Presentation** | scenes/game_root.gd (ввод, камера, композиция), godot_adapter/ui/game_hud.gd, godot_adapter/ui/info_panel.gd |
+| **Application** | autoload/game_manager.gd (оркестрация старта, данные, пауза), core/systems/input_system.gd (команды от ввода) |
+| **Domain** | core/ecs/ecs_world.gd, core/systems/ (wave, movement, combat, projectile, status_effect, aura, energy_network, ore_generation), core/hexmap/, core/types/game_types.gd, core/utils/union_find.gd |
+| **Infrastructure** | autoload/config.gd, data/*.json, godot_adapter/rendering/*.gd, пулы и утилиты рендера |
+
+Так можно ориентироваться при рефакторинге: не тащить доменные правила в UI и не размазывать сценарии использования по разным узлам сцены, а держать границы слоёв и зависимости направленными в одну сторону (вниз: от Presentation к Application к Domain; Infrastructure читает Domain).
+# Риски при расширении игры
+
+Где код может «споткнуться» при добавлении новых пушек, локаций, систем прокачки, статистики и т.п. Что вынести и какие идеи применить глобально.
+
+---
+
+## 1. Новые типы башен (пушки)
+
+### Где завязано на тип (MINER / ATTACK / WALL)
+
+- **input_system.gd**
+  - `_create_tower_entity`: ветки только для `type == "MINER"` (auto-select), `type == "ATTACK"` + combat (добавление combat/aura). Новый тип (например BEACON, AOE) потребует новых `if` и дублирования логики компонентов.
+  - `_determine_tower_id`: RANDOM_ATTACK захардкожен как `["TA", "TE", "TO", "PA", "PE", "TOWER_SILVER"]` — новые башни из JSON в этот список не попадут.
+- **entity_renderer.gd**
+  - `_create_tower_visual`, `_update_tower_color`, `_update_tower_highlight`: `match tower_type` только MINER / WALL / иначе (ATTACK). Четвёртый тип — снова ветка и форма/цвет.
+- **tower_preview.gd**
+  - `_create_preview`: match по MINER / ATTACK / WALL; по умолчанию круг.
+- **wall_renderer.gd**, **energy_network_system.gd**
+  - Проверки `type == "WALL"`, `type == "MINER"` и т.д. по строке. Новый тип — везде добавить условие.
+- **combat_system.gd**
+  - Тип атаки: только `attack_method == "LASER"` и иначе PROJECTILE. AOE/BEACON из GameTypes не обрабатываются — добавление = новый ветки в update и новые функции создания атак.
+
+### Что сделать глобально
+
+- **Единая фабрика башен по def_id:** один модуль (например `TowerFactory` или расширение GameManager), который по `tower_def` из JSON создаёт сущность и вешает нужные компоненты (tower, combat, aura, renderable и т.д.) по полям def, без перечисления типов в коде. Тип башни — данные (например `def["type"]`), а не список `if type == "MINER"` по всему проекту.
+- **Рендер по конфигу:** форма/цвет башни из `tower_def.visuals` (форма: circle/hex/triangle, превью-форма и т.д.), а не жёсткий match по трём типам. Новый тип = новая запись в JSON и при необходимости новое значение в enum/строке.
+- **Список «атакующих» для RANDOM_ATTACK:** формировать по данным (все def с `type == "ATTACK"` или отдельный тег в JSON), а не хардкод массива id.
+
+---
+
+## 2. Лимиты и константы (5 башен, 2 сохранить)
+
+### Где зашито число «2»
+
+- **config.gd:** `TOWERS_TO_KEEP = 2`, `MAX_TOWERS_IN_BUILD_PHASE = 5` — единственная нормальная точка правды.
+- **info_panel.gd:** проверки `saved_count >= 2` и `final_saved_count >= 2` — **литерал 2**, не `Config.TOWERS_TO_KEEP`. При смене лимита (например 3 башни сохранять) здесь останется 2 и логика сломается.
+- **input_system.gd:** пишет `ecs.game_state["towers_to_keep"] = Config.TOWERS_TO_KEEP`, в print использует `ecs.game_state.get("towers_to_keep", 2)` — дефолт 2 дублирует константу.
+
+### Что сделать
+
+- Везде использовать **только** `Config.TOWERS_TO_KEEP` (или `ecs.game_state.get("towers_to_keep", Config.TOWERS_TO_KEEP)`). В info_panel заменить оба `2` на константу из Config.
+- Если лимиты будут зависеть от уровня/локации/сложности — вынести в «правила фазы» (например структура/ресурс PhaseRules с max_towers, towers_to_keep), а не размазывать магические числа по UI и системам.
+
+---
+
+## 3. Волны и контент волн
+
+### Где можно сломаться
+
+- **game_manager.gd, get_wave_def:** после волны 10 цикл жёстко задан: `actual_wave = 6 + ((wave_number - 11) % 5)` (волны 6–10 по кругу). Смена схемы (другая линейка, «бесконечные» волны, ветки по уровню) потребует менять эту формулу и, возможно, контракт волн (не только номер).
+- **wave_system.gd:** ожидает в def поля `count`, `enemy_id`, `spawn_interval`. Новые механики (несколько типов врагов в одной волне, босс, тайминги по фазам) — расширение структуры и правки в одном месте, но без единого «формата волны» легко получить рассинхрон с JSON и другими системами.
+
+### Что сделать
+
+- **Схема волн в одном месте:** описать формат волны (и опционально «режим»: linear / repeat_6_10 / endless / campaign) в конфиге или в коде один раз (например WaveScheme), а get_wave_def только применяет схему. Новые локации/режимы = новые схемы, без правок формул в GameManager.
+- По возможности держать расширения волны (несколько enemy_id, босс-флаг) в данных (JSON), а код — обобщённым циклом по полям.
+
+---
+
+## 4. Локации / несколько карт
+
+### Текущее состояние
+
+- **Один экземпляр карты:** `GameManager.hex_map` и `GameManager.map_seed` глобальные. Нет понятия «уровень», «локация», «выбор карты».
+- **game_manager.gd:** в _ready создаётся одна HexMap с Config.MAP_RADIUS и randi() seed. Генерация руды и начальных стен привязаны к этой карте.
+- **wave_system, pathfinding, input_system, ore_generation_system, aura_system:** везде используется один и тот же hex_map (напрямую или через GameManager).
+
+### Где будет больно
+
+- Смена карты между играми или «выбор уровня» потребует: пересоздавать/подменять hex_map, перегенерировать руду, пересоздать стены, сбросить ECS-сущности, привязанные к гексам/карте. Сейчас всё завязано на один глобальный hex_map.
+- Разные размеры/правила карты (другой радиус, другое число чекпоинтов) — константы размазаны (MAP_RADIUS, 6 чекпоинтов в hex_map и т.д.).
+
+### Что сделать глобально
+
+- **Понятие «текущая локация/уровень»:** либо сцена/контекст с своей картой и правилами (HexMap + LevelConfig), либо явный объект CurrentLevel с hex_map, wave_defs для уровня, лимитами. GameManager тогда хранит «текущий уровень» и отдаёт его системам, а не один hex_map на всё.
+- **Генерация карты/руды/стартовых стен** вызывать из одного места при старте уровня (init_level / load_location), а не только из _ready GameManager. Тогда смена локации = вызов того же потока с другими параметрами/ресурсами.
+
+---
+
+## 5. Статистика
+
+### Где хранится и как используется
+
+- **game_state (ecs_world):** только `total_enemies_killed`, `towers_built_this_phase`, `current_wave`. Инициализация в `init_game_state()` в ecs_world.gd — фиксированный набор ключей.
+- **player_states:** у игрока есть `level`, `current_xp`, `xp_to_next_level`, `health`. XP нигде не начисляется (нет вызова при убийстве врага) — прокачка «заглушена».
+- Убийство врага: в projectile_system и combat_system только инкремент `total_enemies_killed`. Никакой передачи в «статистику» или «прогресс».
+
+### Где будет проблема
+
+- Добавление любой новой статистики (убийств по типам, урона, башен поставлено за сессию, рекорды волн и т.д.):
+  - нужно не забыть инициализировать в init_game_state;
+  - обновлять в разных местах (комбат, волны, инпут);
+  - UI и сохранения будут искать эти поля вручную.
+- Разбросанные `game_state["key"]` и `game_state.get("key", default)` — при добавлении ключа легко пропустить инициализацию или чтение.
+
+### Что сделать глобально
+
+- **Единый слой статистики/прогресса:** один модуль (например GameStats или расширение GameManager), который:
+  - объявляет все ключи (и при необходимости типы/дефолты);
+  - предоставляет API: increment_kill, add_xp, set_phase_counter и т.д.;
+  - при старте игры/уровня инициализирует все поля.
+- **Начисление XP:** в одном месте «враг убит» (например событие или вызов из projectile_system/combat_system) вызывать что-то вроде `GameStats.grant_xp(amount)` или `Progression.on_enemy_killed(enemy_def_id)`, а формула «сколько XP за какого врага» — в конфиге или данных.
+- Не хранить десятки разнородных счётчиков прямо в game_state без списка: либо подструктуры (stats.kills, stats.towers_placed), либо явный реестр в одном файле.
+
+---
+
+## 6. Прокачка (уровень, XP)
+
+### Текущее состояние
+
+- Игрок создаётся с level=1, current_xp=0, xp_to_next_level=Config.calculate_xp_for_level(1). Никакой код не меняет current_xp и не повышает level.
+- get_loot_table_for_level и _pick_from_loot_table используют player_level для выбора башни при размещении. Уровень не растёт — лут-таблица по сути не прогрессирует.
+
+### Где споткнёмся
+
+- Добавление «XP за убийство»: нужно вызывать начисление в projectile_system и combat_system (и не забыть при других причинах смерти). Без единой точки (например OnEnemyKilled) легко дублировать или пропустить.
+- Повышение уровня (current_xp >= xp_to_next_level): сброс current_xp, пересчёт xp_to_next_level, возможно разблокировка контента. Сейчас такой логики нет — при её добавлении лучше держать в одном сервисе прокачки.
+
+### Что сделать
+
+- **Сервис прокачки (одно место):** например `Progression` или функции в GameManager: `grant_xp(amount)`, внутри — прирост current_xp, проверка на уровень, обновление xp_to_next_level. Вызов только из «событие: враг убит» (и при желании из квестов/бонусов).
+- **Связь «враг убит» → XP:** либо dispatch_event(ENEMY_KILLED, {enemy_id, def_id}) и подписчик начисляет XP по def, либо одна функция типа GameManager.on_enemy_killed(enemy_id), которую вызывают и projectile_system, и combat_system. Так не будет дублирования и забытых мест.
+
+---
+
+## 7. Фазы игры и переходы
+
+### Где дублируется логика
+
+- **Переход BUILD → SELECTION:** game_root (_cycle_phase по Space), game_hud (клик по индикатору). Логика «сменить phase» повторена.
+- **Переход SELECTION → WAVE:** game_hud (клик по индикатору: _remove_unselected_towers, сброс выделения, закрытие InfoPanel, phase = WAVE) и info_panel (при сохранении второй башни: _finalize_tower_selection, phase = WAVE, hide_panel). Финализация выбора башен и смена фазы продублированы.
+- **Переход WAVE → BUILD:** game_root (_cycle_phase: _clear_entities, phase = BUILD) и game_hud (клик: _clear_enemies, _clear_projectiles, сброс towers_built_this_phase, снятие temporary с башен, phase = BUILD). Очистка сущностей и сброс состояния дублируются.
+
+### Риск при расширении
+
+- Новые фазы (например MENU, SHOP, между волнами) или условия перехода (таймер, кнопка «Готово») потребуют править несколько файлов и легко получить рассинхрон (в одном месте переход делается, в другом — нет).
+
+### Что сделать глобально
+
+- **Один оркестратор фаз:** один модуль (например PhaseController или методы в GameManager): `request_phase(new_phase)` или `transition_to(next_phase)`. Внутри — все действия при переходе: очистка сущностей, финализация выбора, сброс счётчиков, смена game_state["phase"], закрытие панелей. UI и хоткеи только вызывают request_phase(...).
+- **Описание переходов в одном месте:** какие переходы разрешены (BUILD→SELECTION→WAVE→BUILD), какие действия при каждом — код/таблица в одном файле. Тогда новые фазы и новые действия при переходе добавляются там, а не в game_root + game_hud + info_panel.
+
+---
+
+## 8. Создание стены (перманентной)
+
+### Где дублируется
+
+- **game_manager.gd** (_place_initial_walls): создание сущности стены, tower + renderable, set_tile, place_tower.
+- **game_hud.gd** (_create_permanent_wall): то же самое, с тем же набором полей tower.
+- **info_panel.gd** (_create_permanent_wall): то же.
+
+Любое изменение (новое поле в tower, другой визуал, другой def_id для «варианта стены») нужно вносить в три места — легко забыть одно и получить баг.
+
+### Что сделать
+
+- **Одна функция создания стены:** например `GameManager.create_wall_at(hex)` или общая `TowerFactory.create_wall(hex)` (если фабрика башен будет). Внутри — создание entity, компоненты, привязка к карте. Вызов только из game_manager (начальные стены), game_hud и info_panel (конвертация невыбранных башен).
+
+---
+
+## 9. UI и макеты
+
+### Где зашиты размеры/зоны
+
+- **game_root.gd, _is_ui_area:** координаты 270, 100, 60, 160, 70 захардкожены. Смена размера окна, добавление панелей, сдвиг кнопок — нужно править код и подбирать числа заново.
+- **game_hud.gd:** позиции кнопок (Config.SCREEN_WIDTH - 60, Config.SCREEN_HEIGHT - 60 и т.д.), размеры панелей. Новые элементы — снова магические числа.
+
+### Что сделать
+
+- Вынести зоны кликов и размеры в Config или в один UI-конфиг (например rect панели, отступы). _is_ui_area использовать константы/ресурс, а не голые числа.
+- По возможности строить UI из сцен/нод с привязкой к краям (anchors), чтобы при смене разрешения не ломать логику.
+
+---
+
+## 10. Типы урона и атак
+
+### Где зашито
+
+- **projectile_system.gd, combat_system.gd:** match по attack_type.to_upper() (PHYSICAL, MAGICAL, PURE, SLOW, POISON). Цвет снаряда/лазера — ещё один match. Новый тип урона = правки в двух системах и в Config (цвет).
+- **combat_system:** создание атаки только PROJECTILE и LASER. AOE, BEACON из GameTypes не обрабатываются — отдельные ветки и логика.
+
+### Что сделать
+
+- **Таблица типов урона:** в Config или в данных (JSON) — тип → цвет, флаги (игнорирует броню и т.д.). Код один раз получает запись по типу и применяет; новый тип = новая строка в данных.
+- **Регистрация обработчиков атак:** вместо одного большого match по типу атаки — словарь «тип атаки → функция создания» (или классы атак). Добавление AOE/BEACON = новая функция и регистрация, без правок основной ветки комбата.
+
+---
+
+## 11. Инициализация состояния игры
+
+### Где риск
+
+- **ecs_world.gd, init_game_state:** фиксированный набор ключей. Любая новая глобальная переменная (например best_wave, total_damage_dealt) должна быть добавлена сюда и во все места чтения. Забыли в init — получим неинициализированное значение при .get().
+
+### Что сделать
+
+- Либо **единый реестр ключей game_state** (массив/словарь «ключ → default»), по которому init заполняет game_state, а код везде читает через обёртку типа GameState.get(key). Либо явный модуль GameStats (см. выше), который владеет всеми счётчиками и сам инициализирует их при старте.
+
+---
+
+## 12. Краткая сводка: что вынести
+
+| Что | Куда / как |
+|-----|------------|
+| Создание башни по def_id | Одна фабрика (TowerFactory / GameManager): компоненты из JSON, без перечисления типов в if/match |
+| Создание стены | Одна функция create_wall_at(hex), вызов из всех трёх мест |
+| Лимит «сколько сохранить» | Везде Config.TOWERS_TO_KEEP, убрать литерал 2 из info_panel |
+| Переходы фаз | Один PhaseController: request_phase() и все действия при смене фазы |
+| Статистика и прогресс | Один слой (GameStats / Progression): ключи, инициализация, grant_xp, increment_kill и т.д. |
+| «Враг убит» | Одна точка (событие или on_enemy_killed), оттуда — счётчик убийств и начисление XP |
+| Схема волн (цикл 6–10) | Вынести в «схему»/конфиг волн, get_wave_def только применяет схему |
+| Карта/уровень | Понятие «текущий уровень» (hex_map + правила), смена локации = подмена уровня |
+| Зоны UI | Константы/конфиг для _is_ui_area и позиций кнопок |
+| Типы урона/атак | Данные (тип → цвет, флаги); обработчики атак — регистрация по типу, а не один большой match |
+
+---
+
+## 13. Файлы, которые править в первую очередь при расширении
+
+- **Новый тип башни:** input_system (_create_tower_entity, _determine_tower_id), entity_renderer (_create_tower_visual, _update_tower_*, tower_type), tower_preview, energy_network_system (type checks), wall_renderer (type WALL).
+- **Новый тип атаки (AOE/BEACON):** combat_system (update, создание атак).
+- **Новая фаза или правило перехода:** game_root (_cycle_phase), game_hud (_on_state_indicator_clicked), info_panel (переход при 2 сохранённых).
+- **Новая статистика / прокачка:** ecs_world (init_game_state), projectile_system / combat_system (где считаются убийства), места отображения в HUD.
+- **Несколько карт/локаций:** game_manager (_ready, создание hex_map и руды), все системы, берущие hex_map у GameManager.
+
+Имеет смысл перед крупным расширением ввести перечисленные «единые точки» (фабрика башен, фаза, статистика, уровень), а уже поверх них добавлять новый контент и режимы.
+
+# Поверхностный анализ для рефакторинга (Godot)
+
+Краткий отчёт: дублирование логики, неиспользуемые переменные/функции, места для проверки.
+
+---
+
+## 1. Функции с одинаковой логикой
+
+| Место | Что дублируется | Действие |
+|-------|------------------|----------|
+| **game_root.gd** | `_get_hex_polygon(size)` и `_get_hex_outline(size)` — один и тот же расчёт 6 точек гекса | Одна функция, возвращающая точки; использовать для Polygon2D и Line2D |
+| **game_root.gd** / **game_hud.gd** | Очистка сущностей: `_clear_entities()` vs `_clear_enemies()` + `_clear_projectiles()` — один паттерн (собрать ключи → destroy) | Общий хелпер «очистить по типу» (ECS/GameManager) |
+| **info_panel.gd** / **game_hud.gd** | `_create_permanent_wall(hex)` — создание стены (entity + tower + renderable + place_tower) в двух файлах | Вынести в одно место (GameManager или TowerFactory) |
+| **info_panel.gd** / **game_hud.gd** | Финализация выбора башен (кто удалять, кого в стену, пересбор сети) — `_finalize_tower_selection()` и `_remove_unselected_towers()` | Одна функция финализации, вызываемая из HUD и InfoPanel |
+| **status_effect_system.gd** | `_update_slow_effects` и `_update_poison_effects` — один паттерн: to_remove, таймер −= delta, erase | Обобщить в один цикл по эффектам с таймером |
+| **projectile_system.gd** | `_update_damage_flashes` и `_update_lasers` — тот же паттерн по таймеру | Общий шаблон обновления по таймеру |
+| **projectile_system** / **combat_system** | Расчёт урона с броней, health, damage_flash, destroy при смерти — `_apply_damage` и `_apply_laser_damage` | Одна общая функция применения урона |
+| **entity_renderer** / **energy_network_system** | «Майнер на руде»: перебор руды по гексу + `current_reserve >= ORE_DEPLETION_THRESHOLD` — `_is_miner_on_ore()` и `_is_on_ore(hex)` | Одна функция «есть ли активная руда на гексе» |
+| **game_manager.gd** | `_process_tower_defs`, `_process_enemy_defs`, `_process_loot_table_defs`, `_process_wave_defs` — одна схема (Array/Dict + ключ) | Один обобщённый парсер JSON-дефов |
+| **input_system** / **wall_renderer** / **tower_preview** | Правило «какая башня ставится»: дебаг, лимит 5, первая башня = майнер в волнах 1–4 | Одна точка истины (GameManager/Config) для «текущий тип башни для постройки» |
+
+---
+
+## 2. Неиспользуемые переменные и функции
+
+| Файл | Что не используется |
+|------|---------------------|
+| **game_root.gd** | `debug_key_pressed` |
+| **config.gd** | `LINE_HEIGHT` |
+| **game_manager.gd** | `systems` (массив не заполняется и не читается) |
+| **input_system.gd** | `hovered_hex` |
+| **combat_system.gd** | `hex_map` (передаётся в _init, не используется) |
+| **tower_preview.gd** | `input_system` |
+| **info_panel.gd** | `button_hbox` |
+| **ore_generation_system.gd** | `ore_vein_hexes` |
+| **ecs_world.gd** | Словари компонентов: `turrets`, `beacons`, `beacon_sectors`, `volcano_auras`, `volcano_effects`, `combinables`, `texts`, `aoe_effects`, `manual_selection_markers` — нигде не заполняются |
+| **entity_renderer.gd** | Функции: `_create_entity_visual`, `_create_triangle`, `_create_inverted_triangle`, `_add_triangle_outline`, `_add_inverted_triangle_outline`, `_add_hexagram_outline` |
+
+---
+
+## 3. Условия и места для проверки
+
+- **game_root.gd** — `_is_ui_area()` с магическими числами (270, 100, 60, 160, 70). Вынести в Config. Пауза проверяется и в game_root, и в game_manager — согласовать.
+- **game_manager.gd** — либо использовать `systems`, либо убрать переменную.
+- **input_system.gd** — в `remove_tower()` дважды вызывается `rebuild_energy_network()`. Оставить один вызов. При `fast_tower_placement` путь при установке башни не проверяется.
+- **hex_map.gd** — `_get_exclusion_zones(dist)` учитывает только entry/exit; в `is_in_exclusion_zone()` ещё и checkpoints. Согласовать с дизайном.
+- **pathfinding.gd** — фронт как массив, минимум по стоимости ищется линейно. На больших картах рассмотреть приоритетную очередь (heap).
+- **ecs_world.gd** — в `add_component` дублируются ветки для `"energy_line"` и `"ore"`. В `remove_component` нет ветки для `"position"` — проверить намеренно ли.
+- **config.gd** vs **combat_system.gd** — бонус урона от руды: в Config одна формула, в combat — другая (10, 100, 2.0, 0.8). Свести к одной.
+- **energy_network_system.gd** — в `_is_on_ore()` при каждой проверке идёт `print`. Убрать или под флаг дебага.
+- **info_panel.gd** — на кнопку подписаны и `pressed`, и `button_down` на один обработчик; возможен двойной вызов.
+- **ore_generation_system.gd** — суммарная мощность 240–270 захардкожена; в Config есть `TOTAL_MAP_POWER_MIN/MAX`. Использовать константы.
+- **movement_system.gd** — учёт `jade_poison`: словарь `jade_poisons` нигде не заполняется — ветка мёртвая.
+- **game_hud.gd** — проверка `kills_label.visible` с предупреждением при том, что метка нигде не скрывается.
+
+---
+
+## 4. Куда заглянуть (чеклист рефакторинга)
+
+1. **game_root.gd** — объединить геометрию гекса; убрать `debug_key_pressed`; вынести константы UI.
+2. **game_hud.gd** + **info_panel.gd** — одна реализация «создать постоянную стену» и «финализировать выбор башен».
+3. **game_manager.gd** — судьба `systems`; при необходимости общий хелпер очистки врагов/снарядов.
+4. **input_system.gd** — один вызов `rebuild_energy_network`; убрать `hovered_hex`.
+5. **projectile_system** + **combat_system** — общая функция применения урона.
+6. **status_effect_system** + **projectile_system** — обобщить обновление по таймеру.
+7. **entity_renderer** + **energy_network_system** — одна функция «руда на гексе»; удалить неиспользуемые функции рендера.
+8. **ecs_world.gd** — убрать дубликаты в `add_component`; решить, что делать с неиспользуемыми компонентами.
+9. **config.gd** — убрать или использовать `LINE_HEIGHT`; согласовать формулу бонуса руды с combat.
+10. **combat_system.gd** — убрать неиспользуемый `hex_map`; перейти на общую формулу бонуса руды.
+11. **pathfinding.gd** — рассмотреть heap для A*.
+12. **ore_generation_system.gd** — использовать Config для мощности; убрать или использовать `ore_vein_hexes`.
+13. **Тип башни для постройки** — одна общая логика (input_system, wall_renderer, tower_preview).
+14. **game_manager.gd** — обобщённый парсер JSON-дефов вместо пяти похожих функций.
+# Аудит систем проекта
+
+Оценка по шкале 0–100: насколько система используется, насколько качественно, в полную ли мощность. Отдельно выделены исключения (что намеренно вне ECS или не по архитектуре).
+
+---
+
+## 1. ECS (ecs_world.gd)
+
+**Оценка: 72/100**
+
+**Используется хорошо:**  
+Сущности создаются/уничтожаются через `create_entity` / `destroy_entity`. Основные данные живут в ECS: башни, враги, снаряды, руда, волны, игрок, позиции, здоровье, рендерабл, пути, статус-эффекты, ауры, линии энергосети, вспышки урона, лазеры. Системы читают/пишут компоненты, рендеры опираются на ECS. `has_component` / `add_component` используются по коду последовательно.
+
+**Не в полную мощность:**  
+Ряд компонентов объявлены и очищаются в `destroy_entity`, но нигде не заполняются и не читаются: `turrets`, `beacons`, `beacon_sectors`, `volcano_auras`, `volcano_effects`, `combinables`, `texts`, `aoe_effects`, `manual_selection_markers`. Это задел под маяки/вулканы/крафт — сейчас мёртвый код. `velocities` пишется при спавне врага (ZERO), но ни одна система его не читает (движение по path, не по velocity). В `add_component` дублируются ветки для `"energy_line"` и `"ore"`.
+
+**Исключения / вне ECS:**  
+`game_state` хранится в ECS как один общий словарь (фаза, пауза, скорость времени, волна, счётчики). По смыслу это глобальное состояние игры, а не сущность — логически это синглтон вне сущностной модели, просто положен в ECS для единой точки доступа.
+
+---
+
+## 2. Игровой цикл и GameManager
+
+**Оценка: 48/100**
+
+**Как задумано:**  
+GameManager — автолоад, создаёт ECS и hex_map, загружает данные, в `_process` ограничивает delta, учитывает паузу и скорость времени, накапливает fixed timestep и вызывает `update_simulation(Config.FIXED_DELTA)`. В `update_simulation` цикл по массиву `systems` с вызовом `system.update(delta)`.
+
+**Проблема:**  
+Массив `systems` нигде не заполняется. В GameRoot системы создаются и вызываются вручную в `_process`: `input_system.update(delta)`, `wave_system.update(scaled_delta)` и т.д. То есть фиксированный шаг в GameManager по сути не используется для геймплея — симуляция идёт с переменным delta из GameRoot. Получается два параллельных контура: «официальный» (пустой) в GameManager и реальный в GameRoot. Либо нужно регистрировать системы в `GameManager.systems` и гонять их из `update_simulation`, либо убрать fixed timestep/`systems` и признать единственным местом вызова систем GameRoot.
+
+**Используется нормально:**  
+GameManager создаёт и хранит ECS, hex_map, energy_network, загружает tower_defs, enemy_defs, wave_defs, loot_table_defs, даёт API (get_tower_def, get_wave_def, pause, phase и т.д.). Всё это востребовано.
+
+---
+
+## 3. Игровые системы (Input, Wave, Movement, Combat, Projectile, StatusEffect, Aura)
+
+**Оценка в среднем: 78/100**
+
+- **InputSystem (82):** Очередь команд, фазы, размещение/снятие башни, выбор, проверка пути при постановке. Используется плотно. Минус: дублирование логики «какой тип башни ставим» с wall_renderer и tower_preview; двойной вызов rebuild_energy_network в remove_tower.
+- **WaveSystem (85):** Старт волны, путь через чекпоинты, спавн врагов по таймеру, завершение волны, переход фазы. Хорошо опирается на ECS и hex_map. Pathfinding вызывается один раз при старте волны.
+- **MovementSystem (80):** Движение по path, учёт slow, чекпоинты, урон игроку при достижении выхода. Логика ясная. Минус: ветка `jade_poison` не используется (словарь пустой).
+- **CombatSystem (75):** Поиск целей, снаряды/лазеры, расход энергии, кэш источников питания. Работает. Минусы: `hex_map` в _init не используется; своя формула бонуса руды вместо Config; дублирование логики урона с projectile_system.
+- **ProjectileSystem (78):** Движение снарядов, попадание, урон, броня, статус-эффекты, вспышки, лазеры. Завязан на ECS. Дублирование расчёта урона с combat_system.
+- **StatusEffectSystem (82):** Таймеры slow/poison, снятие по истечении, урон от яда. Простая и используемая по назначению.
+- **AuraSystem (85):** Пересчёт aura_effects по активным башням с аурой, радиус, буст скорострельности. Чисто на ECS и hex_map, без лишнего.
+
+**Исключение:**  
+Системы вызываются только из GameRoot._process (при непаузе), не из GameManager.update_simulation. Порядок вызова (input → wave → movement → status_effect → aura → combat → projectile) зашит в GameRoot, а не в общем реестре систем.
+
+---
+
+## 4. EnergyNetworkSystem
+
+**Оценка: 80/100**
+
+Живёт в GameManager, не в GameRoot. Используется при постановке башни (add_tower_to_network), при сносе (rebuild_energy_network), при финализации выбора башен (HUD, InfoPanel), при истощении руды в combat. Поиск источников питания для атакующих башен — через `_find_power_sources` (вызывается из CombatSystem). Логика MST, UnionFind, перехват майнер-майнер линий, активация/деактивация башен по подключению к руде — реализована и задействована.
+
+**Не в полную мощность:**  
+Много отладочных print в `_is_on_ore` при каждой проверке гекса — в релизе лучше отключать или вести под флагом. Публичный API по сути два: add_tower_to_network и rebuild_energy_network; внутренний _find_power_sources вызывается из combat_system — связность высокая, но зависимость combat → energy_network жёсткая.
+
+**Исключение:**  
+Энергосеть — отдельная система вне списка «игровых систем» в GameRoot; обновляется по событиям (поставили/сняли башню, сменили фазу), а не в каждом кадре. Это осознанное решение и уместно.
+
+---
+
+## 5. OreGenerationSystem
+
+**Оценка: 70/100**
+
+Вызывается один раз из GameManager._ready в `_generate_ore()`. Генерация жил, центры, распределение мощности, создание сущностей руды в ECS — всё на ECS и hex_map. Руда потом используется энергосетью, комбатом и рендером.
+
+**Минусы:**  
+Константы 240–270 захардкожены вместо Config.TOTAL_MAP_POWER_MIN/MAX. Переменная `ore_vein_hexes` не используется. Система не «система в цикле», а одноразовый генератор — название может вводить в заблуждение (ожидание update каждый кадр).
+
+---
+
+## 6. HexMap
+
+**Оценка: 88/100**
+
+Используется последовательно: генерация карты, тайлы, проходимость, размещение/снятие башен, entry/exit/checkpoints, начальные стены, зоны исключения. Pathfinding и волны опираются на hex_map. Двойная запись «башня на гексе»: tower_id в tile и позиция/hex в ECS — нормально для связки карта ↔ сущности.
+
+**Мелкие моменты:**  
+_get_exclusion_zones учитывает только entry/exit, а is_in_exclusion_zone ещё и checkpoints — стоит согласовать с дизайном. В целом система загружена хорошо и по назначению.
+
+---
+
+## 7. Pathfinding
+
+**Оценка: 82/100**
+
+Статический класс, A* по гексам. Вызывается из: wave_system (путь через чекпоинты при старте волны), input_system (_would_block_path при проверке установки башни), hex_map (генерация — проверка пути при удалении секций/углов). Один контракт: find_path(start, goal, hex_map), find_path_through_checkpoints — используется по делу.
+
+**Не в полную мощность:**  
+Фронт хранится как массив, выбор минимальной стоимости — линейный обход. На больших картах имеет смысл заменить на приоритетную очередь (heap) для настоящего A*.
+
+---
+
+## 8. UnionFind
+
+**Оценка: 90/100**
+
+Используется только в EnergyNetworkSystem: построение MST при пересборке сети и проверка циклов при добавлении соединений. API минимальный (find, union, при необходимости connected/clear), без лишних зависимостей. В полную силу под задачу.
+
+---
+
+## 9. Config (autoload)
+
+**Оценка: 85/100**
+
+Константы экрана, гекса, карты, баланса, цветов, путей к JSON — используются по всему проекту. Функции load_json, calculate_xp_for_level, calculate_ore_boost_multiplier востребованы. Одна формула бонуса руды в Config не совпадает с той, что в combat_system — две разные «истины». LINE_HEIGHT объявлена, но нигде не используется. В целом конфиг загружен сильно и централизованно.
+
+---
+
+## 10. GameTypes
+
+**Оценка: 75/100**
+
+Энумы и константы (GamePhase, TowerType, AttackType, DamageType, INVALID_ENTITY_ID) используются в коде. game_phase_to_string, tower_type_to_string и т.п. — для логов и отладки. EventType объявлен, но dispatch_event нигде не вызывается — событийная модель не задействована. get_damage_type_color в GameTypes не вызывается (цвета снарядов берутся из Config в combat_system). Часть типов/утилит в полную силу, часть — задел или мёртвый код.
+
+---
+
+## 11. Рендеринг (Entity, Wall, Ore, EnergyLine, Aura, TowerPreview)
+
+**Оценка в среднем: 80/100**
+
+- **EntityRenderer (82):** Башни, враги, снаряды, лазеры, подсветка гексов, соединения майнеров. Пулы для врагов и снарядов (NodePool). Жёстко опирается на ECS и слои из GameRoot. Есть неиспользуемые функции (треугольники, hexagram, _create_entity_visual).
+- **WallRenderer (85):** Стены по ECS (tower type WALL), связи между соседями, обводки, превью линий при постановке. Вызывается из GameRoot и при force_immediate_update из input_system. Используется по полной.
+- **OreRenderer (80):** Рендер руды из ECS, пульсация, лейблы. Инициализация с ecs в конструкторе, обновление в _process. Нормально.
+- **EnergyLineRenderer (82):** Линии по ecs.energy_lines, создание/обновление Line2D. Простой и по назначению.
+- **AuraRenderer (78):** Круги аур для активных башен с aura. Удаление при неактивной башне. Работает; охват только визуал аур.
+- **TowerPreview (75):** Превью башни под курсором в фазе BUILD. Дублирует логику «какой тип башни» с input_system и wall_renderer; возвращает тип (MINER/ATTACK/WALL), а не def_id.
+
+**Исключение:**  
+MetaballWallRenderer есть в проекте (скрипт + шейдер), но нигде не создаётся и не добавляется в сцену. В игре используется только обычный WallRenderer. Metaball — альтернативная/экспериментальная реализация, фактически не используется.
+
+---
+
+## 12. NodePool
+
+**Оценка: 88/100**
+
+Используется в EntityRenderer для врагов и снарядов: предсоздание узлов, acquire/release, reset при возврате. Уменьшает аллокации при частом спавне/удалении. В полную силу под задачу, без избыточности.
+
+---
+
+## 13. UI (GameHUD, InfoPanel)
+
+**Оценка: 72/100**
+
+**GameHUD:** Отображает здоровье, волну, число башен, убийства, индикатор фазы, кнопки скорости и паузы, оверлей паузы. Переход фаз (BUILD → SELECTION → WAVE → BUILD) и связанная логика (очистка врагов/снарядов, финализация выбора башен, создание стен на месте невыбранных) реализованы в HUD. Дублирование: _create_permanent_wall и логика финализации выбора повторяются в InfoPanel.
+
+**InfoPanel:** Показ информации о башне/враге, кнопка «Сохранить»/«Отменить» в фазе выбора, финализация при сохранении двух башен. Та же логика создания стены и пересборки энергосети, что и в HUD — два места поддержки одного поведения.
+
+**Исключение:** Часть игровой логики (смена фаз, очистка сущностей, превращение башен в стены) живёт в UI, а не в отдельной игровой системе или GameManager. Это усложняет единую точку истины и тестирование.
+
+---
+
+## 14. Profiler (autoload)
+
+**Оценка: 55/100**
+
+Включение/вывод в GameRoot (Shift+PageUp, отрисовка при visual_debug_mode). Замеры есть в entity_renderer (render_towers, render_enemies, render_projectiles), wave_system, movement_system. Нет замеров в combat_system, projectile_system, status_effect_system, aura_system, input_system — покрытие неравномерное. Используется как вспомогательный инструмент, но не систематически по всем тяжёлым путям.
+
+---
+
+## 15. Событийная система (GameManager.dispatch_event / event_dispatched)
+
+**Оценка: 0/100**
+
+Сигнал event_dispatched и функция dispatch_event объявлены, типы событий заданы в GameTypes.EventType. Ни один скрипт не вызывает dispatch_event и не подписывается на event_dispatched. Событийная модель не используется — задел на будущее или мёртвый код.
+
+---
+
+## 16. Данные (tower_defs, enemy_defs, wave_defs, loot_table_defs, recipe_defs)
+
+**Оценка: 78/100**
+
+tower_defs, enemy_defs, wave_defs, loot_table_defs активно используются через get_tower_def, get_enemy_def, get_wave_def, get_loot_table_for_level в системах, рендере и UI. recipe_defs загружаются из JSON и кладутся в GameManager, но ни один код не читает recipe_defs (нет get_recipe, крафта и т.п.) — рецепты не задействованы. Остальные данные — в полную силу.
+
+---
+
+## Сводная таблица оценок
+
+| Система / подсистема           | Оценка | В полную ли мощность | Примечание |
+|-------------------------------|--------|------------------------|------------|
+| ECS                           | 72     | Нет                    | Много пустых компонентов, velocity не читается |
+| Игровой цикл / GameManager    | 48     | Нет                    | systems пустой, fixed timestep не управляет симуляцией |
+| InputSystem                   | 82     | Почти                  | Дубли логики типа башни, двойной rebuild |
+| WaveSystem                   | 85     | Да                     | — |
+| MovementSystem                | 80     | Почти                  | jade_poison не используется |
+| CombatSystem                  | 75     | Почти                  | Свой бонус руды, дубль урона с projectile |
+| ProjectileSystem              | 78     | Почти                  | Дубль урона с combat |
+| StatusEffectSystem            | 82     | Да                     | — |
+| AuraSystem                    | 85     | Да                     | — |
+| EnergyNetworkSystem           | 80     | Да                     | Много print в _is_on_ore |
+| OreGenerationSystem           | 70     | Частично               | Одноразовый генератор, хардкод констант |
+| HexMap                        | 88     | Да                     | Несогласованность exclusion zones |
+| Pathfinding                   | 82     | Почти                  | Нет heap в A* |
+| UnionFind                     | 90     | Да                     | — |
+| Config                        | 85     | Почти                  | LINE_HEIGHT не используется, две формулы руды |
+| GameTypes                     | 75     | Частично               | EventType и get_damage_type_color не используются |
+| EntityRenderer                | 82     | Почти                  | Мёртвый код (треугольники и т.д.) |
+| WallRenderer                  | 85     | Да                     | — |
+| OreRenderer                   | 80     | Да                     | — |
+| EnergyLineRenderer            | 82     | Да                     | — |
+| AuraRenderer                  | 78     | Да                     | — |
+| TowerPreview                  | 75     | Почти                  | Дубли логики типа башни |
+| NodePool                      | 88     | Да                     | — |
+| GameHUD / InfoPanel           | 72     | Частично               | Дубли логики, часть геймплея в UI |
+| Profiler                      | 55     | Нет                    | Неравномерное покрытие систем |
+| События (dispatch_event)       | 0      | Нет                    | Не используется |
+| Данные (defs)                 | 78     | Почти                  | recipe_defs не читаются |
+| MetaballWallRenderer          | —      | Не используется         | Не подключён к сцене |
+
+---
+
+## Что намеренно или фактически вне ECS
+
+- **HexMap:** карта и тайлы — отдельно от ECS; в ECS хранятся позиции сущностей и hex у башен/врагов/руды. Дублирование «кто на гексе» между tile.tower_id и ECS — осознанное (карта для навигации и размещения, ECS для компонентов).
+- **game_state:** глобальное состояние (фаза, пауза, скорость, волна, счётчики) лежит в ECS как один словарь, но по смыслу это не сущность, а синглтон-состояние.
+- **Камера, слои, курсор:** полностью вне ECS, что корректно.
+- **Логика фаз и «кто что может ставить»:** частично в InputSystem, частично в UI (HUD, InfoPanel) и в tower_preview / wall_renderer — единой «системы правил фазы» нет.
+- **EnergyNetworkSystem:** не в списке систем GameRoot, обновляется по событиям (постановка/снятие башни, смена фазы) — архитектурно выделена отдельно от пошаговой симуляции.
+
+Файл можно использовать как чеклист для приведения архитектуры к единому стилю и доведения недогруженных систем до полной мощности.
+
