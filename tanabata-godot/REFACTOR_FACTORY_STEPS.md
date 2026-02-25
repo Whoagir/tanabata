@@ -49,8 +49,7 @@
 4. WAVE: враги идут, башни стреляют, урон есть.
 Если что-то перестало работать (майнер без энергии, атакующая не стреляет, крафт падает) — откати шаг 1.1.
 
-### Шаг 1.2 — RANDOM_ATTACK из данных ✓
-
+### Шаг 1.2 — RANDOM_ATTACK из данных 
 **Где:** `core/systems/input_system.gd`, `_get_random_attack_tower_ids()`.
 
 **Сделано:** Список собирается из `DataRepository.tower_defs`: только `type == "ATTACK"`, **`crafting_level == 0`** (базовые; Silver, Malachite и т.п. не выпадают), и не `no_random`. Кэш при первом вызове.
