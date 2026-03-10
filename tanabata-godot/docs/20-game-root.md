@@ -7,20 +7,25 @@
 ## Инициализация
 
 - Рендеринг гексов карты.
-- Создание InputSystem, WaveSystem, MovementSystem, CombatSystem, ProjectileSystem, StatusEffectSystem, AuraSystem, CraftingSystem, VolcanoSystem, BeaconSystem.
-- Добавление EntityRenderer, OreRenderer, EnergyLineRenderer, WallRenderer, AuraRenderer, TowerPreview, HUD, InfoPanel, RecipeBook.
+- Создание InputSystem, WaveSystem, MovementSystem, CombatSystem, ProjectileSystem, StatusEffectSystem, AuraSystem, CraftingSystem, VolcanoSystem, BeaconSystem, BatterySystem, AurigaSystem, LineDragHandler.
+- Добавление EntityRenderer, OreRenderer, EnergyLineRenderer, AttackLinkRenderer, CraftingVisualRenderer, WallRenderer, AuraRenderer, PathOverlayLayer, TowerPreview, HUD, InfoPanel, RecipeBook, BossRewardOverlay (оверлей карт за босса), **GameOverOverlay** (меню конца игры, Popup на отдельном CanvasLayer).
 - Установка z_index для слоёв.
 
 ## Обработка ввода
 
-- Клавиши: Space (смена фазы), P (пауза), B (книга рецептов), **I (дебаг-метки + панель волны 0–40)**, 1/2/3 (тип башни в отладке), 0 (выкл. отладка), Shift+PageUp (профайлер).
-- Мышь: клики передаются в InputSystem если не попали в UI.
+- Клавиши: P (пауза), B (книга рецептов), **U (режим редактирования энерголиний)**, **I (режим разработчика: дебаг-метки + панель волны 0–40 + кликабельный индикатор фазы + HP ниже нуля не завершает игру)**, 1/2/3/6 (тип башни в отладке: 1 — случайная атакующая, 2 — майнер, 3 — стена, 6 — тестовая из Config.DEBUG_TEST_TOWER_IDS: TOWER_QUARTZ, NI3, TA2, TOWER_LAKICHINZ; повторное 6 выкл.), 0 (выкл. отладка), Shift+PageUp (профайлер).
+- Мышь: в режиме U клики по карте обрабатывает LineDragHandler (перенаправление линий); иначе — InputSystem, если не попали в UI.
 - Проверка _is_ui_area — клики по кнопкам не идут в игровой мир.
 
-## Дебаг-режим
+## Конец игры и меню Game Over
 
-- **I** — вкл/выкл дебаг-метки (координаты гексов при наведении) и **панель волны** справа.
-- В панели волны (+, −) задаётся номер волны, на которую перейти в начале следующей волны. Диапазон: **0–40** (0 = не прыгать, идти по счётчику). При нажатии Space в фазе строительства следующая волна будет с выбранным номером.
+- При **здоровье игрока 0 или ниже** (если не включён режим разработчика) выставляется **game_state["game_over"] = true**. Игровые системы больше не обновляются, показывается модальное меню (GameOverOverlay): очки, убито врагов, кнопки «Начать заново» и «В меню». Фон меню — тёмно-синий, как в главном меню.
+- В **режиме разработчика (I)** при HP <= 0 игра не заканчивается (Config.god_mode), индикатор фазы кликабелен.
+
+## Дебаг-режим / режим разработчика (I)
+
+- **I** — вкл/выкл **режим разработчика**: дебаг-метки (координаты гексов при наведении), **панель волны** справа, **кликабельный индикатор фазы**, **игрок не проигрывает при HP <= 0** (god_mode). В game_state выставляются **developer_mode** и в Config — **god_mode**.
+- В панели волны (+, −) задаётся номер волны, на которую перейти в начале следующей волны. Диапазон: **0–40** (0 = не прыгать, идти по счётчику).
 
 ## Эффекты
 

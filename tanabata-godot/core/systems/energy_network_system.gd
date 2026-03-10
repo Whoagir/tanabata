@@ -8,6 +8,8 @@ var hex_map: HexMap
 
 # Кэш: tower_id -> массив ore_id в этой сети (инвалидируется при изменении графа)
 var _network_ore_ids_cache: Dictionary = {}
+# Кэш сглаженного восстановления руды по жилам (ore_id -> restore_per_round), инвалидируется в rebuild_energy_network
+var _smoothed_restore_cache: Dictionary = {}
 
 # Предвычисленный набор гексов на энерголиниях (для env damage в movement_system)
 var line_hex_set: Dictionary = {}  # hex_key -> true
@@ -36,13 +38,21 @@ func _init(ecs_: ECSWorld, hex_map_: HexMap):
 # ПРИОРИТЕТЫ И СОРТИРОВКА
 # ============================================================================
 
+# Радиус передачи по типу башни (майнер 4, батарея 5)
+static func get_transfer_radius(tower_def: Dictionary) -> int:
+	var energy = tower_def.get("energy", {})
+	if typeof(energy) == TYPE_DICTIONARY and energy.has("transfer_radius"):
+		return int(energy["transfer_radius"])
+	return Config.ENERGY_TRANSFER_RADIUS
+
 # Вычислить вес ребра (чем меньше, тем выше приоритет)
 static func calculate_edge_weight(type1: String, type2: String, distance: float) -> float:
 	var is_t1_miner = (type1 == "MINER")
 	var is_t2_miner = (type2 == "MINER")
-	
-	# Майнер-Майнер: высший приоритет
-	if is_t1_miner and is_t2_miner:
+	var is_t1_battery = (type1 == "BATTERY")
+	var is_t2_battery = (type2 == "BATTERY")
+	# Майнер-Майнер и Батарея-*: высший приоритет
+	if (is_t1_miner and is_t2_miner) or (is_t1_battery or is_t2_battery):
 		return 100.0 + distance
 	# Майнер-Атакер: средний приоритет
 	if is_t1_miner or is_t2_miner:
@@ -77,6 +87,7 @@ static func sort_energy_edges(edges: Array) -> void:
 # Добавить башню в энергосеть (вызывается при постановке башни)
 func add_tower_to_network(new_tower_id: int) -> void:
 	_network_ore_ids_cache.clear()
+	_smoothed_restore_cache.clear()
 	if not ecs.towers.has(new_tower_id):
 		return
 	
@@ -93,13 +104,17 @@ func add_tower_to_network(new_tower_id: int) -> void:
 		if _handle_miner_intercept(new_tower_id, new_tower):
 			_expand_network_from(new_tower_id)
 			rebuild_line_hex_set()
+			var powered_after = _find_powered_towers_with_adj(_build_adjacency_list())
+			_update_powered_tower_ids_for_renderer(powered_after)
+			_update_all_towers_resistance()
 			return
 	
 	# 1. Найти возможные соединения с активными башнями
 	var connections = _find_possible_connections(new_tower_id, new_tower)
 	
-	# 2. Проверить: может ли башня быть активной (майнер на руде = корень)
-	var is_new_root = tower_type == "MINER" and _is_on_ore(new_tower.get("hex"))
+	# 2. Проверить: может ли башня быть активной (майнер или батарея на руде = корень)
+	var new_hex = new_tower.get("hex")
+	var is_new_root = (tower_type == "MINER" or tower_type == "BATTERY") and _is_on_ore(new_hex)
 	
 	if connections.size() == 0 and not is_new_root:
 		# Нет соединений и НЕ на руде → НЕАКТИВНА
@@ -116,6 +131,9 @@ func add_tower_to_network(new_tower_id: int) -> void:
 	
 	_expand_network_from(new_tower_id)
 	rebuild_line_hex_set()
+	var powered_after = _find_powered_towers_with_adj(_build_adjacency_list())
+	_update_powered_tower_ids_for_renderer(powered_after)
+	_update_all_towers_resistance()
 
 # Перехват майнер-майнер линии (новый майнер встал на линию между двумя майнерами)
 func _handle_miner_intercept(new_tower_id: int, new_tower: Dictionary) -> bool:
@@ -170,7 +188,14 @@ func _handle_miner_intercept(new_tower_id: int, new_tower: Dictionary) -> bool:
 	
 	return false
 
-# Найти возможные соединения с активными башнями
+# Есть ли у башни хотя бы одна линия (участвует в графе сети)
+func _tower_has_any_line(tower_id: int) -> bool:
+	for line in ecs.energy_lines.values():
+		if line.get("tower1_id") == tower_id or line.get("tower2_id") == tower_id:
+			return true
+	return false
+
+# Найти возможные соединения: с активными башнями и с башнями, уже входящими в граф (выключенные майнеры — передатчики, к ним тоже можно подключаться)
 func _find_possible_connections(new_tower_id: int, new_tower: Dictionary) -> Array:
 	var connections: Array = []
 	var new_hex = new_tower.get("hex")
@@ -185,8 +210,10 @@ func _find_possible_connections(new_tower_id: int, new_tower: Dictionary) -> Arr
 			continue
 		
 		var other_tower = ecs.towers[other_id]
-		if not other_tower.get("is_active", false):
-			continue  # Только с активными башнями
+		var other_active = other_tower.get("is_active", false)
+		var other_in_graph = _tower_has_any_line(other_id)
+		if not other_active and not other_in_graph:
+			continue  # Только активные или уже в сети (в т.ч. выключенные майнеры как передатчики)
 		
 		var other_def = DataRepository.get_tower_def(other_tower.get("def_id", ""))
 		if not other_def:
@@ -195,17 +222,25 @@ func _find_possible_connections(new_tower_id: int, new_tower: Dictionary) -> Arr
 		var other_type = other_def.get("type", "ATTACK")
 		var other_hex = other_tower.get("hex")
 		var distance = new_hex.distance_to(other_hex)
-		
+		var new_radius = get_transfer_radius(new_def)
+		var other_radius = get_transfer_radius(other_def)
+		var max_dist = mini(new_radius, other_radius)
 		# Правила соединения
 		var is_neighbor = (distance == 1)
 		var is_miner_connection = (
 			new_type == "MINER" and 
 			other_type == "MINER" and
-			distance <= Config.ENERGY_TRANSFER_RADIUS and
+			distance <= max_dist and
 			new_hex.is_on_same_line(other_hex)
 		)
-		
-		if is_neighbor or is_miner_connection:
+		var is_battery_connection = (
+			(new_type == "BATTERY" or other_type == "BATTERY") and
+			(new_type == "MINER" or new_type == "BATTERY") and
+			(other_type == "MINER" or other_type == "BATTERY") and
+			distance <= max_dist and
+			new_hex.is_on_same_line(other_hex)
+		)
+		if is_neighbor or is_miner_connection or is_battery_connection:
 			connections.append(EnergyEdge.new(
 				new_tower_id, other_id,
 				new_type, other_type,
@@ -255,11 +290,19 @@ func _connect_to_networks(tower_id: int, connections: Array) -> void:
 				_create_line(edge)
 				break
 
-# Расширить сеть от башни (BFS)
+# Расширить сеть от башни (BFS). Не создаём циклов: линия только если башни в разных компонентах связности.
 func _expand_network_from(start_node: int) -> void:
 	var queue = [start_node]
 	var visited = {start_node: true}
 	var adj = _build_adjacency_list()
+	var uf = UnionFind.new()
+	for id in ecs.towers.keys():
+		uf.find(id)
+	for line in ecs.energy_lines.values():
+		var t1 = line.get("tower1_id")
+		var t2 = line.get("tower2_id")
+		if ecs.towers.has(t1) and ecs.towers.has(t2):
+			uf.union(t1, t2)
 	
 	while queue.size() > 0:
 		var current_id = queue.pop_front()
@@ -274,14 +317,16 @@ func _expand_network_from(start_node: int) -> void:
 		var current_type = current_def.get("type", "ATTACK")
 		var current_hex = current_tower.get("hex")
 		
-		# Ищем неактивных соседей
+		# Ищем соседей, с которыми ещё нет линии (чтобы не дублировать рёбра и не создавать циклы)
 		for other_id in ecs.towers.keys():
 			if visited.get(other_id, false):
 				continue
+			if adj.get(current_id, []).has(other_id):
+				continue  # Уже соединены — не создаём дубликат линии
 			
 			var other_tower = ecs.towers[other_id]
 			if other_tower.get("is_active", false):
-				continue
+				continue  # Активные уже в графе, линия к ним создана в _connect_to_networks
 			
 			var other_def = DataRepository.get_tower_def(other_tower.get("def_id", ""))
 			if not other_def or other_def.get("type") == "WALL":
@@ -290,28 +335,40 @@ func _expand_network_from(start_node: int) -> void:
 			var other_type = other_def.get("type", "ATTACK")
 			var other_hex = other_tower.get("hex")
 			var distance = current_hex.distance_to(other_hex)
-			
+			var current_radius = get_transfer_radius(current_def)
+			var other_radius = get_transfer_radius(other_def)
+			var max_dist = mini(current_radius, other_radius)
 			var is_neighbor = (distance == 1)
 			var is_miner_connection = (
 				current_type == "MINER" and
 				other_type == "MINER" and
-				distance <= Config.ENERGY_TRANSFER_RADIUS and
+				distance <= max_dist and
 				current_hex.is_on_same_line(other_hex)
 			)
-			
-			if is_neighbor or is_miner_connection:
+			var is_battery_connection = (
+				(current_type == "BATTERY" or other_type == "BATTERY") and
+				(current_type == "MINER" or current_type == "BATTERY") and
+				(other_type == "MINER" or other_type == "BATTERY") and
+				distance <= max_dist and
+				current_hex.is_on_same_line(other_hex)
+			)
+			if is_neighbor or is_miner_connection or is_battery_connection:
+				if uf.find(current_id) == uf.find(other_id):
+					continue  # Уже в одной компоненте — линия создаст цикл, не добавляем
 				if not _forms_triangle(current_id, other_id, adj):
-					# Активируем соседа
-					other_tower["is_active"] = true
-					_update_tower_appearance(other_id)
+					# Активируем соседа только если он не выключен вручную (выключенный майнер остаётся передатчиком, не «включаем» его)
+					if not other_tower.get("is_manually_disabled", false):
+						other_tower["is_active"] = true
+						_update_tower_appearance(other_id)
 					
-					# Создаём линию
+					# Создаём линию в любом случае (граф единый, выключенный — часть сети)
 					var edge = EnergyEdge.new(
 						current_id, other_id,
 						current_type, other_type,
 						float(distance)
 					)
 					_create_line(edge)
+					uf.union(current_id, other_id)
 					
 					# Обновляем adj
 					if not adj.has(current_id):
@@ -331,6 +388,7 @@ func _expand_network_from(start_node: int) -> void:
 # Удалить все линии, подключённые к башне (вызывать ДО destroy_entity)
 func remove_lines_connected_to_tower(tower_id: int) -> void:
 	_network_ore_ids_cache.clear()
+	_smoothed_restore_cache.clear()
 	var to_remove = []
 	for line_id in ecs.energy_lines.keys():
 		var line = ecs.energy_lines[line_id]
@@ -347,6 +405,7 @@ func remove_lines_connected_to_tower(tower_id: int) -> void:
 # Сохраняет существующие линии и добавляет только недостающие "мосты".
 func handle_tower_removal() -> void:
 	_network_ore_ids_cache.clear()
+	_smoothed_restore_cache.clear()
 	# 1. Определить какие башни питаются от источника
 	var powered = _find_powered_towers_with_adj(_build_adjacency_list())
 	for id in ecs.towers.keys():
@@ -354,7 +413,7 @@ func handle_tower_removal() -> void:
 		var def = DataRepository.get_tower_def(tower.get("def_id", ""))
 		if def and def.get("type") == "WALL":
 			continue
-		tower["is_active"] = powered.get(id, false)
+		tower["is_active"] = powered.get(id, false) and not tower.get("is_manually_disabled", false)
 	
 	# 2. Объединить разъединённые активные компоненты (mergeActiveNetworks)
 	_merge_active_networks()
@@ -391,23 +450,16 @@ func handle_tower_removal() -> void:
 			var def = DataRepository.get_tower_def(tower.get("def_id", ""))
 			if def and def.get("type") == "WALL":
 				continue
-			tower["is_active"] = powered.get(id, false)
+			tower["is_active"] = powered.get(id, false) and not tower.get("is_manually_disabled", false)
 	
-	# 4. Удалить линии к неактивным башням
-	var to_remove = []
-	for line_id in ecs.energy_lines.keys():
-		var line = ecs.energy_lines[line_id]
-		var t1 = ecs.towers.get(line.get("tower1_id"))
-		var t2 = ecs.towers.get(line.get("tower2_id"))
-		if not t1 or not t2 or not t1.get("is_active", false) or not t2.get("is_active", false):
-			to_remove.append(line_id)
-	for line_id in to_remove:
-		ecs.destroy_entity(line_id)
-	
+	# Линии не удаляем по is_active: пустые майнеры остаются передатчиками, топология сохраняется (см. ENERGY_NETWORK_LINES_BUG_ANALYSIS.md).
 	for id in ecs.towers.keys():
 		_update_tower_appearance(id)
 	
 	rebuild_line_hex_set()
+	var powered_after = _find_powered_towers_with_adj(_build_adjacency_list())
+	_update_powered_tower_ids_for_renderer(powered_after)
+	_update_all_towers_resistance()
 	if GameManager.combat_system:
 		GameManager.combat_system.clear_power_cache()
 
@@ -421,13 +473,20 @@ func _merge_active_networks() -> void:
 	if active_towers.size() <= 1:
 		return
 	
+	# Связность по всему графу (включая выключенные майнеры — передатчики). Иначе две активные башни,
+	# соединённые только через выключенный майнер, считаются разными компонентами и между ними добавляется
+	# мост -> цикл.
 	var uf = UnionFind.new()
-	for id in active_towers.keys():
+	for id in ecs.towers.keys():
+		var tower = ecs.towers[id]
+		var def = DataRepository.get_tower_def(tower.get("def_id", ""))
+		if def and def.get("type") == "WALL":
+			continue
 		uf.find(id)
 	for line in ecs.energy_lines.values():
 		var t1 = line.get("tower1_id")
 		var t2 = line.get("tower2_id")
-		if active_towers.has(t1) and active_towers.has(t2):
+		if ecs.towers.has(t1) and ecs.towers.has(t2):
 			uf.union(t1, t2)
 	
 	var active_ids = active_towers.keys()
@@ -497,9 +556,11 @@ func _find_all_possible_bridges() -> Array:
 # Удалить башню из сети (полная перестройка) - используется при FinalizeTowerSelection и т.п.
 func rebuild_energy_network() -> void:
 	_network_ore_ids_cache.clear()
+	_smoothed_restore_cache.clear()
 	var all_towers = _collect_and_reset_towers()
 	if all_towers.size() == 0:
 		_clear_all_lines()
+		_update_powered_tower_ids_for_renderer({})
 		return
 	
 	var potentially_active = _get_potentially_active_towers(all_towers)
@@ -513,6 +574,9 @@ func rebuild_energy_network() -> void:
 	_update_tower_appearances(all_towers)
 	_rebuild_energy_lines(mst_edges)
 	rebuild_line_hex_set()
+	var powered_after = _find_powered_towers_with_adj(_build_adjacency_list())
+	_update_powered_tower_ids_for_renderer(powered_after)
+	_update_all_towers_resistance()
 	if GameManager.combat_system:
 		GameManager.combat_system.clear_power_cache()
 
@@ -562,18 +626,31 @@ func _collect_possible_edges(all_towers: Dictionary, potentially_active: Diction
 			
 			var distance = hex_a.distance_to(hex_b)
 			var is_neighbor = (distance == 1)
+			var type_a = def_a.get("type", "ATTACK")
+			var type_b = def_b.get("type", "ATTACK")
+			var r_a = get_transfer_radius(def_a)
+			var r_b = get_transfer_radius(def_b)
+			var max_dist = mini(r_a, r_b)
 			var is_miner_connection = (
-				def_a.get("type") == "MINER" and
-				def_b.get("type") == "MINER" and
-				distance <= Config.ENERGY_TRANSFER_RADIUS and
+				type_a == "MINER" and
+				type_b == "MINER" and
+				distance <= max_dist and
+				hex_a.is_on_same_line(hex_b) and
+				not _has_active_tower_between(hex_a, hex_b, all_towers, potentially_active)
+			)
+			var is_battery_connection = (
+				(type_a == "BATTERY" or type_b == "BATTERY") and
+				(type_a == "MINER" or type_a == "BATTERY") and
+				(type_b == "MINER" or type_b == "BATTERY") and
+				distance <= max_dist and
 				hex_a.is_on_same_line(hex_b) and
 				not _has_active_tower_between(hex_a, hex_b, all_towers, potentially_active)
 			)
 			
-			if is_neighbor or is_miner_connection:
+			if is_neighbor or is_miner_connection or is_battery_connection:
 				edges.append(EnergyEdge.new(
 					id_a, id_b,
-					def_a.get("type"), def_b.get("type"),
+					type_a, type_b,
 					float(distance)
 				))
 	
@@ -589,8 +666,8 @@ func _has_active_tower_between(hex_a: Hex, hex_b: Hex, all_towers: Dictionary, p
 				var tower = ecs.towers.get(id)
 				if tower:
 					var def = DataRepository.get_tower_def(tower.get("def_id", ""))
-					# Блокируется только другим майнером
-					if def and def.get("type") == "MINER":
+					# Блокируется майнером или батареей на линии (как у вышки типа Б)
+					if def and (def.get("type") == "MINER" or def.get("type") == "BATTERY"):
 						return true
 	return false
 
@@ -610,7 +687,7 @@ func _build_minimum_spanning_tree(edges: Array, potentially_active: Dictionary) 
 	return {"uf": uf, "edges": mst_edges}
 
 func _activate_network_towers(all_towers: Dictionary, potentially_active: Dictionary, uf: UnionFind) -> void:
-	# Найти корни (майнеры на руде)
+	# Найти корни: майнеры на руде; батареи в режиме разряда (ручная трата или авто: сеть < 10 или батарея полная)
 	var energy_source_roots = {}
 	for hex_key in all_towers.keys():
 		var id = all_towers[hex_key]
@@ -618,19 +695,40 @@ func _activate_network_towers(all_towers: Dictionary, potentially_active: Dictio
 		if not tower:
 			continue
 		var def = DataRepository.get_tower_def(tower.get("def_id", ""))
-		if def and def.get("type") == "MINER":
+		if not def:
+			continue
+		if def.get("type") == "MINER":
+			if tower.get("is_manually_disabled", false):
+				continue
 			var hex = Hex.from_key(hex_key)
 			if _is_on_ore(hex):
 				energy_source_roots[uf.find(id)] = true
+		elif def.get("type") == "BATTERY":
+			var hex = Hex.from_key(hex_key)
+			if _is_on_ore(hex):
+				energy_source_roots[uf.find(id)] = true
+			else:
+				var storage = tower.get("battery_storage", 0.0)
+				if storage <= 0.0:
+					continue
+				var manual_discharge = tower.get("battery_manual_discharge", false)
+				var storage_max = def.get("energy", {}).get("storage_max", 200.0)
+				var net_ore = get_network_ore_total_for_activation(id)
+				var auto_discharge = (net_ore < 10.0) or (storage >= storage_max)
+				if manual_discharge or auto_discharge:
+					energy_source_roots[uf.find(id)] = true
 	
-	# Активировать ТОЛЬКО башни, подключенные к корням
+	# Активировать: подключены к корням и не выключены вручную (для батареи "выключено" = режим траты, всё равно источник)
 	var activated_count = 0
 	for id in potentially_active.keys():
-		if energy_source_roots.has(uf.find(id)):
+		var tower = ecs.towers.get(id)
+		var def = DataRepository.get_tower_def(tower.get("def_id", "")) if tower else null
+		var is_battery = def and def.get("type") == "BATTERY"
+		var not_manual_off = not (tower.get("is_manually_disabled", false) if tower else false)
+		if energy_source_roots.has(uf.find(id)) and (not_manual_off or is_battery):
 			ecs.towers[id]["is_active"] = true
 			activated_count += 1
 		else:
-			# КРИТИЧНО: если башня НЕ подключена к руде, она НЕАКТИВНА
 			ecs.towers[id]["is_active"] = false
 
 func _update_tower_appearances(all_towers: Dictionary) -> void:
@@ -639,10 +737,11 @@ func _update_tower_appearances(all_towers: Dictionary) -> void:
 
 func _rebuild_energy_lines(mst_edges: Array) -> void:
 	_clear_all_lines()
+	# Линии по топологии MST (ручно выключенные башни остаются в сети — передают)
 	for edge in mst_edges:
 		var tower1 = ecs.towers.get(edge.tower1_id)
 		var tower2 = ecs.towers.get(edge.tower2_id)
-		if tower1 and tower2 and tower1.get("is_active") and tower2.get("is_active"):
+		if tower1 and tower2:
 			_create_line(edge)
 
 # ============================================================================
@@ -695,36 +794,17 @@ func _is_on_ore(hex: Hex) -> bool:
 		return false
 	return ore.get("current_reserve", 0.0) >= Config.ORE_DEPLETION_THRESHOLD
 
-# Сколько руды восстанавливается за волну (на жилу с майнером этого уровня).
-# 1) Все майнеры × ORE_RESTORE_GLOBAL_MULT (0.7 = −30%).
-# 2) Прогресс по уровню игрока (по опыту): майнер уровня L восстанавливает 0..100% в зависимости от прогресса XP в уровне L.
-#    Прогресс = current_xp / xp_to_next_level. Если player_level > L — майнер L уже на 100%.
-func get_ore_restore_per_round(ore_id: int) -> float:
-	var ore = ecs.ores.get(ore_id)
-	if not ore:
-		return 0.8 * Config.ORE_RESTORE_GLOBAL_MULT
-	var ore_hex = ore.get("hex")
-	if not ore_hex:
-		return 0.8 * Config.ORE_RESTORE_GLOBAL_MULT
-	# O(1) через hex_map вместо перебора всех towers
-	var tid = hex_map.get_tower_id(ore_hex)
-	if tid == GameTypes.INVALID_ENTITY_ID:
-		return 0.8 * Config.ORE_RESTORE_GLOBAL_MULT
-	var t = ecs.towers.get(tid)
-	if not t:
-		return 0.8 * Config.ORE_RESTORE_GLOBAL_MULT
-	var def = DataRepository.get_tower_def(t.get("def_id", ""))
-	if def.get("type") != "MINER":
-		return 0.8 * Config.ORE_RESTORE_GLOBAL_MULT
-	var miner_lv = clampi(t.get("level", 1), 1, 5)
-	var base: float
-	match miner_lv:
-		1: base = 0.8
-		2: base = 1.9
-		3: base = 4.1
-		4: base = 6.6
-		5: base = 10.0
-		_: base = 0.8
+# Вес уровня майнера для сглаживания: лвл 1 = 1.0, каждый следующий +20% (лвл 2 = 1.2, 3 = 1.4, 4 = 1.6, 5 = 1.8).
+func _miner_restore_weight(level: int) -> float:
+	var lv = clampi(level, 1, 5)
+	return 1.0 + (lv - 1) * Config.ORE_RESTORE_MINER_LEVEL_WEIGHT_BONUS
+
+# Заполняет _smoothed_restore_cache: общее восстановление распределяется по жилам с весами по уровню майнера (лейт-польза низкоуровневых майнеров).
+func _fill_smoothed_restore_cache() -> void:
+	_smoothed_restore_cache.clear()
+	var total_raw := 0.0
+	var total_weight := 0.0
+	var entries: Array = []  # { ore_id, raw, weight, disabled_mult, success_mult }
 	var player_level = 1
 	var current_xp = 0
 	var xp_to_next = 100
@@ -734,15 +814,63 @@ func get_ore_restore_per_round(ore_id: int) -> float:
 		current_xp = ps.get("current_xp", 0)
 		xp_to_next = ps.get("xp_to_next_level", 100)
 		break
+	var success_lv = ecs.game_state.get("success_level", Config.SUCCESS_LEVEL_DEFAULT)
+	var success_mult = Config.get_success_ore_bonus_mult(success_lv)
+	var card_bonus = GameManager.get_card_ore_restore_bonus() if GameManager else 0.0
 	var progress = 1.0
 	if xp_to_next > 0:
 		progress = clampf(float(current_xp) / float(xp_to_next), 0.0, 1.0)
-	var level_mult = 1.0
-	if player_level > miner_lv:
-		level_mult = 1.0
-	elif player_level == miner_lv:
-		level_mult = progress
-	return base * Config.ORE_RESTORE_GLOBAL_MULT * level_mult
+	for ore_id in ecs.ores.keys():
+		var ore = ecs.ores.get(ore_id)
+		if not ore:
+			continue
+		var ore_hex = ore.get("hex")
+		if not ore_hex:
+			continue
+		var tid = hex_map.get_tower_id(ore_hex)
+		if tid == GameTypes.INVALID_ENTITY_ID:
+			continue
+		var t = ecs.towers.get(tid)
+		if not t:
+			continue
+		var def = DataRepository.get_tower_def(t.get("def_id", ""))
+		if def.get("type") != "MINER":
+			continue
+		var miner_lv = clampi(t.get("level", 1), 1, 5)
+		var base: float
+		match miner_lv:
+			1: base = 1.7 * Config.ORE_RESTORE_LEVEL_1_MULT
+			2: base = 2.5
+			3: base = 5.2
+			4: base = 9.6
+			5: base = 15.0
+			_: base = 1.7
+		var level_mult = 1.0
+		if player_level > miner_lv:
+			level_mult = 1.0
+		elif player_level == miner_lv:
+			level_mult = progress
+		var raw = base * Config.ORE_RESTORE_GLOBAL_MULT * level_mult + card_bonus
+		var weight = _miner_restore_weight(miner_lv)
+		var disabled_mult = 1.3 if t.get("is_manually_disabled", false) else 1.0
+		total_raw += raw
+		total_weight += weight
+		entries.append({"ore_id": ore_id, "raw": raw, "weight": weight, "disabled_mult": disabled_mult, "success_mult": success_mult})
+	if total_weight <= 0.0:
+		return
+	var rate_per_weight = total_raw / total_weight
+	for e in entries:
+		var effective = rate_per_weight * e.weight * e.disabled_mult * e.success_mult
+		_smoothed_restore_cache[e.ore_id] = effective
+
+# Сколько руды восстанавливается за волну (на жилу с майнером).
+# Сглаживание: суммарное восстановление по всем жилам распределяется по весам уровней (лвл 1 = 1.0, каждый следующий +20%), чтобы майнеры 1 лвл оставались полезны в лейте.
+func get_ore_restore_per_round(ore_id: int) -> float:
+	if _smoothed_restore_cache.is_empty():
+		_fill_smoothed_restore_cache()
+	if _smoothed_restore_cache.has(ore_id):
+		return _smoothed_restore_cache[ore_id]
+	return 0.0
 
 # Эффективность добычи: майнер лвл 2+ даёт +30% (списываем на 30% меньше руды за выстрел)
 func get_miner_efficiency_for_ore(ore_id: int) -> float:
@@ -809,6 +937,7 @@ func reconnect_line(source_id: int, target_id: int, original_parent_id: int, hid
 	_create_line(EnergyEdge.new(source_id, target_id, type1, type2, float(dist)))
 	_recalculate_powered_and_cleanup()
 	rebuild_line_hex_set()
+	_update_all_towers_resistance()
 	if GameManager.combat_system:
 		GameManager.combat_system.clear_power_cache()
 	return true
@@ -871,17 +1000,40 @@ func _is_valid_connection(tower1: Dictionary, tower2: Dictionary) -> bool:
 		return false
 	var dist = h1.distance_to(h2)
 	var is_adjacent = (dist == 1)
-	var is_miner = def1.get("type") == "MINER" and def2.get("type") == "MINER"
-	var miner_ok = is_miner and dist <= Config.ENERGY_TRANSFER_RADIUS and h1.is_on_same_line(h2)
-	return is_adjacent or miner_ok
+	var t1 = def1.get("type", "ATTACK")
+	var t2 = def2.get("type", "ATTACK")
+	var r1 = get_transfer_radius(def1)
+	var r2 = get_transfer_radius(def2)
+	var max_dist = mini(r1, r2)
+	var is_miner = t1 == "MINER" and t2 == "MINER"
+	var miner_ok = is_miner and dist <= max_dist and h1.is_on_same_line(h2)
+	var is_battery = (t1 == "BATTERY" or t2 == "BATTERY") and (t1 == "MINER" or t1 == "BATTERY") and (t2 == "MINER" or t2 == "BATTERY")
+	var battery_ok = is_battery and dist <= max_dist and h1.is_on_same_line(h2)
+	return is_adjacent or miner_ok or battery_ok
 
 func _find_powered_towers_with_adj(adj: Dictionary) -> Dictionary:
 	var powered = {}
 	for id in ecs.towers.keys():
 		var tower = ecs.towers[id]
 		var def = DataRepository.get_tower_def(tower.get("def_id", ""))
-		if def.get("type") == "MINER" and _is_on_ore(tower.get("hex")):
-			powered[id] = true
+		if not def:
+			continue
+		if def.get("type") == "MINER":
+			if tower.get("is_manually_disabled", false):
+				continue
+			if _is_on_ore(tower.get("hex")):
+				powered[id] = true
+		elif def.get("type") == "BATTERY":
+			if _is_on_ore(tower.get("hex")):
+				powered[id] = true
+			else:
+				var storage = tower.get("battery_storage", 0.0)
+				if storage <= 0.0:
+					continue
+				var manual = tower.get("battery_manual_discharge", false)
+				var storage_max = def.get("energy", {}).get("storage_max", 200.0)
+				if manual or storage >= storage_max:
+					powered[id] = true
 	var queue = []
 	for id in powered.keys():
 		queue.append(id)
@@ -896,28 +1048,22 @@ func _find_powered_towers_with_adj(adj: Dictionary) -> Dictionary:
 	return powered
 
 func _recalculate_powered_and_cleanup() -> void:
+	_network_ore_ids_cache.clear()
 	var powered = _find_powered_towers_with_adj(_build_adjacency_list())
 	for id in ecs.towers.keys():
 		var tower = ecs.towers[id]
 		var def = DataRepository.get_tower_def(tower.get("def_id", ""))
 		if def.get("type") == "WALL":
 			continue
-		tower["is_active"] = powered.get(id, false)
+		tower["is_active"] = powered.get(id, false) and not tower.get("is_manually_disabled", false)
 	for id in ecs.towers.keys():
 		_update_tower_appearance(id)
-	# Удаляем линии к неактивным башням
-	var to_remove = []
-	for line_id in ecs.energy_lines.keys():
-		var line = ecs.energy_lines[line_id]
-		var t1 = ecs.towers.get(line.get("tower1_id"))
-		var t2 = ecs.towers.get(line.get("tower2_id"))
-		if not t1 or not t2 or not t1.get("is_active", false) or not t2.get("is_active", false):
-			to_remove.append(line_id)
-	for line_id in to_remove:
-		ecs.destroy_entity(line_id)
-	# Обновляем визуалы оставшихся башен
-	for id in ecs.towers.keys():
-		_update_tower_appearance(id)
+	# Линии не удаляем при вкл/выкл майнера: выключенный майнер остаётся передатчиком, топология сети сохраняется. Линии удаляются только при сносе башни (remove_lines_connected_to_tower / handle_tower_removal).
+	_update_powered_tower_ids_for_renderer(powered)
+
+# Сохранить множество ID башен, входящих в компоненты с корнями (есть питание). Рендерер рисует линии только между такими башнями — при 0 корней линии не показываются.
+func _update_powered_tower_ids_for_renderer(powered: Dictionary) -> void:
+	ecs.game_state["energy_network_powered_tower_ids"] = powered
 
 func _clear_all_lines() -> void:
 	var to_remove = []
@@ -986,6 +1132,31 @@ func _get_connected_tower_ids(tower_id: int) -> Array:
 				queue.append(neighbor)
 	return queue
 
+# Сумма руды в компоненте по жилам под майнерами и батареями (без учёта is_active). Для решения «батарея — корень?» во время rebuild.
+func get_network_ore_total_for_activation(tower_id: int) -> float:
+	var connected = _get_connected_tower_ids(tower_id)
+	var total = 0.0
+	var seen_oid = {}
+	for tid in connected:
+		var t = ecs.towers.get(tid)
+		if not t:
+			continue
+		var def = DataRepository.get_tower_def(t.get("def_id", ""))
+		if not def:
+			continue
+		if def.get("type") != "MINER" and def.get("type") != "BATTERY":
+			continue
+		var mhex = t.get("hex")
+		if not mhex:
+			continue
+		var oid = ecs.ore_hex_index.get(mhex.to_key(), -1)
+		if oid >= 0 and ecs.ores.has(oid) and not seen_oid.get(oid, false):
+			seen_oid[oid] = true
+			var o = ecs.ores[oid]
+			if o:
+				total += o.get("current_reserve", 0.0)
+	return total
+
 # Статистика руды в сети этой башни: всего осталось, всего было, добыто (по руде под майнерами в компоненте)
 # Кэш: список жил руды в сети (инвалидируется при добавлении/удалении башен, крафте, переподключении линии).
 func get_network_ore_stats(tower_id: int) -> Dictionary:
@@ -1000,15 +1171,24 @@ func get_network_ore_stats(tower_id: int) -> Dictionary:
 			if not t:
 				continue
 			var def = DataRepository.get_tower_def(t.get("def_id", ""))
-			if def.get("type") != "MINER":
+			if not def:
 				continue
 			var mhex = t.get("hex")
 			if not mhex:
 				continue
-			# O(1) через ore_hex_index вместо перебора всех ores
 			var oid = ecs.ore_hex_index.get(mhex.to_key(), -1)
-			if oid >= 0 and ecs.ores.has(oid):
-				ore_ids[oid] = true
+			if oid < 0 or not ecs.ores.has(oid):
+				continue
+			if def.get("type") == "MINER":
+				if not t.get("is_active", false):
+					continue
+				var ore = ecs.ores[oid]
+				if ore.get("current_reserve", 0.0) >= Config.ORE_DEPLETION_THRESHOLD:
+					ore_ids[oid] = true
+			elif def.get("type") == "BATTERY":
+				var ore = ecs.ores[oid]
+				if ore.get("current_reserve", 0.0) >= Config.ORE_DEPLETION_THRESHOLD:
+					ore_ids[oid] = true
 		ore_ids_arr = ore_ids.keys()
 		for tid in connected:
 			_network_ore_ids_cache[tid] = ore_ids_arr
@@ -1019,7 +1199,34 @@ func get_network_ore_stats(tower_id: int) -> Dictionary:
 		if o:
 			total_current += o.get("current_reserve", 0.0)
 			total_max += o.get("max_reserve", 0.0)
-	return {"total_current": total_current, "total_max": total_max, "mined": total_max - total_current}
+	var connected = _get_connected_tower_ids(tower_id)
+	for tid in connected:
+		var t = ecs.towers.get(tid)
+		if not t:
+			continue
+		var def = DataRepository.get_tower_def(t.get("def_id", ""))
+		if not def or def.get("type") != "BATTERY":
+			continue
+		var storage = t.get("battery_storage", 0.0)
+		if storage <= 0.0:
+			continue
+		var manual = t.get("battery_manual_discharge", false)
+		var storage_max = def.get("energy", {}).get("storage_max", 200.0)
+		var net_ore = get_network_ore_total_for_activation(tid)
+		var auto_discharge = (net_ore < 10.0) or (storage >= storage_max)
+		if manual or auto_discharge:
+			total_current += storage
+			total_max += storage
+	return {"total_current": total_current, "total_max": total_max, "mined": total_max - total_current, "ore_ids": ore_ids_arr}
+
+# Все жилы руды в сетях (под майнерами) — для награды за голд-существо (равномерное распределение руды).
+func get_all_network_ore_ids() -> Array:
+	var seen: Dictionary = {}
+	for tid in ecs.towers:
+		var st = get_network_ore_stats(tid)
+		for oid in st.get("ore_ids", []):
+			seen[oid] = true
+	return seen.keys()
 
 # Множитель урона от доли руды в сети: полная руда = 1.0, почти пусто = 1.5 (линейно).
 func get_network_ore_damage_mult(tower_id: int) -> float:
@@ -1030,6 +1237,62 @@ func get_network_ore_damage_mult(tower_id: int) -> float:
 	var ratio = st.get("total_current", 0.0) / total_max
 	# ratio 1 (full) -> 1.0, ratio 0 (empty) -> 1.5
 	return 1.5 - 0.5 * ratio
+
+# ============================================================================
+# СОПРОТИВЛЕНИЕ СЕТИ (резистор)
+# ============================================================================
+# Вышки типа Б (MINER, BATTERY) — 0 сопротивления. Вышки типа А (ATTACK) — 0.2 за каждую на пути до ближайшей типа Б. Сумма капается на 1. Множитель урона и силы ауры = max(0, 1 - resistance).
+
+func _compute_tower_resistance(tower_id: int) -> float:
+	var adj = _build_adjacency_list()
+	if not adj.has(tower_id):
+		return 0.0
+	var queue = [tower_id]
+	var visited = {tower_id: true}
+	var hops = {tower_id: 0}
+	var head = 0
+	while head < queue.size():
+		var current = queue[head]
+		head += 1
+		var current_hops = hops.get(current, 0)
+		var t = ecs.towers.get(current)
+		if not t:
+			continue
+		var def = DataRepository.get_tower_def(t.get("def_id", ""))
+		if not def:
+			continue
+		var tt = def.get("type", "ATTACK")
+		if tt == "MINER" or tt == "BATTERY":
+			if current == tower_id:
+				return 0.0
+			var resistance = current_hops * Config.RESISTANCE_PER_ATTACK_TOWER
+			return minf(resistance, Config.RESISTANCE_CAP)
+		for neighbor in adj.get(current, []):
+			if not visited.get(neighbor, false):
+				visited[neighbor] = true
+				hops[neighbor] = current_hops + 1
+				queue.append(neighbor)
+	return Config.RESISTANCE_CAP
+
+func _update_all_towers_resistance() -> void:
+	var adj = _build_adjacency_list()
+	for tower_id in ecs.towers.keys():
+		var tower = ecs.towers[tower_id]
+		var def = DataRepository.get_tower_def(tower.get("def_id", ""))
+		if not def or def.get("type") == "WALL":
+			tower["resistance"] = 0.0
+			continue
+		if not adj.has(tower_id):
+			tower["resistance"] = 0.0
+			continue
+		tower["resistance"] = _compute_tower_resistance(tower_id)
+
+func get_resistance_mult(tower_id: int) -> float:
+	var t = ecs.towers.get(tower_id)
+	if not t:
+		return 1.0
+	var r = t.get("resistance", 0.0)
+	return maxf(0.0, 1.0 - r)
 
 # Сумма руды по всем сетям (каждая связная компонента один раз). Для HUD — то же, что на майнере «в сети», но по всей карте.
 func get_all_networks_ore_totals() -> Dictionary:
@@ -1052,38 +1315,109 @@ func get_all_networks_ore_totals() -> Dictionary:
 		total_max += st.get("total_max", 0.0)
 	return {"total_current": total_current, "total_max": total_max}
 
-# Поиск источников питания для башни
-# Возвращает массив ore entity_id которые питают эту башню
+# Список сетей с рудой и числом атакующих вышек (не MINER, не WALL). Для лога «основная сеть» = с макс. числом атакующих.
+func get_networks_ore_and_attack_count() -> Array:
+	var result: Array = []
+	var seen_components := {}
+	for tid in ecs.towers.keys():
+		var conn = _get_connected_tower_ids(tid)
+		if conn.is_empty():
+			continue
+		conn.sort()
+		var key = ""
+		for c in conn:
+			key += str(c) + ","
+		if seen_components.get(key, false):
+			continue
+		seen_components[key] = true
+		var st = get_network_ore_stats(tid)
+		var attack_count = 0
+		for t_id in conn:
+			var t = ecs.towers.get(t_id)
+			if not t:
+				continue
+			var def = DataRepository.get_tower_def(t.get("def_id", ""))
+			var ttype = def.get("type", "")
+			if ttype != "MINER" and ttype != "WALL":
+				attack_count += 1
+		result.append({
+			"tower_id": tid,
+			"total_current": st.get("total_current", 0.0),
+			"total_max": st.get("total_max", 0.0),
+			"attack_count": attack_count
+		})
+	return result
+
+# Поиск источников питания для башни (в той же сети).
+# Возвращает массив {"type": "ore", "id": ore_id} или {"type": "battery", "id": tower_id}.
 func _find_power_sources(tower_id: int) -> Array:
 	var sources = []
-	
 	var tower = ecs.towers.get(tower_id)
-	if not tower:
+	if not tower or not tower.get("is_active", false):
 		return sources
-	
-	if not tower.get("is_active", false):
-		return sources
-	
-	for miner_id in ecs.towers.keys():
-		var miner = ecs.towers[miner_id]
-		var miner_def = DataRepository.get_tower_def(miner.get("def_id", ""))
-		
-		if miner_def.get("type") != "MINER":
+	var connected = _get_connected_tower_ids(tower_id)
+	var seen_ore = {}
+	for tid in connected:
+		var t = ecs.towers.get(tid)
+		if not t:
 			continue
-		
-		if not miner.get("is_active", false):
+		var def = DataRepository.get_tower_def(t.get("def_id", ""))
+		if not def:
 			continue
-		
-		var miner_hex = miner.get("hex")
-		if not miner_hex:
+		var mhex = t.get("hex")
+		if not mhex:
 			continue
-		
-		# O(1) lookup вместо перебора всех ores
-		var ore_id = ecs.ore_hex_index.get(miner_hex.to_key(), -1)
-		if ore_id < 0:
-			continue
-		var ore = ecs.ores.get(ore_id)
-		if ore and ore.get("current_reserve", 0.0) > Config.ORE_DEPLETION_THRESHOLD:
-			sources.append(ore_id)
-	
+		var ore_id = ecs.ore_hex_index.get(mhex.to_key(), -1)
+		if ore_id >= 0 and ecs.ores.has(ore_id) and not seen_ore.get(ore_id, false):
+			var ore = ecs.ores[ore_id]
+			if ore.get("current_reserve", 0.0) >= Config.ORE_DEPLETION_THRESHOLD:
+				if def.get("type") == "MINER":
+					if not t.get("is_active", false):
+						continue
+				seen_ore[ore_id] = true
+				sources.append({"type": "ore", "id": ore_id})
+		if def.get("type") == "BATTERY":
+			var storage = t.get("battery_storage", 0.0)
+			if storage <= 0.0:
+				continue
+			var manual = t.get("battery_manual_discharge", false)
+			var storage_max = def.get("energy", {}).get("storage_max", 200.0)
+			var net_ore = get_network_ore_total_for_activation(tid)
+			var auto_discharge = (net_ore < 10.0) or (storage >= storage_max)
+			if manual or auto_discharge:
+				sources.append({"type": "battery", "id": tid})
 	return sources
+
+func get_power_source_reserve(source: Dictionary) -> float:
+	if source.get("type") == "ore":
+		var o = ecs.ores.get(source.get("id", -1))
+		return o.get("current_reserve", 0.0) if o else 0.0
+	if source.get("type") == "battery":
+		var t = ecs.towers.get(source.get("id", -1))
+		return t.get("battery_storage", 0.0) if t else 0.0
+	return 0.0
+
+func consume_from_power_source(source: Dictionary, amount: float, tower_id: int = -1) -> void:
+	if source.get("type") == "ore":
+		var ore_id = source.get("id", -1)
+		var ore = ecs.ores.get(ore_id)
+		if not ore:
+			return
+		var sector = ore.get("sector", 0)
+		var mult = get_miner_efficiency_for_ore(ore_id)
+		var deduct = amount / mult * GameManager.get_ore_consumption_multiplier()
+		var cur = ore.get("current_reserve", 0.0)
+		ore["current_reserve"] = maxf(0.0, cur - deduct)
+		GameManager.record_ore_spent(deduct, sector, tower_id)
+		if ore["current_reserve"] < Config.ORE_DEPLETION_THRESHOLD:
+			ecs.destroy_entity(ore_id)
+			rebuild_energy_network()
+	elif source.get("type") == "battery":
+		var bid = source.get("id", -1)
+		var t = ecs.towers.get(bid)
+		if not t:
+			return
+		var cur = t.get("battery_storage", 0.0)
+		var deduct = minf(amount, cur)
+		t["battery_storage"] = maxf(0.0, cur - deduct)
+		GameManager.record_ore_spent(deduct, 0, tower_id)

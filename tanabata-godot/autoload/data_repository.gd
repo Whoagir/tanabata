@@ -12,7 +12,9 @@ var enemy_defs: Dictionary = {}
 var recipe_defs: Array = []
 var loot_table_defs: Dictionary = {}
 var wave_defs: Dictionary = {}
+var wave_balance: Dictionary = {}
 var ability_defs: Dictionary = {}
+var mimic_weights: Dictionary = {}
 
 # ============================================================================
 # ИНИЦИАЛИЗАЦИЯ
@@ -36,8 +38,12 @@ func load_all_data():
 	loot_table_defs = _process_loot_table_defs(loot_data)
 	var waves_data = Config.load_json(Config.PATH_WAVES)
 	wave_defs = _process_wave_defs(waves_data)
+	var balance_data = Config.load_json(Config.PATH_WAVE_BALANCE)
+	wave_balance = balance_data.get("wave_health", {}) if balance_data is Dictionary else {}
 	var abilities_data = Config.load_json(Config.PATH_ABILITY_DEFINITIONS)
 	ability_defs = _process_ability_defs(abilities_data)
+	var mimic_data = Config.load_json(Config.PATH_MIMIC_WEIGHTS)
+	mimic_weights = _process_mimic_weights(mimic_data)
 
 # ============================================================================
 # ОБРАБОТКА ДАННЫХ
@@ -109,6 +115,11 @@ func _process_ability_defs(data: Variant) -> Dictionary:
 				result[str(ab.id)] = ab
 	return result
 
+func _process_mimic_weights(data: Variant) -> Dictionary:
+	if data is Dictionary:
+		return data
+	return {}
+
 # ============================================================================
 # ПУБЛИЧНЫЕ МЕТОДЫ (API)
 # ============================================================================
@@ -128,6 +139,50 @@ func get_enemy_def(enemy_id: String) -> Dictionary:
 	else:
 		push_warning("Enemy definition not found: %s" % enemy_id)
 		return {}
+
+# Код-множитель HP врагов по номеру волны (из wave_balance.json). Применяется после base * health_mult * health_multiplier_modifier * diff_health.
+func get_wave_health_code_multiplier(wave_number: int, is_tutorial: bool) -> float:
+	var wb = wave_balance
+	if wb.is_empty():
+		return 1.0
+	var mult := 1.0
+	var wn = wave_number
+	if wn >= 1 and wn <= 3:
+		mult *= float(wb.get("range_1_3_multiplier", 1.0))
+	elif wn >= 5 and wn <= 6:
+		mult *= float(wb.get("range_5_6_multiplier", 1.0))
+	if wn >= 1 and wn <= 5:
+		var early = wb.get("early_waves_1_5", [1.0, 1.0, 1.0, 1.0, 1.0])
+		if early is Array and early.size() >= wn:
+			mult *= float(early[wn - 1])
+	if wn == 2:
+		mult *= float(wb.get("extra_wave_2", 1.0))
+	elif wn == 3:
+		mult *= float(wb.get("extra_wave_3", 1.0))
+	elif wn == 4:
+		mult *= float(wb.get("extra_wave_4", 1.0))
+	elif wn == 5:
+		mult *= float(wb.get("extra_wave_5", 1.0))
+	if wn == 8:
+		mult *= float(wb.get("wave_8_multiplier", 1.0))
+	if wn == 11:
+		mult *= float(wb.get("wave_11_multiplier", 1.0))
+	if wn == 37:
+		mult *= float(wb.get("wave_37_multiplier", 1.0))
+	if wn == 38:
+		mult *= float(wb.get("wave_38_multiplier", 1.0))
+	if wn == 39:
+		mult *= float(wb.get("wave_39_multiplier", 1.0))
+	var per_wave_key = "wave_%d_multiplier" % wn
+	if wb.get(per_wave_key) != null:
+		mult *= float(wb[per_wave_key])
+	if is_tutorial:
+		mult *= float(wb.get("tutorial_multiplier", 1.0))
+	return mult
+
+# Множитель HP летающих на волнах 11–15 (0.7 = −30% HP). Используется в WaveSystem.
+func get_flying_waves_11_15_hp_multiplier() -> float:
+	return float(wave_balance.get("flying_waves_11_15_multiplier", 1.0))
 
 # Получить определение волны по номеру
 func get_wave_def(wave_number: int) -> Dictionary:

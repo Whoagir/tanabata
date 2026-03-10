@@ -73,10 +73,22 @@ func _render_lines():
 			add_child(line_node)
 			line_visuals[line_id] = line_node
 		
-		# Обновляем позиции
+		# Обновляем позиции. Линии сети показываем только когда сеть есть (есть корни): обе башни в компоненте с питанием; при 0 корней линий не рисуем
 		var ln = line_visuals[line_id]
 		ln.points = PackedVector2Array([pos1, pos2])
-		ln.visible = not line_data.get("is_hidden", false)
+		var powered = ecs.game_state.get("energy_network_powered_tower_ids", null)
+		var show_line = not line_data.get("is_hidden", false)
+		if powered != null:
+			show_line = show_line and powered.get(tower1_id, false) and powered.get(tower2_id, false)
+		ln.visible = show_line
+		# Мерцание при малом запасе руды (сеть восстанавливается)
+		var ore_flicker = ecs.game_state.get("ore_flicker", false)
+		if ore_flicker and ln.visible:
+			var t = Time.get_ticks_msec() / 180.0
+			var a = 0.55 + 0.45 * sin(t)
+			ln.modulate = Color(1.0, 1.0, 1.0, a)
+		else:
+			ln.modulate = Color.WHITE
 	
 	# Удаляем визуалы удалённых линий
 	var to_remove = []

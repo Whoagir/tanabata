@@ -127,7 +127,7 @@
 
 ### Где дублируется логика
 
-- **Переход BUILD → SELECTION:** game_root (_cycle_phase по Space), game_hud (клик по индикатору). Логика «сменить phase» повторена.
+- **Переход BUILD → SELECTION:** game_hud (клик по индикатору в режиме I), авто-переход при 5 башнях. Логика «сменить phase» в PhaseController.
 - **Переход SELECTION → WAVE:** game_hud (клик по индикатору: _remove_unselected_towers, сброс выделения, закрытие InfoPanel, phase = WAVE) и info_panel (при сохранении второй башни: _finalize_tower_selection, phase = WAVE, hide_panel). Финализация выбора башен и смена фазы продублированы.
 - **Переход WAVE → BUILD:** game_root (_cycle_phase: _clear_entities, phase = BUILD) и game_hud (клик: _clear_enemies, _clear_projectiles, сброс towers_built_this_phase, снятие temporary с башен, phase = BUILD). Очистка сущностей и сброс состояния дублируются.
 

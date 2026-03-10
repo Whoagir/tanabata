@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Аналитика волн — Tanabata</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #1a1b1e;
+      --card: #25262b;
+      --text: #e0e0e0;
+      --muted: #909296;
+      --accent: #5c9ead;
+      --success: #51cf66;
+      --danger: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 8px 0; color: var(--text); }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+    .upload {
+      background: var(--card);
+      border: 2px dashed var(--muted);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      margin-bottom: 24px;
+      cursor: pointer;
+    }
+    .upload:hover { border-color: var(--accent); }
+    .upload input { display: none; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .summary .cell {
+      background: var(--card);
+      padding: 16px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .summary .cell .value { font-size: 1.75rem; font-weight: 600; color: var(--accent); }
+    .summary .cell .label { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 24px;
+    }
+    .chart-wrap {
+      background: var(--card);
+      padding: 20px;
+      border-radius: 12px;
+      height: 280px;
+    }
+    .chart-wrap h3 { margin: 0 0 12px 0; font-size: 1rem; color: var(--muted); }
+    .empty { color: var(--muted); text-align: center; padding: 48px 24px; }
+  </style>
+</head>
+<body>
+  <h1>Аналитика волн</h1>
+  <p class="sub">Загрузите CSV с прогонов (wave_1.csv, wave_2.csv, …) — один или несколько файлов.</p>
+
+  <label class="upload" id="uploadLabel">
+    <input type="file" id="fileInput" accept=".csv" multiple>
+    Выберите CSV или перетащите сюда
+  </label>
+
+  <div class="summary" id="summary" hidden>
+    <div class="cell"><div class="value" id="statRuns">0</div><div class="label">Прогонов</div></div>
+    <div class="cell"><div class="value" id="statSuccess">0%</div><div class="label">Успех</div></div>
+    <div class="cell"><div class="value" id="statPassed">0</div><div class="label">Среднее прошло</div></div>
+    <div class="cell"><div class="value" id="statDuration">0</div><div class="label">Среднее время (с)</div></div>
+    <div class="cell"><div class="value" id="statHp">0</div><div class="label">Среднее HP волны</div></div>
+  </div>
+
+  <div class="charts" id="charts" hidden>
+    <div class="chart-wrap"><h3>Успех / провал</h3><canvas id="chartSuccess"></canvas></div>
+    <div class="chart-wrap"><h3>Сколько врагов прошло (распределение)</h3><canvas id="chartPassed"></canvas></div>
+    <div class="chart-wrap"><h3>Время волны, с (распределение)</h3><canvas id="chartDuration"></canvas></div>
+    <div class="chart-wrap"><h3>Суммарное HP волны (распределение)</h3><canvas id="chartHp"></canvas></div>
+  </div>
+
+  <div class="empty" id="empty">Нет данных. Загрузите CSV.</div>
+
+  <script>
+    Chart.defaults.color = '#909296';
+    Chart.defaults.borderColor = '#3d3e42';
+    Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+    const fileInput = document.getElementById('fileInput');
+    const summary = document.getElementById('summary');
+    const charts = document.getElementById('charts');
+    const empty = document.getElementById('empty');
+
+    let chartSuccess = null, chartPassed = null, chartDuration = null, chartHp = null;
+
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) return [];
+      const header = lines[0].split(',');
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const vals = lines[i].split(',');
+        const row = {};
+        header.forEach((h, j) => row[h.trim()] = vals[j] !== undefined ? vals[j].trim() : '');
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function num(val) {
+      const n = parseFloat(val);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function buildHistogram(arr, bins) {
+      if (!arr.length) return { labels: [], counts: [] };
+      const min = Math.min(...arr);
+      const max = Math.max(...arr);
+      const range = max - min || 1;
+      const step = range / bins;
+      const counts = Array(bins).fill(0);
+      const labels = [];
+      for (let i = 0; i < bins; i++) {
+        const lo = min + i * step;
+        const hi = lo + step;
+        labels.push(step >= 1 ? (Math.round(lo)) + '-' + (Math.round(hi)) : lo.toFixed(1));
+      }
+      arr.forEach(v => {
+        let idx = (v - min) / range * bins;
+        idx = Math.min(bins - 1, Math.floor(idx));
+        if (v === max) idx = bins - 1;
+        counts[idx]++;
+      });
+      return { labels, counts };
+    }
+
+    function updateDashboard(data) {
+      if (!data.length) return;
+      const n = data.length;
+      const successCount = data.filter(r => num(r.success) === 1).length;
+      const passedArr = data.map(r => num(r.passed));
+      const durationArr = data.map(r => num(r.duration_sec));
+      const hpArr = data.map(r => num(r.total_hp));
+
+      document.getElementById('statRuns').textContent = n.toLocaleString();
+      document.getElementById('statSuccess').textContent = (100 * successCount / n).toFixed(1) + '%';
+      document.getElementById('statPassed').textContent = (passedArr.reduce((a, b) => a + b, 0) / n).toFixed(2);
+      document.getElementById('statDuration').textContent = (durationArr.reduce((a, b) => a + b, 0) / n).toFixed(1);
+      document.getElementById('statHp').textContent = (hpArr.reduce((a, b) => a + b, 0) / n).toFixed(0);
+
+      summary.hidden = false;
+      charts.hidden = false;
+      empty.hidden = true;
+
+      if (chartSuccess) chartSuccess.destroy();
+      chartSuccess = new Chart(document.getElementById('chartSuccess'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Успех', 'Провал'],
+          datasets: [{ data: [successCount, n - successCount], backgroundColor: ['#51cf66', '#ff6b6b'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      const bins = Math.min(20, Math.max(5, Math.ceil(Math.sqrt(n))));
+      const passedRange = Math.max(...passedArr) - Math.min(...passedArr) + 1;
+      const histPassed = buildHistogram(passedArr, Math.max(2, Math.min(bins, passedRange)));
+      if (chartPassed) chartPassed.destroy();
+      chartPassed = new Chart(document.getElementById('chartPassed'), {
+        type: 'bar',
+        data: {
+          labels: histPassed.labels,
+          datasets: [{ label: 'Прогонов', data: histPassed.counts, backgroundColor: '#5c9ead' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+      });
+
+      const histDuration = buildHistogram(durationArr, bins);
+      if (chartDuration) chartDuration.destroy();
+      chartDuration = new Chart(document.getElementById('chartDuration'), {
+        type: 'bar',
+        data: {
+          labels: histDuration.labels,
+          datasets: [{ label: 'Прогонов', data: histDuration.counts, backgroundColor: '#5c9ead' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+      });
+
+      const histHp = buildHistogram(hpArr, bins);
+      if (chartHp) chartHp.destroy();
+      chartHp = new Chart(document.getElementById('chartHp'), {
+        type: 'bar',
+        data: {
+          labels: histHp.labels,
+          datasets: [{ label: 'Прогонов', data: histHp.counts, backgroundColor: '#5c9ead' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
+      });
+    }
+
+    function onFiles(files) {
+      let all = [];
+      let left = files.length;
+      if (!left) return;
+      for (let i = 0; i < files.length; i++) {
+        const fr = new FileReader();
+        fr.onload = () => {
+          all = all.concat(parseCSV(fr.result));
+          left--;
+          if (left === 0) updateDashboard(all);
+        };
+        fr.readAsText(files[i], 'utf-8');
+      }
+    }
+
+    fileInput.addEventListener('change', () => onFiles(fileInput.files));
+    document.getElementById('uploadLabel').addEventListener('dragover', e => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--accent)'; });
+    document.getElementById('uploadLabel').addEventListener('dragleave', e => { e.currentTarget.style.borderColor = ''; });
+    document.getElementById('uploadLabel').addEventListener('drop', e => {
+      e.preventDefault();
+      e.currentTarget.style.borderColor = '';
+      onFiles(e.dataTransfer.files);
+    });
+  </script>
+</body>
+</html>

@@ -402,7 +402,11 @@ func _draw_preview_line(from_pos: Vector2, to_pos: Vector2):
 
 func _get_preview_tower_type() -> String:
 	if ecs.game_state.has("debug_tower_type"):
-		return ecs.game_state["debug_tower_type"]
+		var dt = ecs.game_state["debug_tower_type"]
+		if dt == "DEBUG_TEST":
+			var ids = Config.DEBUG_TEST_TOWER_IDS
+			return ids[0] if not ids.is_empty() else "NONE"
+		return dt
 	
 	var towers_built = ecs.game_state.get("towers_built_this_phase", 0)
 	if towers_built >= Config.MAX_TOWERS_IN_BUILD_PHASE:
@@ -416,11 +420,9 @@ func _get_preview_tower_type() -> String:
 			return "TOWER_MINER"
 		return "TA1"
 	
-	# Первая башня в волнах 1–4 = майнер
+	# Первые 5 волн в блоке (1–5, 11–15, 21–25…) — первая башня майнер
 	var current_wave = ecs.game_state.get("current_wave", 0)
-	var wave_mod_10 = (current_wave - 1) % 10
-	
-	if wave_mod_10 < 4 and towers_built == 0:
+	if current_wave % 10 < 5 and towers_built == 0:
 		return "TOWER_MINER"
 	
 	return "TA1"

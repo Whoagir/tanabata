@@ -34,8 +34,12 @@ func update():
 		var aura_data = ecs.auras[aura_tower_id]
 		var aura_hex = aura_tower.get("hex")
 		var aura_radius = aura_data.get("radius", 2)
-		var speed_mult = aura_data.get("speed_multiplier", 1.0)
-		var damage_bonus = aura_data.get("damage_bonus", 0)
+		var resistance_mult = GameManager.get_resistance_mult(aura_tower_id)
+		var raw_speed = aura_data.get("speed_multiplier", 1.0)
+		var speed_mult = 1.0 + (raw_speed - 1.0) * resistance_mult
+		var damage_bonus = int(aura_data.get("damage_bonus", 0) * resistance_mult)
+		var damage_bonus_percent = aura_data.get("damage_bonus_percent", 0.0) * resistance_mult
+		var debuff_immunity = aura_data.get("debuff_immunity", false)
 		
 		# Находим все гексы в радиусе ауры
 		var hexes_in_range = hex_map.get_hexes_in_range(aura_hex, aura_radius)
@@ -54,18 +58,26 @@ func update():
 			if not ecs.combat.has(tower_id):
 				continue
 			
-			# Применяем buff: скорость атаки стакается (перемножается), бонус урона — максимум
+			# Применяем buff: скорость атаки стакается (перемножается), бонус урона — максимум, иммунитет к дебаффам
 			if ecs.aura_effects.has(tower_id):
 				var cur = ecs.aura_effects[tower_id]
 				if speed_mult > 1.0:
 					cur["speed_multiplier"] = cur.get("speed_multiplier", 1.0) * speed_mult
 				if damage_bonus > 0:
 					cur["damage_bonus"] = max(cur.get("damage_bonus", 0), damage_bonus)
+				if damage_bonus_percent > 0:
+					cur["damage_bonus_percent"] = max(cur.get("damage_bonus_percent", 0.0), damage_bonus_percent)
+				if debuff_immunity:
+					cur["debuff_immunity"] = true
 			else:
 				var eff = {}
 				if speed_mult > 1.0:
 					eff["speed_multiplier"] = speed_mult
 				if damage_bonus > 0:
 					eff["damage_bonus"] = damage_bonus
+				if damage_bonus_percent > 0:
+					eff["damage_bonus_percent"] = damage_bonus_percent
+				if debuff_immunity:
+					eff["debuff_immunity"] = true
 				if not eff.is_empty():
 					ecs.aura_effects[tower_id] = eff

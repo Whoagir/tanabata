@@ -44,6 +44,11 @@ func _execute_command(cmd: Dictionary):
 		"place_tower":
 			var hex = cmd.get("hex")
 			if hex:
+				place_tower(hex, cmd.get("force_random_attack", false))
+		"replace_wall_with_tower":
+			var hex = cmd.get("hex")
+			if hex:
+				remove_tower(hex)
 				place_tower(hex)
 		"remove_tower":
 			var hex = cmd.get("hex")
@@ -61,6 +66,10 @@ func _execute_command(cmd: Dictionary):
 			var tower_id = cmd.get("tower_id")
 			if tower_id != null:
 				toggle_manual_selection(tower_id)
+		"toggle_tower_enabled":
+			var tower_id = cmd.get("tower_id")
+			if tower_id != null:
+				toggle_tower_enabled(tower_id)
 
 # ============================================================================
 # ОБРАБОТКА ВВОДА
@@ -90,7 +99,13 @@ func handle_mouse_click(mouse_pos: Vector2, button: int):
 				var tower = ecs.towers.get(tower_id)
 				if tower:
 					var tower_def = DataRepository.get_tower_def(tower.get("def_id", ""))
-					if tower_def.get("type") != "WALL":
+					if tower_def.get("type") == "WALL":
+						# ЛКМ по стене: удалить и поставить то, что выпало бы на этот слот (Б или А по очереди)
+						clear_highlight()
+						if GameManager.info_panel:
+							GameManager.info_panel.hide_panel()
+						command_queue.append({"type": "replace_wall_with_tower", "hex": hex})
+					else:
 						if GameManager.info_panel:
 							GameManager.info_panel.show_entity(tower_id)
 						command_queue.append({"type": "select_tower", "tower_id": tower_id})
@@ -159,16 +174,23 @@ func handle_mouse_click(mouse_pos: Vector2, button: int):
 					for tid in ecs.towers.keys():
 						ecs.towers[tid]["is_manually_selected"] = false
 	
-	# ПКМ - удаление башни
+	# ПКМ - удаление башни (BUILD) или вкл/выкл башни (WAVE / SELECTION)
 	elif button == MOUSE_BUTTON_RIGHT:
 		if current_phase == GameTypes.GamePhase.BUILD_STATE:
 			command_queue.append({"type": "remove_tower", "hex": hex})
+		elif (current_phase == GameTypes.GamePhase.WAVE_STATE or current_phase == GameTypes.GamePhase.TOWER_SELECTION_STATE):
+			var tower_id = hex_map.get_tower_id(hex)
+			if tower_id != GameTypes.INVALID_ENTITY_ID and ecs.towers.has(tower_id):
+				var tower = ecs.towers[tower_id]
+				var def = DataRepository.get_tower_def(tower.get("def_id", ""))
+				if def and def.get("type") != "WALL":
+					command_queue.append({"type": "toggle_tower_enabled", "tower_id": tower_id})
 
 # ============================================================================
 # РАЗМЕЩЕНИЕ БАШНИ
 # ============================================================================
 
-func place_tower(hex: Hex) -> bool:
+func place_tower(hex: Hex, force_random_attack: bool = false) -> bool:
 	var current_phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
 	if current_phase != GameTypes.GamePhase.BUILD_STATE:
 		return false
@@ -185,9 +207,16 @@ func place_tower(hex: Hex) -> bool:
 	if not _can_place_tower(hex):
 		return false
 	
-	# Выбираем тип башни: если в стеке майнер (удалили в этом раунде) — ставим его
+	# Выбираем тип башни: замена стены (то же что слот — Б или А), стек майнера, или обычная логика
 	var tower_def_id: String
-	if ecs.game_state.get("removed_miner_stash", false):
+	if force_random_attack:
+		# Дебаг/тест: только атакующая из лута
+		var player_level = 1
+		for _pid in ecs.player_states.keys():
+			player_level = ecs.player_states[_pid].get("level", 1)
+			break
+		tower_def_id = _pick_from_loot_table(player_level)
+	elif ecs.game_state.get("removed_miner_stash", false):
 		ecs.game_state["removed_miner_stash"] = false
 		tower_def_id = "TOWER_MINER"
 	else:
@@ -203,6 +232,9 @@ func place_tower(hex: Hex) -> bool:
 	
 	if tower_id == GameTypes.INVALID_ENTITY_ID:
 		return false
+	
+	# Проклятие раннего крафта: запоминаем волну постановки (0 = до первой волны)
+	ecs.towers[tower_id]["placed_at_wave"] = ecs.game_state.get("current_wave", 0)
 	
 	if CRAFT_DEBUG:
 		print("[Craft] поставлена вышка def=%s entity_id=%d" % [tower_def_id, tower_id])
@@ -227,7 +259,9 @@ func place_tower(hex: Hex) -> bool:
 		ecs.game_state["towers_built_this_phase"] = towers_built
 		var placements = ecs.game_state.get("placements_made_this_phase", 0) + 1
 		ecs.game_state["placements_made_this_phase"] = placements
-		
+		# Стеш: забираем из очереди один слот (тот тип, что поставили — первый в очереди)
+		if ecs.game_state.has("stash_queue") and ecs.game_state["stash_queue"].size() > 0:
+			ecs.game_state["stash_queue"].pop_front()
 		
 		# Автопереход в SELECTION фазу после 5 башен (как в Go)
 		if towers_built >= Config.MAX_TOWERS_IN_BUILD_PHASE:
@@ -254,8 +288,12 @@ func place_tower(hex: Hex) -> bool:
 	if GameManager.crafting_system:
 		GameManager.crafting_system.recalculate_combinations()
 	
-	# Предпросмотр пути врагов — отложенно, чтобы не тормозить кадр постановки башни
-	GameManager.call_deferred("_request_future_path_update")
+	# Предпросмотр пути: в фазе строительства обновляем сразу (для счётчика длины в HUD), иначе отложенно
+	var phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
+	if phase == GameTypes.GamePhase.BUILD_STATE:
+		GameManager.update_future_path()
+	else:
+		GameManager.call_deferred("_request_future_path_update")
 	return true
 
 # ============================================================================
@@ -300,15 +338,23 @@ func remove_tower(hex: Hex):
 	if GameManager.crafting_system:
 		GameManager.crafting_system.recalculate_combinations()
 	
-	# Предпросмотр пути — отложенно, чтобы не тормозить кадр удаления башни
-	GameManager.call_deferred("_request_future_path_update")
+	if current_phase == GameTypes.GamePhase.BUILD_STATE:
+		GameManager.update_future_path()
+	else:
+		GameManager.call_deferred("_request_future_path_update")
 	
-	# Учёт удаления: стена или обычная вышка — ничего. Майнер этого раунда — слот освобождается и майнер в стек.
-	if current_phase == GameTypes.GamePhase.BUILD_STATE and is_temporary and not is_wall and def_id == "TOWER_MINER":
-		var towers_built = ecs.game_state.get("towers_built_this_phase", 0)
-		if towers_built > 0:
-			ecs.game_state["towers_built_this_phase"] = towers_built - 1
-		ecs.game_state["removed_miner_stash"] = true
+	# Учёт удаления: стена или обычная вышка — ничего. Майнер/батарея — слот освобождается, Б возвращается в стеш; А — не возвращается.
+	if current_phase == GameTypes.GamePhase.BUILD_STATE and is_temporary and not is_wall:
+		var tower_def = DataRepository.get_tower_def(def_id)
+		var ttype = tower_def.get("type", "")
+		if ttype == "MINER" or ttype == "BATTERY":
+			var towers_built = ecs.game_state.get("towers_built_this_phase", 0)
+			if towers_built > 0:
+				ecs.game_state["towers_built_this_phase"] = towers_built - 1
+			if not ecs.game_state.has("stash_queue"):
+				ecs.game_state["stash_queue"] = []
+			ecs.game_state["stash_queue"].insert(0, "Б")
+			ecs.game_state["removed_miner_stash"] = true
 	
 
 # ============================================================================
@@ -352,6 +398,9 @@ func toggle_manual_selection(tower_id: int):
 	var tower = ecs.towers[tower_id]
 	var was_selected = tower.get("is_manually_selected", false)
 	tower["is_manually_selected"] = not was_selected
+	# Чтобы комбинация из shift-выделенных попала в possible_crafts, пересчитываем крафты после каждого изменения выделения
+	if GameManager.crafting_system:
+		GameManager.crafting_system.recalculate_combinations()
 	
 
 func clear_manual_selection():
@@ -359,6 +408,19 @@ func clear_manual_selection():
 	for tower_id in ecs.towers.keys():
 		var tower = ecs.towers[tower_id]
 		tower["is_manually_selected"] = false
+
+# Вкл/выкл башню (не стреляет, не тратит руду)
+func toggle_tower_enabled(tower_id: int):
+	if not ecs.towers.has(tower_id):
+		return
+	var tower = ecs.towers[tower_id]
+	tower["is_manually_disabled"] = not tower.get("is_manually_disabled", false)
+	# Инкрементально: линия с выключенной башней не удаляется, при включении достаточно пересчёта
+	if GameManager.energy_network:
+		GameManager.energy_network._recalculate_powered_and_cleanup()
+	# Крафт доступен независимо от вкл/выкл башни — пересчитываем комбинации чтобы кнопки и рецепты были актуальны
+	if GameManager.crafting_system:
+		GameManager.crafting_system.recalculate_combinations()
 
 # Переключить выбор башни для сохранения (фаза SELECTION)
 func toggle_tower_selection(tower_id: int):
@@ -471,6 +533,13 @@ func _determine_tower_id() -> String:
 			var random_tower = ids[randi() % ids.size()]
 			return random_tower
 		
+		# Тестовая башня: из фиксированного списка (как 2, но всегда из DEBUG_TEST_TOWER_IDS)
+		if debug_type == "DEBUG_TEST":
+			var ids = Config.DEBUG_TEST_TOWER_IDS
+			if ids.is_empty():
+				return "TA1"
+			return ids[randi() % ids.size()]
+		
 		return debug_type
 	
 	
@@ -501,23 +570,61 @@ func _determine_tower_id() -> String:
 		var ids = _get_tutorial_0_attack_tower_ids()
 		return ids[randi() % ids.size()] if not ids.is_empty() else "TA1"
 	
-	# Правило: первая ПОСТАВКА в блоке = майнер (placements_made не уменьшается при удалении)
+	# Правило: первые 5 волн в каждом блоке (перед 1–5, 11–15, 21–25…) — первая выдача майнер
 	var current_wave = ecs.game_state.get("current_wave", 0)
-	
-	var wave_mod_10 = (current_wave - 1) % 10
-	if wave_mod_10 < 4 and placements_made == 0:
+	if current_wave % 10 < 5 and placements_made == 0:
 		return "TOWER_MINER"
 	
-	# Остальные - СЛУЧАЙНЫЕ атакующие из loot table
 	var player_level = 1
 	for player_id in ecs.player_states.keys():
 		var player = ecs.player_states[player_id]
 		player_level = player.get("level", 1)
 		break
 	
+	# Первая волна (до волны 1): Б А1 А1 А2 А3 — одна база повторяется дважды, без крафта с касания
+	if current_wave < 1:
+		if not ecs.game_state.has("first_wave_attack_sequence") or ecs.game_state["first_wave_attack_sequence"].is_empty():
+			ecs.game_state["first_wave_attack_sequence"] = _build_first_wave_attack_sequence(player_level)
+		var seq = ecs.game_state["first_wave_attack_sequence"]
+		var idx = placements_made - 1
+		if idx >= 0 and idx < seq.size():
+			return seq[idx]
+	
+	# Остальные - СЛУЧАЙНЫЕ атакующие из loot table
 	return _pick_from_loot_table(player_level)
 
 const _FIRST_WAVE_ALLOWED_BASES = ["TA", "TE", "TO", "PA", "PE", "PO"]  # Только на первой волне (до волны 1)
+# Рецепты из первых шести баз (касание на 1 лвле): Auriga = TA+TE+TO, Malachite = PA+PE+PO. Чтобы не было крафта с касания — не выдаём все три из одной группы.
+const _AURIGA_BASES = ["TA", "TE", "TO"]
+const _MALACHITE_BASES = ["PA", "PE", "PO"]
+
+func _build_first_wave_attack_sequence(player_level: int) -> Array:
+	"""Строит очередь из 4 атакующих для первой волны: Б А1 А1 А2 А3 (без крафта с касания)."""
+	# Используем глобальный RNG (детерминирован сидом прогона)
+	var group_a = _AURIGA_BASES.duplicate()
+	var group_b = _MALACHITE_BASES.duplicate()
+	group_a.shuffle()
+	group_b.shuffle()
+	# Вариант: 2 из одной группы + 1 из другой (никакой рецепт не соберётся)
+	var two_from_a_one_b := randi() % 2 == 0
+	var bases: Array = []
+	if two_from_a_one_b:
+		bases = [group_a[0], group_a[1], group_b[0]]
+	else:
+		bases = [group_a[0], group_b[0], group_b[1]]
+	bases.shuffle()
+	var a1: String = bases[0]
+	var a2: String = bases[1]
+	var a3: String = bases[2]
+	var leveled_a1 := _resolve_leveled_tower_id(a1, player_level)
+	var leveled_a2 := _resolve_leveled_tower_id(a2, player_level)
+	var leveled_a3 := _resolve_leveled_tower_id(a3, player_level)
+	# Первая поставленная А-вышка (слот 1) всегда A1; A1 ещё раз среди слотов 2–4. Порядок: [A1, shuffle(A1,A2,A3)]
+	var rest: Array = [leveled_a1, leveled_a2, leveled_a3]
+	rest.shuffle()
+	var seq: Array = [leveled_a1]
+	seq.append_array(rest)
+	return seq
 
 func _pick_from_loot_table(player_level: int) -> String:
 	var loot_table = GameManager.get_loot_table_for_level(player_level)

@@ -1,19 +1,386 @@
 [
-  {"id": "ENEMY_NORMAL_WEAK", "name": "Слабый 1", "health": 35, "speed": 80, "physical_armor": 5, "magical_armor": 0, "visuals": {"color": {"r": 150, "g": 150, "b": 150, "a": 255}, "radius_factor": 0.4, "stroke_width": 0}},
-  {"id": "ENEMY_NORMAL_WEAK_2", "name": "Слабый 2", "health": 35, "speed": 80, "physical_armor": 7, "magical_armor": 3, "visuals": {"color": {"r": 160, "g": 160, "b": 160, "a": 255}, "radius_factor": 0.4, "stroke_width": 0}},
-  {"id": "ENEMY_NORMAL", "name": "Обычный 1", "health": 115, "speed": 80, "physical_armor": 10, "magical_armor": 5, "visuals": {"color": {"r": 128, "g": 128, "b": 128, "a": 255}, "radius_factor": 0.5, "stroke_width": 0}},
-  {"id": "ENEMY_NORMAL_2", "name": "Обычный 2", "health": 115, "speed": 80, "physical_armor": 15, "magical_armor": 12, "visuals": {"color": {"r": 138, "g": 138, "b": 138, "a": 255}, "radius_factor": 0.5, "stroke_width": 0}},
-  {"id": "ENEMY_TOUGH", "name": "Крепкий 1", "health": 280, "speed": 75, "physical_armor": 25, "magical_armor": 15, "visuals": {"color": {"r": 200, "g": 100, "b": 100, "a": 255}, "radius_factor": 0.55, "stroke_width": 0}},
-  {"id": "ENEMY_TOUGH_2", "name": "Крепкий 2", "health": 280, "speed": 75, "physical_armor": 35, "magical_armor": 20, "visuals": {"color": {"r": 210, "g": 90, "b": 90, "a": 255}, "radius_factor": 0.55, "stroke_width": 0}},
-  {"id": "ENEMY_MAGIC_RESIST", "name": "Магический щит", "health": 240, "speed": 80, "physical_armor": -10, "magical_armor": 60, "visuals": {"color": {"r": 180, "g": 50, "b": 230, "a": 255}, "radius_factor": 0.53, "stroke_width": 0}},
-  {"id": "ENEMY_PHYSICAL_RESIST", "name": "Физический щит", "health": 240, "speed": 80, "physical_armor": 60, "magical_armor": -10, "visuals": {"color": {"r": 230, "g": 180, "b": 50, "a": 255}, "radius_factor": 0.53, "stroke_width": 0}},
-  {"id": "ENEMY_FAST", "name": "Быстрый 1", "health": 140, "speed": 160, "physical_armor": 5, "magical_armor": 10, "visuals": {"color": {"r": 50, "g": 230, "b": 180, "a": 255}, "radius_factor": 0.45, "stroke_width": 0}},
-  {"id": "ENEMY_FAST_2", "name": "Быстрый 2", "health": 140, "speed": 160, "physical_armor": 8, "magical_armor": 14, "visuals": {"color": {"r": 60, "g": 220, "b": 170, "a": 255}, "radius_factor": 0.45, "stroke_width": 0}},
-  {"id": "ENEMY_BOSS", "name": "Босс", "health": 3200, "speed": 78, "physical_armor": 40, "magical_armor": 40, "visuals": {"color": {"r": 255, "g": 0, "b": 0, "a": 255}, "radius_factor": 0.8, "stroke_width": 2}},
-  {"id": "ENEMY_FLYING", "name": "Летающий", "flying": true, "health": 90, "speed": 100, "physical_armor": 5, "magical_armor": 5, "visuals": {"color": {"r": 100, "g": 200, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 0}},
-  {"id": "ENEMY_FLYING_WEAK", "name": "Летающий слабый", "flying": true, "health": 70, "speed": 100, "physical_armor": 7, "magical_armor": 3, "visuals": {"color": {"r": 140, "g": 200, "b": 255, "a": 255}, "radius_factor": 0.45, "stroke_width": 0}},
-  {"id": "ENEMY_FLYING_TOUGH", "name": "Летающий крепкий", "flying": true, "health": 180, "speed": 90, "physical_armor": 35, "magical_armor": 20, "visuals": {"color": {"r": 70, "g": 150, "b": 220, "a": 255}, "radius_factor": 0.55, "stroke_width": 0}},
-  {"id": "ENEMY_FLYING_FAST", "name": "Летающий быстрый", "flying": true, "health": 90, "speed": 130, "physical_armor": 8, "magical_armor": 14, "visuals": {"color": {"r": 120, "g": 220, "b": 255, "a": 255}, "radius_factor": 0.48, "stroke_width": 0}},
-  {"id": "ENEMY_HEALER", "name": "Хиллер", "health": 100, "speed": 80, "physical_armor": 5, "magical_armor": 5, "visuals": {"color": {"r": 100, "g": 255, "b": 100, "a": 255}, "radius_factor": 0.48, "stroke_width": 1}},
-  {"id": "ENEMY_TANK", "name": "Танк", "health": 1200, "speed": 80, "physical_armor": 20, "magical_armor": 20, "visuals": {"color": {"r": 80, "g": 80, "b": 90, "a": 255}, "radius_factor": 0.6, "stroke_width": 2}}
+  {
+    "id": "ENEMY_NORMAL_WEAK",
+    "name": "Слабый 1",
+    "health": 33,
+    "speed": 80,
+    "physical_armor": 5,
+    "magical_armor": 15,
+    "visuals": {
+      "color": {
+        "r": 150,
+        "g": 150,
+        "b": 150,
+        "a": 255
+      },
+      "radius_factor": 0.4,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_NORMAL_WEAK_2",
+    "name": "Слабый 2",
+    "health": 46,
+    "speed": 80,
+    "physical_armor": 12,
+    "magical_armor": 13,
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 160,
+        "b": 160,
+        "a": 255
+      },
+      "radius_factor": 0.4,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_NORMAL",
+    "name": "Обычный 1",
+    "health": 134,
+    "speed": 80,
+    "physical_armor": 17,
+    "magical_armor": 22,
+    "visuals": {
+      "color": {
+        "r": 128,
+        "g": 128,
+        "b": 128,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_NORMAL_2",
+    "name": "Обычный 2",
+    "health": 107,
+    "speed": 80,
+    "physical_armor": 15,
+    "magical_armor": 17,
+    "visuals": {
+      "color": {
+        "r": 138,
+        "g": 138,
+        "b": 138,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_TOUGH",
+    "name": "Крепкий 1",
+    "health": 208,
+    "speed": 75,
+    "physical_armor": 25,
+    "magical_armor": 25,
+    "visuals": {
+      "color": {
+        "r": 200,
+        "g": 100,
+        "b": 100,
+        "a": 255
+      },
+      "radius_factor": 0.55,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_TOUGH_2",
+    "name": "Крепкий 2",
+    "health": 338,
+    "speed": 77,
+    "physical_armor": 45,
+    "magical_armor": 35,
+    "visuals": {
+      "color": {
+        "r": 210,
+        "g": 90,
+        "b": 90,
+        "a": 255
+      },
+      "radius_factor": 0.55,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_MAGIC_RESIST",
+    "name": "Магический щит 1",
+    "health": 201,
+    "speed": 80,
+    "physical_armor": -10,
+    "magical_armor": 65,
+    "visuals": {
+      "color": {
+        "r": 180,
+        "g": 50,
+        "b": 230,
+        "a": 255
+      },
+      "radius_factor": 0.53,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_MAGIC_RESIST_2",
+    "name": "Магический щит 2",
+    "health": 201,
+    "speed": 80,
+    "physical_armor": -25,
+    "magical_armor": 100,
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 40,
+        "b": 240,
+        "a": 255
+      },
+      "radius_factor": 0.54,
+      "stroke_width": 1
+    }
+  },
+  {
+    "id": "ENEMY_PHYSICAL_RESIST",
+    "name": "Физический щит 1",
+    "health": 196,
+    "speed": 80,
+    "physical_armor": 60,
+    "magical_armor": -5,
+    "visuals": {
+      "color": {
+        "r": 230,
+        "g": 180,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.53,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_PHYSICAL_RESIST_2",
+    "name": "Физический щит 2",
+    "health": 216,
+    "speed": 80,
+    "physical_armor": 95,
+    "magical_armor": -20,
+    "visuals": {
+      "color": {
+        "r": 240,
+        "g": 160,
+        "b": 30,
+        "a": 255
+      },
+      "radius_factor": 0.54,
+      "stroke_width": 1
+    }
+  },
+  {
+    "id": "ENEMY_FAST",
+    "name": "Быстрый 1",
+    "health": 91,
+    "speed": 160,
+    "physical_armor": 5,
+    "magical_armor": 15,
+    "visuals": {
+      "color": {
+        "r": 50,
+        "g": 230,
+        "b": 180,
+        "a": 255
+      },
+      "radius_factor": 0.45,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_FAST_2",
+    "name": "Быстрый 2",
+    "health": 130,
+    "speed": 160,
+    "physical_armor": 8,
+    "magical_armor": 19,
+    "visuals": {
+      "color": {
+        "r": 60,
+        "g": 220,
+        "b": 170,
+        "a": 255
+      },
+      "radius_factor": 0.45,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_BOSS",
+    "name": "Босс",
+    "health": 3422,
+    "speed": 78,
+    "physical_armor": 45,
+    "magical_armor": 50,
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 0,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.8,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "ENEMY_FLYING",
+    "name": "Летающий",
+    "flying": true,
+    "health": 78,
+    "speed": 93,
+    "physical_armor": 5,
+    "magical_armor": 15,
+    "visuals": {
+      "color": {
+        "r": 100,
+        "g": 200,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_FLYING_WEAK",
+    "name": "Летающий слабый",
+    "flying": true,
+    "health": 30,
+    "speed": 86,
+    "physical_armor": 7,
+    "magical_armor": 8,
+    "visuals": {
+      "color": {
+        "r": 140,
+        "g": 200,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.45,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_FLYING_TOUGH",
+    "name": "Летающий крепкий",
+    "flying": true,
+    "health": 155,
+    "speed": 84,
+    "physical_armor": 35,
+    "magical_armor": 25,
+    "visuals": {
+      "color": {
+        "r": 70,
+        "g": 150,
+        "b": 220,
+        "a": 255
+      },
+      "radius_factor": 0.55,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_FLYING_FAST",
+    "name": "Летающий быстрый",
+    "flying": true,
+    "health": 78,
+    "speed": 121,
+    "physical_armor": 8,
+    "magical_armor": 19,
+    "visuals": {
+      "color": {
+        "r": 120,
+        "g": 220,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.48,
+      "stroke_width": 0
+    }
+  },
+  {
+    "id": "ENEMY_HEALER",
+    "name": "Хиллер",
+    "health": 93,
+    "speed": 80,
+    "physical_armor": 5,
+    "magical_armor": 15,
+    "visuals": {
+      "color": {
+        "r": 100,
+        "g": 255,
+        "b": 100,
+        "a": 255
+      },
+      "radius_factor": 0.48,
+      "stroke_width": 1
+    }
+  },
+  {
+    "id": "ENEMY_TANK",
+    "name": "Танк",
+    "health": 1116,
+    "speed": 80,
+    "physical_armor": 20,
+    "magical_armor": 25,
+    "visuals": {
+      "color": {
+        "r": 80,
+        "g": 80,
+        "b": 90,
+        "a": 255
+      },
+      "radius_factor": 0.6,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "ENEMY_DARKNESS_1",
+    "name": "Тьма 1",
+    "health": 177,
+    "speed": 110,
+    "physical_armor": 7,
+    "magical_armor": 7,
+    "pure_armor": 30,
+    "visuals": {
+      "color": {
+        "r": 28,
+        "g": 28,
+        "b": 28,
+        "a": 255
+      },
+      "radius_factor": 0.52,
+      "stroke_width": 1
+    }
+  },
+  {
+    "id": "ENEMY_DARKNESS_2",
+    "name": "Тьма 2",
+    "health": 223,
+    "speed": 120,
+    "physical_armor": 17,
+    "magical_armor": 17,
+    "pure_armor": 50,
+    "visuals": {
+      "color": {
+        "r": 22,
+        "g": 22,
+        "b": 22,
+        "a": 255
+      },
+      "radius_factor": 0.54,
+      "stroke_width": 1
+    }
+  }
 ]

@@ -9,10 +9,20 @@ var _tutorial_complete_popup: Node = null  # CanvasLayer с попапом по�
 var _tutorial_completed_index: int = -1
 
 func _ready():
-	GameManager.exit_to_menu_requested.connect(_on_exit_to_menu)
-	GameManager.restart_game_requested.connect(_on_restart_game)
-	GameManager.tutorial_level_completed.connect(_on_tutorial_level_completed)
-	_show_menu()
+	if not Config.is_headless():
+		if Config.DISABLE_VSYNC:
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		GameManager.exit_to_menu_requested.connect(_on_exit_to_menu)
+		GameManager.restart_game_requested.connect(_on_restart_game)
+		GameManager.tutorial_level_completed.connect(_on_tutorial_level_completed)
+		_show_menu()
+	else:
+		_run_headless()
+
+func _run_headless():
+	var runner = Node.new()
+	runner.set_script(preload("res://scenes/headless_runner.gd"))
+	add_child(runner)
 
 func _show_menu():
 	if _game_root:

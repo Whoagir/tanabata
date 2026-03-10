@@ -1,0 +1,287 @@
+[gd_scene format=3 uid="uid://b53jg2nhg5e7x"]
+
+[ext_resource type="Script" uid="uid://dj84q04xp2gqy" path="res://godot_adapter/ui/info_panel.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status_bg"]
+bg_color = Color(0.08, 0.08, 0.1, 0.85)
+border_width_bottom = 1
+border_color = Color(0.3, 0.3, 0.35, 0.5)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.12, 0.12, 0.15, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.4, 0.4, 0.5, 1)
+
+[node name="InfoPanel" type="Control" unique_id=140051306]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_script")
+
+[node name="VBox" type="VBoxContainer" parent="." unique_id=107145322]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -265.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 0
+
+[node name="StatusBarWrapper" type="PanelContainer" parent="VBox" unique_id=2143536804]
+layout_mode = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_status_bg")
+
+[node name="StatusBar" type="HBoxContainer" parent="VBox/StatusBarWrapper" unique_id=1988533342]
+layout_mode = 2
+mouse_filter = 2
+theme_override_constants/separation = 4
+
+[node name="Status1" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=220563632]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Status2" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=1495204066]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Status3" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=1422606752]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Status4" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=195527067]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Status5" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=604075195]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Status6" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=956650939]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Status7" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=1905373159]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Status8" type="ColorRect" parent="VBox/StatusBarWrapper/StatusBar" unique_id=1477288945]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+color = Color(0.35, 0.35, 0.4, 1)
+
+[node name="Panel" type="Panel" parent="VBox" unique_id=767858138]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MarginContainer" type="MarginContainer" parent="VBox/Panel" unique_id=999673289]
+layout_mode = 0
+offset_right = 1191.0
+offset_bottom = 208.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 12
+
+[node name="MainHBox" type="HBoxContainer" parent="VBox/Panel/MarginContainer" unique_id=952621308]
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="LeftColumn" type="VBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox" unique_id=1467612651]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+mouse_filter = 2
+theme_override_constants/separation = 6
+
+[node name="HeaderRow" type="HBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn" unique_id=967803212]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TitleLabel" type="Label" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow" unique_id=1975262243]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Tower Name"
+
+[node name="HeaderTowerSwitch" type="HBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow" unique_id=1982736001]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="HeaderSpacer" type="Control" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow/HeaderTowerSwitch" unique_id=1982736002]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+
+[node name="TowerEnabledSwitch" type="Control" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow/HeaderTowerSwitch" unique_id=1982736003]
+custom_minimum_size = Vector2(54, 66)
+layout_mode = 2
+
+[node name="IconCenter" type="CenterContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow" unique_id=1743615109]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="InfoIcon" type="Label" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow/IconCenter" unique_id=1569539236]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "i"
+
+[node name="ContentSection" type="HBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn" unique_id=2058753432]
+custom_minimum_size = Vector2(200, 85)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="DescriptionScroll" type="ScrollContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection" unique_id=1106887423]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_vertical = 3
+mouse_filter = 2
+horizontal_scroll_mode = 0
+
+[node name="InfoVbox" type="VBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/DescriptionScroll" unique_id=1221395675]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SkillsRow" type="HBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection" unique_id=842111045]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="Skill1" type="ColorRect" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/SkillsRow" unique_id=1056623815]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+color = Color(0.25, 0.5, 0.7, 1)
+
+[node name="Skill2" type="ColorRect" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/SkillsRow" unique_id=766858809]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+color = Color(0.3, 0.55, 0.75, 1)
+
+[node name="Skill3" type="ColorRect" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/SkillsRow" unique_id=1274325582]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+color = Color(0.5, 0.35, 0.6, 1)
+
+[node name="Skill4" type="ColorRect" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/SkillsRow" unique_id=646086132]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+color = Color(0.55, 0.4, 0.65, 1)
+
+[node name="Skill5" type="ColorRect" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/SkillsRow" unique_id=1321055382]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+color = Color(0.4, 0.6, 0.4, 1)
+
+[node name="Skill6" type="ColorRect" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/SkillsRow" unique_id=1760225696]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 2
+color = Color(0.45, 0.65, 0.45, 1)
+
+[node name="ButtonsSpacer" type="Control" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn"]
+custom_minimum_size = Vector2(0, 7)
+layout_mode = 2
+
+[node name="ButtonsHbox" type="HBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn" unique_id=1740096464]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SelectButton" type="Button" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox" unique_id=54621366]
+custom_minimum_size = Vector2(120, 40)
+layout_mode = 2
+mouse_filter = 1
+text = "СОХРАНИТЬ"
+
+[node name="CraftButton" type="Button" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox" unique_id=1155070082]
+custom_minimum_size = Vector2(130, 40)
+layout_mode = 2
+mouse_filter = 1
+text = "ОБЪЕДИНИТЬ"
+
+[node name="CraftButton2" type="Button" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox" unique_id=436902922]
+custom_minimum_size = Vector2(130, 40)
+layout_mode = 2
+mouse_filter = 1
+text = "ОБЪЕДИНИТЬ"
+
+[node name="SimplifyButton" type="Button" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox" unique_id=1394186307]
+custom_minimum_size = Vector2(120, 40)
+layout_mode = 2
+mouse_filter = 1
+text = "УПРОСТИТЬ (3)"
+
+[node name="X2Button" type="Button" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox" unique_id=1512736238]
+custom_minimum_size = Vector2(44, 40)
+layout_mode = 2
+mouse_filter = 1
+text = "х2"
+
+[node name="X4Button" type="Button" parent="VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox" unique_id=1010982305]
+custom_minimum_size = Vector2(44, 40)
+layout_mode = 2
+mouse_filter = 1
+text = "х4"
+
+[node name="CraftsInfoPanel" type="VBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox" unique_id=1460667824]
+custom_minimum_size = Vector2(140, 0)
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 2
+
+[node name="CloseRow" type="HBoxContainer" parent="VBox/Panel/MarginContainer/MainHBox/CraftsInfoPanel" unique_id=1650149204]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="CloseSpacer" type="Control" parent="VBox/Panel/MarginContainer/MainHBox/CraftsInfoPanel/CloseRow" unique_id=1450979219]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CloseButton" type="Button" parent="VBox/Panel/MarginContainer/MainHBox/CraftsInfoPanel/CloseRow" unique_id=1259517233]
+custom_minimum_size = Vector2(36, 32)
+layout_mode = 2
+mouse_filter = 1
+theme_override_font_sizes/font_size = 22
+text = "x"
+flat = true
+
+[node name="CraftsIntoLabel" type="RichTextLabel" parent="VBox/Panel/MarginContainer/MainHBox/CraftsInfoPanel" unique_id=1633143764]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/default_color = Color(0.5, 0.5, 0.55, 1)
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+horizontal_alignment = 2
+autowrap_mode = 2

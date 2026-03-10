@@ -12,35 +12,38 @@ Tower Defense на гексагональной карте с энергосет
 
 ```
 tanabata-godot/
-├── core/                    # ЧИСТАЯ СИМУЛЯЦИЯ (БЕЗ GODOT)
+├── core/                    # Чистая симуляция (без Godot)
 │   ├── ecs/                 # Entity-Component-System (ecs_world.gd)
 │   ├── systems/             # Игровые системы (input, wave, movement, combat, projectile, status_effect, aura, energy_network, ore_generation)
 │   ├── hexmap/              # Гексагональная математика и карта
 │   ├── types/               # Базовые типы и энумы (game_types.gd)
 │   └── utils/               # Утилиты (union_find)
 │
-├── godot_adapter/           # ИНТЕГРАЦИЯ С GODOT
+├── godot_adapter/           # Интеграция с Godot
 │   ├── rendering/           # Рендеринг (entity, wall, ore, energy_line, aura, tower_preview)
 │   └── ui/                  # UI (game_hud, info_panel)
 │
-├── data/                    # ДАННЫЕ (JSON)
+├── data/                    # Данные (JSON)
 │   ├── towers.json
 │   ├── enemies.json
 │   ├── recipes.json
+│   ├── mimic_weights.json   # Веса выпадения вышек для крафта Мимика
 │   ├── loot_tables.json
-│   └── waves.json
+│   ├── waves.json
+│   ├── wave_balance.json
+│   └── ability_definitions.json
 │
-├── assets/                  # РЕСУРСЫ
+├── assets/                  # Ресурсы
 │   ├── sprites/
 │   ├── textures/
 │   ├── fonts/
 │   └── sounds/
 │
-├── scenes/                  # СЦЕНЫ GODOT (МИНИМУМ)
+├── scenes/                  # Сцены Godot (минимум)
 │   ├── main.tscn           # Главная сцена
 │   └── game_root.tscn      # Корневая игровая сцена
 │
-└── autoload/                # АВТОЗАГРУЗКА (синглтоны)
+└── autoload/                # Автозагрузка (синглтоны)
     ├── game_manager.gd      # Главный менеджер
     └── config.gd            # Константы и настройки
 ```
@@ -50,12 +53,12 @@ tanabata-godot/
 ### 1. Разделение Core и Adapter
 
 **CORE (чистая логика):**
-- НЕ импортирует ничего из Godot
+- Не импортирует ничего из Godot
 - Только GDScript, математика, структуры данных
 - Полностью тестируемо без движка
 
 **ADAPTER (интеграция):**
-- Использует Godot API (Node, Sprite2D, Camera2D, etc.)
+- Использует Godot API (Node, Sprite2D, Camera2D и т.д.)
 - Читает состояние из Core
 - Рендерит и обрабатывает ввод
 
@@ -127,7 +130,7 @@ func load_json(path: String) -> Dictionary:
 
 ## Состояние разработки
 
-Реализовано: ECS, гексагональная карта и pathfinding, генерация руды, энергосеть (MST), все основные системы (input, wave, movement, combat, projectile, status_effect, aura), рендеринг (entity, wall, ore, energy_line, aura, tower_preview и др.), HUD, InfoPanel и Recipe Book (B), три фазы (BUILD → SELECTION → WAVE). **Крафт:** CraftingSystem, 5 рецептов (Silver, Malachite, Volcano, Lighthouse, Jade), игрок крафтит в фазе выбора по подсвеченной группе. **Спецбашни:** Volcano (AoE), Lighthouse (Beacon). Дальнейший план — DEVELOPMENT_PLAN.md.
+Реализовано: ECS, гексагональная карта и pathfinding, генерация руды, энергосеть (MST), все основные системы (input, wave, movement, combat, projectile, status_effect, aura), рендеринг (entity, wall, ore, energy_line, aura, tower_preview и др.), HUD, InfoPanel и Recipe Book (B), три фазы (BUILD → SELECTION → WAVE). **Крафт:** CraftingSystem, рецепты в recipes.json (Silver, Malachite, Volcano, Lighthouse, Jade, 238, U235, Мимик и др.), игрок крафтит в фазе выбора по подсвеченной группе. **Мимик:** PE1+TE2+DE1 → случайная вышка уровня крафта 1 по весам (mimic_weights.json). **Спецбашни:** Volcano (AoE), Lighthouse (Beacon), 238 (мультицель, ускоренные снаряды), U235 (impact burst + стаки повторных попаданий). Дальнейший план — DEVELOPMENT_PLAN.md.
 
 ## Ключевые отличия от Go версии
 

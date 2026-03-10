@@ -7,8 +7,12 @@ var tower_nodes: Dictionary = {}  # entity_id -> Node2D
 var enemy_nodes: Dictionary = {}  # entity_id -> Node2D
 var projectile_nodes: Dictionary = {}  # entity_id -> Node2D
 var laser_nodes: Dictionary = {}  # laser_id -> Line2D
+var laser_crit_shards: Dictionary = {}  # laser_id -> Node2D (контейнер треугольников при крите)
 var volcano_effect_nodes: Dictionary = {}  # effect_id -> Polygon2D
+var scream_stun_effect_nodes: Dictionary = {}  # enemy_id -> Polygon2D
+var scream_stun_effect_timers: Dictionary = {}  # enemy_id -> float (остаток 0.25 с, как у вулкана)
 var beacon_sector_nodes: Dictionary = {}  # tower_id -> Polygon2D
+var auriga_line_nodes: Dictionary = {}   # tower_id -> Node2D (контейнер с Polygon2D по гексам линии)
 
 # Слои
 var tower_layer: Node2D
@@ -16,6 +20,8 @@ var enemy_layer: Node2D
 var projectile_layer: Node2D
 var effect_layer: Node2D
 var laser_layer: Node2D  # Лазеры рисуем здесь (гарантированно видимый слой)
+var chain_lightning_layer: Node2D  # Цепная молния Бладстоуна (белые линии)
+var scream_zones_layer: Node2D    # Зоны крика (Турнамент) — прозрачный светлый круг
 
 # Object Pools
 var enemy_pool: NodePool
@@ -49,6 +55,15 @@ func _ready():
 	laser_layer.name = "LaserLayer"
 	laser_layer.z_index = 100
 	add_child(laser_layer)
+	# Цепная молния (Бладстоун) — белые линии поверх врагов
+	chain_lightning_layer = Node2D.new()
+	chain_lightning_layer.name = "ChainLightningLayer"
+	chain_lightning_layer.z_index = 95
+	add_child(chain_lightning_layer)
+	scream_zones_layer = Node2D.new()
+	scream_zones_layer.name = "ScreamZonesLayer"
+	scream_zones_layer.z_index = 94
+	add_child(scream_zones_layer)
 	
 	# Создаем слой для соединений майнеров (под башнями, но над стенами)
 	miner_connections_layer = Node2D.new()
@@ -81,7 +96,7 @@ func _ready():
 # ОБНОВЛЕНИЕ
 # ============================================================================
 
-func _process(_delta):
+func _process(delta: float):
 	_render_hex_highlights()  # Рендерим подсветку гексов ПЕРВОЙ (под всем)
 	
 	Profiler.start("render_towers")
@@ -98,7 +113,11 @@ func _process(_delta):
 	
 	_render_lasers()
 	_render_volcano_effects()
+	_render_scream_stun_effects(delta)
 	_render_beacon_sectors()
+	_render_auriga_lines()
+	_render_chain_lightning(delta)
+	_render_scream_zones()
 	_render_miner_connections()
 	
 
@@ -174,6 +193,8 @@ func _render_towers():
 			_update_tower_color(tower_node, tower, tower_def)
 			_update_tower_highlight(tower_node, tower, tower_def)
 			tower_state_cache[tower_id] = current_state
+		elif tower_def.get("type") == "MINER" or tower_def.get("type") == "BATTERY":
+			_update_miner_battery_dots(tower_node, tower, tower_def)
 
 # ============================================================================
 # РЕНДЕРИНГ ВРАГОВ
@@ -224,7 +245,7 @@ func _render_enemies():
 			enemy_node.scale = Vector2(scale_factor, scale_factor)
 		
 		# Визуализация статус-эффектов (приоритет: damage_flash > jade_poison > poison > slow)
-		var body = enemy_node.get_node_or_null("Body")
+		var body = enemy_node.get_meta("_body") if enemy_node.has_meta("_body") else enemy_node.get_node_or_null("Body")
 		if body:
 			if ecs.damage_flashes.has(enemy_id):
 				# Красная вспышка при уроне
@@ -253,7 +274,7 @@ func _render_enemies():
 				body.modulate = Color(1.0, 1.0, 1.0)
 		
 		# Обводка для выделенных врагов (движущиеся сущности)
-		var outline = enemy_node.get_node_or_null("Outline")
+		var outline = enemy_node.get_meta("_outline") if enemy_node.has_meta("_outline") else enemy_node.get_node_or_null("Outline")
 		if outline:
 			var enemy = ecs.enemies.get(enemy_id, {})
 			var is_highlighted = enemy.get("is_highlighted", false)
@@ -302,6 +323,9 @@ func _render_lasers():
 	for lid in laser_nodes.keys():
 		if not ecs.lasers.has(lid):
 			laser_nodes[lid].queue_free()
+			if laser_crit_shards.has(lid):
+				laser_crit_shards[lid].queue_free()
+				laser_crit_shards.erase(lid)
 			to_remove.append(lid)
 	for lid in to_remove:
 		laser_nodes.erase(lid)
@@ -311,21 +335,55 @@ func _render_lasers():
 		var start_pos = _to_vector2(laser.get("start_pos"))
 		var target_pos = _to_vector2(laser.get("target_pos"))
 		var color = laser.get("color", Color.WHITE)
+		var is_crit = laser.get("is_crit", false)
+		var def_id = laser.get("def_id", "")
 		
 		if start_pos != null and target_pos != null:
+			var width_normal = 5.0
+			var width_crit = 14.0
+			if def_id == "TOWER_HUGE":
+				width_normal = 7.0
+				width_crit = 12.0
+			elif def_id == "TOWER_PINK":
+				width_normal = 4.0
+				width_crit = 8.0
 			var line: Line2D
 			if laser_nodes.has(laser_id):
 				line = laser_nodes[laser_id]
 				line.clear_points()
 			else:
 				line = Line2D.new()
-				line.width = 5.0
+				line.width = width_crit if is_crit else width_normal
 				line.z_index = 0
 				laser_layer.add_child(line)
 				laser_nodes[laser_id] = line
+			line.width = width_crit if is_crit else width_normal
 			line.add_point(start_pos)
 			line.add_point(target_pos)
-			line.default_color = color
+			var line_color = Color(1.0, 0.2, 0.2, 0.9) if is_crit else color
+			line.default_color = line_color
+			
+			if is_crit:
+				if not laser_crit_shards.has(laser_id):
+					var container = Node2D.new()
+					laser_layer.add_child(container)
+					laser_crit_shards[laser_id] = container
+					var shard_color = color
+					var size = 16.0
+					var shard_count = 6 if def_id == "TOWER_HUGE" else 3
+					var angle_step = TAU / float(shard_count)
+					for i in range(shard_count):
+						var angle = i * angle_step
+						var poly = Polygon2D.new()
+						poly.color = shard_color
+						var tip = Vector2(cos(angle), sin(angle)) * size
+						var base1 = Vector2(cos(angle + angle_step * 0.5), sin(angle + angle_step * 0.5)) * (size * 0.4)
+						var base2 = Vector2(cos(angle - angle_step * 0.5), sin(angle - angle_step * 0.5)) * (size * 0.4)
+						poly.polygon = PackedVector2Array([tip, base1, base2])
+						container.add_child(poly)
+				var container = laser_crit_shards[laser_id]
+				container.position = target_pos
+				container.z_index = 1
 
 # Приведение к Vector2 (на случай если из ECS пришёл dict с x,y)
 func _to_vector2(v) -> Variant:
@@ -381,6 +439,62 @@ func _render_volcano_effects():
 		node.color = col
 
 # ============================================================================
+# РЕНДЕРИНГ ЭФФЕКТА СТАНА ОТ КРИКА (синий круг под врагом, как огонь вулкана)
+# ============================================================================
+
+func _render_scream_stun_effects(delta: float):
+	const effect_duration = 0.25
+	const max_radius = 8.0
+	var to_remove = []
+	for eid in scream_stun_effect_nodes.keys():
+		if not ecs.scream_stun.has(eid):
+			var n = scream_stun_effect_nodes[eid]
+			effect_layer.remove_child(n)
+			n.queue_free()
+			to_remove.append(eid)
+			scream_stun_effect_timers.erase(eid)
+		else:
+			var t = scream_stun_effect_timers.get(eid, effect_duration)
+			t -= delta
+			scream_stun_effect_timers[eid] = t
+			if t <= 0:
+				var n = scream_stun_effect_nodes[eid]
+				effect_layer.remove_child(n)
+				n.queue_free()
+				to_remove.append(eid)
+				scream_stun_effect_timers.erase(eid)
+	for eid in to_remove:
+		scream_stun_effect_nodes.erase(eid)
+	for enemy_id in ecs.scream_stun.keys():
+		if scream_stun_effect_nodes.has(enemy_id):
+			var t = scream_stun_effect_timers.get(enemy_id, 0.0)
+			var pos = ecs.positions.get(enemy_id)
+			if pos:
+				var progress = 1.0 - t / effect_duration
+				var radius = max_radius * progress
+				var alpha = 0.5 * (1.0 - progress)
+				var node = scream_stun_effect_nodes[enemy_id]
+				node.position = pos
+				node.scale = Vector2(radius, radius)
+				node.color = Color(0.35, 0.6, 1.0, alpha)
+			continue
+		var pos = ecs.positions.get(enemy_id)
+		if not pos:
+			continue
+		var node = Polygon2D.new()
+		var points = PackedVector2Array()
+		for i in range(24):
+			var a = TAU * i / 24
+			points.append(Vector2(cos(a), sin(a)))
+		node.polygon = points
+		effect_layer.add_child(node)
+		scream_stun_effect_nodes[enemy_id] = node
+		scream_stun_effect_timers[enemy_id] = effect_duration
+		node.position = pos
+		node.scale = Vector2(0.0, 0.0)
+		node.color = Color(0.35, 0.6, 1.0, 0.5)
+
+# ============================================================================
 # РЕНДЕРИНГ BEACON SECTORS (сектор урона Маяка)
 # ============================================================================
 
@@ -424,6 +538,73 @@ func _render_beacon_sectors():
 			var a = lerp_angle(start_a, end_a, t)
 			points.append(Vector2(cos(a), sin(a)) * radius)
 		node.polygon = points
+
+# ============================================================================
+# РЕНДЕРИНГ ЛИНИИ АУРИГИ (засвеченные гексы линии выстрела)
+# ============================================================================
+
+func _render_auriga_lines():
+	var to_remove = []
+	for tid in auriga_line_nodes.keys():
+		var data = ecs.auriga_lines.get(tid)
+		if not data or not data.get("is_visible", false):
+			auriga_line_nodes[tid].queue_free()
+			to_remove.append(tid)
+	for tid in to_remove:
+		auriga_line_nodes.erase(tid)
+
+	for tower_id in ecs.auriga_lines.keys():
+		var data = ecs.auriga_lines[tower_id]
+		if not data.get("is_visible", false):
+			continue
+		var hex_keys = data.get("hexes", [])
+		if hex_keys.is_empty():
+			continue
+
+		var container: Node2D
+		if auriga_line_nodes.has(tower_id):
+			container = auriga_line_nodes[tower_id]
+			# Подстроить число дочерних полигонов под число гексов (remove_child сразу, иначе queue_free не уменьшает get_child_count → бесконечный цикл)
+			var excess = container.get_child_count() - hex_keys.size()
+			if excess > 0:
+				for _j in range(excess):
+					var c = container.get_child(container.get_child_count() - 1)
+					container.remove_child(c)
+					c.queue_free()
+			for _j in range(container.get_child_count(), hex_keys.size()):
+				var poly = Polygon2D.new()
+				poly.color = Color(1.0, 1.0, 1.0, 0.22)
+				poly.z_index = 5
+				container.add_child(poly)
+		else:
+			container = Node2D.new()
+			container.z_index = 5
+			effect_layer.add_child(container)
+			auriga_line_nodes[tower_id] = container
+			for _k in hex_keys.size():
+				var poly = Polygon2D.new()
+				poly.color = Color(1.0, 1.0, 1.0, 0.22)
+				poly.z_index = 5
+				container.add_child(poly)
+
+		var hex_points = _auriga_hex_polygon_local(Config.HEX_SIZE)
+		for i in range(hex_keys.size()):
+			var hex = Hex.from_key(hex_keys[i])
+			var pos = hex.to_pixel(Config.HEX_SIZE)
+			var poly = container.get_child(i)
+			poly.position = pos
+			poly.polygon = hex_points
+			poly.visible = true
+		for i in range(hex_keys.size(), container.get_child_count()):
+			container.get_child(i).visible = false
+
+func _auriga_hex_polygon_local(size: float) -> PackedVector2Array:
+	var points = PackedVector2Array()
+	for i in range(6):
+		var angle_deg = 60.0 * i - 30.0
+		var angle_rad = deg_to_rad(angle_deg)
+		points.append(Vector2(size * cos(angle_rad), size * sin(angle_rad)))
+	return points
 
 # ============================================================================
 # СОЗДАНИЕ ВИЗУАЛА
@@ -478,6 +659,33 @@ func _create_tower_visual(renderable: Dictionary, tower_id: int) -> Node2D:
 		# Маленький кружок сети (когда в сети но НЕ на руде)
 		var network_dot = _create_network_dot()
 		container.add_child(network_dot)
+	elif tower_type == "BATTERY":
+		# Батарея - шестиугольник как майнер, красная обводка, такой же синий кружок как у майнера
+		body = _create_hexagon(radius, color)
+		body.z_index = 1
+		var battery_outline = Line2D.new()
+		battery_outline.name = "MinerOutline"
+		battery_outline.width = 2.0
+		battery_outline.default_color = Color(0.9, 0.2, 0.2, 0.9)  # Красная обводка
+		battery_outline.z_index = 2
+		battery_outline.antialiased = true
+		_add_hexagon_outline(battery_outline, radius)
+		container.add_child(battery_outline)
+		var energy_dot = Polygon2D.new()
+		energy_dot.name = "EnergyDot"
+		var dot_radius = 6.0
+		var dot_points = PackedVector2Array()
+		for i in range(32):
+			var angle = (PI * 2 * i) / 32
+			dot_points.append(Vector2(cos(angle), sin(angle)) * dot_radius)
+		energy_dot.polygon = dot_points
+		energy_dot.color = Color(0.2, 0.6, 1.0, 1.0)
+		energy_dot.position = Vector2(0, 0)
+		energy_dot.z_index = 100
+		energy_dot.visible = false
+		container.add_child(energy_dot)
+		var network_dot = _create_network_dot()
+		container.add_child(network_dot)
 	elif tower_type == "WALL":
 		# Стена - ШЕСТИУГОЛЬНИК (серый)
 		body = _create_hexagon(radius, color)
@@ -510,6 +718,11 @@ func _create_tower_visual(renderable: Dictionary, tower_id: int) -> Node2D:
 		outline.width = 2.0
 		outline.default_color = Color(1.0, 1.0, 0.0, 0.4)  # ЖЕЛТАЯ, 40% прозрачность
 		outline.visible = true  # Всегда видна для майнеров
+		_add_hexagon_outline(outline, radius)
+	elif tower_type == "BATTERY":
+		outline.width = 2.0
+		outline.default_color = Color(0.9, 0.2, 0.2, 0.5)  # Красная обводка
+		outline.visible = true
 		_add_hexagon_outline(outline, radius)
 	elif tower_type == "WALL":
 		# Стены: НЕТ обводки (стены не выделяются)
@@ -661,6 +874,10 @@ func _update_tower_color(tower_node: Node2D, tower: Dictionary, tower_def: Dicti
 		return
 	var tower_type = tower_def.get("type", "ATTACK")
 	var is_active = tower.get("is_active", false)
+	# Батарея: «включено» = режим добычи (накопление), «выключено» = режим траты
+	var is_visually_on = is_active
+	if tower_type == "BATTERY":
+		is_visually_on = not tower.get("battery_manual_discharge", false)
 	
 	# Базовый цвет из visuals
 	var base_color = Color.WHITE
@@ -677,21 +894,23 @@ func _update_tower_color(tower_node: Node2D, tower: Dictionary, tower_def: Dicti
 		match tower_type:
 			"MINER":
 				base_color = Color(1.0, 0.84, 0.0)  # Золотой
+			"BATTERY":
+				base_color = Color(1.0, 0.84, 0.0)  # Как майнер
 			"WALL":
 				base_color = Color(0.41, 0.41, 0.41)  # Темно-серый
 			_:
 				base_color = Color(1.0, 0.31, 0.0)  # Оранжевый
 	
 	# Неактивные башни (кроме стен) затемняются
-	if tower_type != "WALL" and not is_active:
-		# Майнеры неактивные тоже затемняются + 15%
-		if tower_type == "MINER":
+	if tower_type != "WALL" and not is_visually_on:
+		# Майнеры/батареи неактивные тоже затемняются + 15%
+		if tower_type == "MINER" or tower_type == "BATTERY":
 			body.color = base_color.darkened(0.15).darkened(0.5)
 		else:
 			body.color = base_color.darkened(0.5)
 	else:
-		# Майнеры на 15% тусклее (даже когда активны)
-		if tower_type == "MINER":
+		# Майнеры/батареи на 15% тусклее (даже когда активны)
+		if tower_type == "MINER" or tower_type == "BATTERY":
 			body.color = base_color.darkened(0.15)
 		else:
 			body.color = base_color
@@ -706,27 +925,64 @@ func _update_tower_color(tower_node: Node2D, tower: Dictionary, tower_def: Dicti
 				miner_outline.default_color = outline_color.darkened(0.5)
 			else:
 				miner_outline.default_color = outline_color
-		
-		# Показываем/скрываем синий кружок ТОЛЬКО если майнер стоит на руде
-		var energy_dot = tower_node.get_node_or_null("EnergyDot")
-		if energy_dot:
-			# Получаем tower_id из метаданных ноды
-			var tower_id = tower_node.get_meta("entity_id")
-			var is_on_ore = _is_miner_on_ore(tower_id)
-			energy_dot.visible = is_active and is_on_ore
-		
-		# Маленький кружок: когда в сети но НЕ на руде
-		var network_dot = tower_node.get_node_or_null("NetworkDot")
-		if network_dot:
-			var tower_id = tower_node.get_meta("entity_id")
-			var is_on_ore = _is_miner_on_ore(tower_id)
-			network_dot.visible = is_active and not is_on_ore
+		_update_miner_battery_dots(tower_node, tower, tower_def)
+	elif tower_type == "BATTERY":
+		tower_node.scale = Vector2(1.1, 1.1)
+		# Добыча = включено (светло), трата = выключено (темно)
+		var miner_outline = tower_node.get_node_or_null("MinerOutline")
+		if miner_outline:
+			var outline_color = Color(0.9, 0.2, 0.2, 0.9)
+			if not is_visually_on:
+				miner_outline.default_color = outline_color.darkened(0.5)
+			else:
+				miner_outline.default_color = outline_color
+		_update_miner_battery_dots(tower_node, tower, tower_def)
 	
 	# Для атакующих: маленький кружок когда в сети
 	if tower_type == "ATTACK":
 		var network_dot = tower_node.get_node_or_null("NetworkDot")
 		if network_dot:
 			network_dot.visible = is_active
+
+	# Мерцание при малом запасе руды (сеть восстанавливается)
+	var ore_flicker = GameManager.ecs.game_state.get("ore_flicker", false)
+	if tower_type != "WALL" and is_active and ore_flicker:
+		var t = Time.get_ticks_msec() / 180.0
+		var a = 0.55 + 0.45 * sin(t)
+		tower_node.modulate = Color(1.0, 1.0, 1.0, a)
+	else:
+		tower_node.modulate = Color.WHITE
+
+func _update_miner_battery_dots(tower_node: Node2D, tower: Dictionary, tower_def: Dictionary):
+	"""Обновляет видимость и анимацию кружков (EnergyDot/NetworkDot) у майнера и батарейки. Вызывается каждый кадр, чтобы мигание синий/красный работало плавно."""
+	var tower_type = tower_def.get("type", "")
+	var tower_id = tower_node.get_meta("entity_id", -1)
+	if tower_type == "MINER":
+		var is_active = tower.get("is_active", false)
+		var is_on_ore = _is_miner_on_ore(tower_id)
+		var energy_dot = tower_node.get_node_or_null("EnergyDot")
+		if energy_dot:
+			energy_dot.visible = is_active and is_on_ore
+			if energy_dot.visible:
+				var ore_reserve = _get_ore_reserve_under_tower(tower_id)
+				_update_energy_dot_by_ore(energy_dot, ore_reserve)
+		var network_dot = tower_node.get_node_or_null("NetworkDot")
+		if network_dot:
+			network_dot.visible = is_active and not is_on_ore
+			if network_dot.visible and GameManager:
+				var totals = GameManager.get_ore_network_totals()
+				_update_energy_dot_by_ore(network_dot, totals.get("total_current", 0.0))
+	elif tower_type == "BATTERY":
+		var is_visually_on = not tower.get("battery_manual_discharge", false)
+		var energy_dot = tower_node.get_node_or_null("EnergyDot")
+		if energy_dot:
+			energy_dot.visible = is_visually_on
+			if energy_dot.visible and GameManager:
+				var totals = GameManager.get_ore_network_totals()
+				_update_energy_dot_by_ore(energy_dot, totals.get("total_current", 0.0))
+		var network_dot = tower_node.get_node_or_null("NetworkDot")
+		if network_dot:
+			network_dot.visible = false
 
 func _create_network_dot() -> Polygon2D:
 	"""Маленький синий кружок (половина линии ~4px) для башен в энергосети"""
@@ -765,6 +1021,14 @@ func _update_tower_highlight(tower_node: Node2D, tower: Dictionary, tower_def: D
 			outline.width = 2.5
 		else:
 			outline.default_color = Color(1.0, 1.0, 0.0, 0.4)  # ЖЕЛТАЯ 40% базово
+			outline.width = 2.0
+	elif tower_type == "BATTERY":
+		outline.visible = true
+		if any_selection:
+			outline.default_color = Color(0.95, 0.3, 0.3, 0.7)
+			outline.width = 2.5
+		else:
+			outline.default_color = Color(0.9, 0.2, 0.2, 0.5)
 			outline.width = 2.0
 	elif tower_type == "WALL":
 		# Стены: НИКОГДА не показываем обводку
@@ -815,6 +1079,9 @@ func _create_pooled_enemy() -> Node2D:
 	outline.add_point(Vector2(-10, 10))
 	outline.add_point(Vector2(-10, -10))
 	container.add_child(outline)
+	# Кэш для _render_enemies: не вызывать get_node каждый кадр
+	container.set_meta("_body", polygon)
+	container.set_meta("_outline", outline)
 	
 	return container
 
@@ -870,6 +1137,100 @@ func _update_projectile_visual(node: Node2D, renderable: Dictionary):
 		points.append(Vector2(cos(angle), sin(angle)) * radius)
 	circle.polygon = points
 	circle.color = renderable.get("color", Color.WHITE)
+
+# ============================================================================
+# ЦЕПНАЯ МОЛНИЯ (БЛАДСТОУН)
+# ============================================================================
+
+func _render_chain_lightning(delta: float):
+	if not chain_lightning_layer or not ecs:
+		return
+	var to_remove = []
+	for i in range(ecs.chain_lightning_effects.size()):
+		var eff = ecs.chain_lightning_effects[i]
+		eff["timer"] = eff.get("timer", 0.4) - delta
+		if eff["timer"] <= 0.0:
+			to_remove.append(i)
+	for i in range(to_remove.size() - 1, -1, -1):
+		ecs.chain_lightning_effects.remove_at(to_remove[i])
+	# Перерисовываем оставшиеся (позиции берём текущие — молния следует за врагами)
+	for child in chain_lightning_layer.get_children():
+		child.queue_free()
+	var white = Color(1.0, 1.0, 1.0, 0.9)
+	for eff in ecs.chain_lightning_effects:
+		var chain_ids = eff.get("chain_ids", [])
+		var snapshot = eff.get("snapshot_positions", [])
+		var positions: Array = []
+		var used_snapshot = false
+		for i in range(chain_ids.size()):
+			var eid = chain_ids[i]
+			var pos = ecs.positions.get(eid)
+			if pos != null:
+				positions.append(pos)
+			elif i < snapshot.size():
+				var snap = snapshot[i]
+				if snap != Vector2.ZERO:
+					positions.append(snap)
+					used_snapshot = true
+		if used_snapshot:
+			eff["timer"] = minf(eff["timer"], eff.get("dead_timer", 0.2))
+		var width_offset = int(eff.get("width_offset", 0))
+		for j in range(positions.size() - 1):
+			var p0 = positions[j]
+			var p1 = positions[j + 1]
+			var mid = (p0 + p1) * 0.5
+			var dir = (p1 - p0).normalized()
+			var perp = Vector2(-dir.y, dir.x)
+			var angle_deg = randf_range(5.0, 15.0) * (1.0 if randf() > 0.5 else -1.0)
+			var segment_len = p0.distance_to(p1)
+			var offset_len = segment_len * 0.5 * tan(deg_to_rad(angle_deg * 0.5))
+			var mid_shifted = mid + perp * offset_len
+			var line = Line2D.new()
+			line.width = float(randi() % 3 + 4 + width_offset)
+			line.default_color = white
+			line.add_point(chain_lightning_layer.to_local(p0))
+			line.add_point(chain_lightning_layer.to_local(mid_shifted))
+			line.add_point(chain_lightning_layer.to_local(p1))
+			chain_lightning_layer.add_child(line)
+
+# ============================================================================
+# ЗОНЫ КРИКА (ТУРНАМЕНТ)
+# ============================================================================
+
+func _render_scream_zones():
+	if not scream_zones_layer or not ecs:
+		return
+	var zones = ecs.scream_zones
+	var want_count = zones.size()
+	var children = scream_zones_layer.get_children()
+	while children.size() < want_count:
+		var poly = Polygon2D.new()
+		scream_zones_layer.add_child(poly)
+		children = scream_zones_layer.get_children()
+	# Удаляем лишние ноды: remove_child сразу, иначе queue_free не убирает из get_children() до конца кадра — бесконечный цикл
+	var num_to_remove = children.size() - want_count
+	if num_to_remove > 0:
+		for idx in range(num_to_remove):
+			var node = children[children.size() - 1 - idx]
+			scream_zones_layer.remove_child(node)
+			node.queue_free()
+	var sky_blue = Color(0.53, 0.81, 0.98, 0.35)
+	for i in range(want_count):
+		var z = zones[i]
+		var center = z.get("center", Vector2.ZERO)
+		var radius_hex = float(z.get("radius_hex", 4.0))
+		var pixel_radius = radius_hex * Config.HEX_SIZE * 1.8
+		var poly = scream_zones_layer.get_child(i) as Polygon2D
+		if not poly:
+			continue
+		poly.color = sky_blue
+		var points: PackedVector2Array = []
+		for j in range(33):
+			var angle = (j / 32.0) * TAU
+			var pt = center + Vector2(cos(angle), sin(angle)) * pixel_radius
+			points.append(scream_zones_layer.to_local(pt))
+		poly.polygon = points
+		poly.queue_redraw()
 
 # ============================================================================
 # РЕНДЕРИНГ СОЕДИНЕНИЙ МАЙНЕРОВ
@@ -1037,7 +1398,11 @@ func _render_hex_highlights():
 	# Собираем сущности, которые нужно подсветить (башни, руда)
 	var entities_to_highlight = {}  # entity_id -> {pos, radius, color}
 	
-	# Башни
+	# Башни: зелёный/красный только у поставленных в этом раунде (временных), если они входят в рецепт
+	var part_craft = GameManager.get_towers_part_of_craft_after_save() if GameManager else {}
+	var phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
+	var in_build_or_selection = (phase == GameTypes.GamePhase.BUILD_STATE or phase == GameTypes.GamePhase.TOWER_SELECTION_STATE)
+
 	for tower_id in ecs.towers.keys():
 		var tower = ecs.towers[tower_id]
 		var tower_def_id = tower.get("def_id", "")
@@ -1052,11 +1417,14 @@ func _render_hex_highlights():
 		var is_selected = tower.get("is_selected", false)
 		var is_manually_selected = tower.get("is_manually_selected", false)
 		var is_temporary = tower.get("is_temporary", false)
-		var phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
-		var show_phase_built_blue = (phase == GameTypes.GamePhase.BUILD_STATE or phase == GameTypes.GamePhase.TOWER_SELECTION_STATE) and is_temporary
+		var show_phase_built_blue = in_build_or_selection and is_temporary
+		var in_part_craft = part_craft.has(tower_id)
+		# Зелёный/красный только у поставленных в этом раунде, сохранённые не подсвечиваем
+		var show_craft_green = in_build_or_selection and is_temporary and in_part_craft and not part_craft[tower_id].get("has_curse", false)
+		var show_craft_red = in_build_or_selection and is_temporary and in_part_craft and part_craft[tower_id].get("has_curse", false)
 		
-		# Подсвечиваем если есть выделение ИЛИ башня построена в этой фазе (голубой гекс)
-		if not (is_highlighted or is_selected or is_manually_selected or show_phase_built_blue):
+		# Подсвечиваем: выделение ИЛИ участник крафта (зелёный/красный) ИЛИ просто построена в этой фазе (голубой)
+		if not (is_highlighted or is_selected or is_manually_selected or show_craft_green or show_craft_red or show_phase_built_blue):
 			continue
 		
 		# Получаем позицию и радиус
@@ -1068,24 +1436,21 @@ func _render_hex_highlights():
 		var pos = ecs.positions[tower_id]
 		var radius = Config.HEX_SIZE * 0.95  # РАЗМЕР ГЕКСА НА КАРТЕ
 		
-		# Определяем цвет подсветки в зависимости от приоритета
+		# Приоритет: is_selected > is_manually_selected > is_highlighted > участник крафта (зелёный/красный) > построена в фазе (голубой)
 		var highlight_color = Color(0.7, 0.7, 0.7, 0.25)  # СЕРЫЙ по умолчанию
-		
-		# Приоритет: is_selected > is_manually_selected > is_highlighted > построена в этой фазе (голубой)
 		if is_selected:
-			# СОХРАНЕНО (кнопка "Сохранить") - ГОЛУБОЙ гекс
 			highlight_color = Color(0.3, 0.8, 1.0, 0.35)
 		elif is_manually_selected:
-			# Выделено для крафта (Shift+клик) - ФИОЛЕТОВЫЙ гекс
 			highlight_color = Color(0.8, 0.3, 1.0, 0.3)
 		elif is_highlighted:
-			# Просто выбрано (обычный клик) - СЕРЫЙ гекс
 			highlight_color = Color(0.7, 0.7, 0.7, 0.25)
+		elif show_craft_green:
+			highlight_color = Color(0.25, 0.75, 0.35, 0.32)
+		elif show_craft_red:
+			highlight_color = Color(0.8, 0.28, 0.28, 0.32)
 		elif show_phase_built_blue:
-			# Построена в этой фазе (BUILD/SELECTION) - голубой гекс
 			highlight_color = Color(0.35, 0.7, 1.0, 0.28)
 		else:
-			# Не должно сюда попасть
 			continue
 		
 		entities_to_highlight[tower_id] = {
@@ -1192,3 +1557,35 @@ func _is_miner_on_ore(tower_id: int) -> bool:
 	if not ore:
 		return false
 	return ore.get("current_reserve", 0.0) >= Config.ORE_DEPLETION_THRESHOLD
+
+func _get_ore_reserve_under_tower(tower_id: int) -> float:
+	"""Запас руды в жиле под башней (0 если нет руды)."""
+	if not ecs.towers.has(tower_id):
+		return 0.0
+	var tower = ecs.towers[tower_id]
+	var hex = tower.get("hex")
+	if not hex:
+		return 0.0
+	var ore_id = ecs.ore_hex_index.get(hex.to_key(), -1)
+	if ore_id < 0:
+		return 0.0
+	var ore = ecs.ores.get(ore_id)
+	if not ore:
+		return 0.0
+	return ore.get("current_reserve", 0.0)
+
+func _update_energy_dot_by_ore(energy_dot: Polygon2D, ore_amount: float) -> void:
+	"""Обновляет масштаб и цвет кружка: ore >= 15 — пульс ~10%, 3..15 — синий/красный, < 3 — только красный."""
+	var t = Time.get_ticks_msec() / 1000.0
+	if ore_amount >= Config.ORE_LOW_THRESHOLD:
+		var s = 1.0 + 0.1 * sin(t * 0.6)
+		energy_dot.scale = Vector2(s, s)
+		energy_dot.color = Color(0.2, 0.6, 1.0, 1.0)
+	elif ore_amount >= Config.ORE_FLICKER_THRESHOLD:
+		energy_dot.scale = Vector2.ONE
+		var mix_val = 0.5 + 0.5 * sin(t * 4.0)
+		energy_dot.color = Color(0.2, 0.6, 1.0, 1.0).lerp(Color(0.9, 0.2, 0.2, 1.0), mix_val)
+	else:
+		energy_dot.scale = Vector2.ONE
+		var a = 0.6 + 0.4 * sin(t * 5.0)
+		energy_dot.color = Color(0.9, 0.2, 0.2, a)

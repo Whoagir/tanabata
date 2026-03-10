@@ -1,40 +1,1030 @@
 [
-  {"id": "TA1", "name": "TA (Физ. атака) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 18, "fire_rate": 1.0, "range": 3, "shot_cost": 0.048, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL"}}, "visuals": {"color": {"r": 255, "g": 80, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TA2", "name": "TA (Физ. атака) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 32, "fire_rate": 1.0, "range": 3, "shot_cost": 0.053, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL"}}, "visuals": {"color": {"r": 255, "g": 80, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TA3", "name": "TA (Физ. атака) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 57, "fire_rate": 1.0, "range": 3, "shot_cost": 0.058, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL"}}, "visuals": {"color": {"r": 255, "g": 80, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TA4", "name": "TA (Физ. атака) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 102, "fire_rate": 1.0, "range": 3, "shot_cost": 0.064, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL"}}, "visuals": {"color": {"r": 255, "g": 80, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TA5", "name": "TA (Физ. атака) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 184, "fire_rate": 1.0, "range": 3, "shot_cost": 0.07, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL"}}, "visuals": {"color": {"r": 255, "g": 80, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TA6", "name": "TA (Физ. атака) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 980, "fire_rate": 1.0, "range": 3, "shot_cost": 0.077, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL"}}, "visuals": {"color": {"r": 255, "g": 80, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TE1", "name": "TE (Маг. атака) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 10, "fire_rate": 1.0, "range": 3, "shot_cost": 0.056, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL"}}, "visuals": {"color": {"r": 160, "g": 32, "b": 240, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TE2", "name": "TE (Маг. атака) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 30, "fire_rate": 1.0, "range": 3, "shot_cost": 0.062, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL"}}, "visuals": {"color": {"r": 160, "g": 32, "b": 240, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TE3", "name": "TE (Маг. атака) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 54, "fire_rate": 1.0, "range": 3, "shot_cost": 0.068, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL"}}, "visuals": {"color": {"r": 160, "g": 32, "b": 240, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TE4", "name": "TE (Маг. атака) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 97, "fire_rate": 1.0, "range": 3, "shot_cost": 0.075, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL"}}, "visuals": {"color": {"r": 160, "g": 32, "b": 240, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TE5", "name": "TE (Маг. атака) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 174, "fire_rate": 1.0, "range": 3, "shot_cost": 0.082, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL"}}, "visuals": {"color": {"r": 160, "g": 32, "b": 240, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TE6", "name": "TE (Маг. атака) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 930, "fire_rate": 1.0, "range": 3, "shot_cost": 0.09, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL"}}, "visuals": {"color": {"r": 160, "g": 32, "b": 240, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TO1", "name": "TO (Чист. атака) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 8, "fire_rate": 1.0, "range": 3, "shot_cost": 0.032, "attack": {"type": "PROJECTILE", "damage_type": "PURE"}}, "visuals": {"color": {"r": 173, "g": 216, "b": 230, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TO2", "name": "TO (Чист. атака) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 14, "fire_rate": 1.0, "range": 3, "shot_cost": 0.035, "attack": {"type": "PROJECTILE", "damage_type": "PURE"}}, "visuals": {"color": {"r": 173, "g": 216, "b": 230, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TO3", "name": "TO (Чист. атака) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 26, "fire_rate": 1.0, "range": 3, "shot_cost": 0.039, "attack": {"type": "PROJECTILE", "damage_type": "PURE"}}, "visuals": {"color": {"r": 173, "g": 216, "b": 230, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TO4", "name": "TO (Чист. атака) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 48, "fire_rate": 1.0, "range": 3, "shot_cost": 0.043, "attack": {"type": "PROJECTILE", "damage_type": "PURE"}}, "visuals": {"color": {"r": 173, "g": 216, "b": 230, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TO5", "name": "TO (Чист. атака) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 88, "fire_rate": 1.0, "range": 3, "shot_cost": 0.047, "attack": {"type": "PROJECTILE", "damage_type": "PURE"}}, "visuals": {"color": {"r": 173, "g": 216, "b": 230, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "TO6", "name": "TO (Чист. атака) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 480, "fire_rate": 1.0, "range": 3, "shot_cost": 0.052, "attack": {"type": "PROJECTILE", "damage_type": "PURE"}}, "visuals": {"color": {"r": 173, "g": 216, "b": 230, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PA1", "name": "PA (Сплит-физ.) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 11, "fire_rate": 1.0, "range": 3, "shot_cost": 0.064, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 255, "g": 140, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PA2", "name": "PA (Сплит-физ.) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 17, "fire_rate": 1.0, "range": 3, "shot_cost": 0.07, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 255, "g": 140, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PA3", "name": "PA (Сплит-физ.) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 37, "fire_rate": 1.0, "range": 3, "shot_cost": 0.077, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 255, "g": 140, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PA4", "name": "PA (Сплит-физ.) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 66, "fire_rate": 1.0, "range": 3, "shot_cost": 0.085, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 255, "g": 140, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PA5", "name": "PA (Сплит-физ.) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 119, "fire_rate": 1.0, "range": 3, "shot_cost": 0.094, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 255, "g": 140, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PA6", "name": "PA (Сплит-физ.) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 635, "fire_rate": 1.0, "range": 3, "shot_cost": 0.103, "attack": {"type": "PROJECTILE", "damage_type": "PHYSICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 255, "g": 140, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PE1", "name": "PE (Сплит-маг.) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 4, "fire_rate": 1.0, "range": 3, "shot_cost": 0.048, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 221, "g": 160, "b": 221, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PE2", "name": "PE (Сплит-маг.) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 12, "fire_rate": 1.0, "range": 3, "shot_cost": 0.053, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 221, "g": 160, "b": 221, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PE3", "name": "PE (Сплит-маг.) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 21, "fire_rate": 1.0, "range": 3, "shot_cost": 0.058, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 221, "g": 160, "b": 221, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PE4", "name": "PE (Сплит-маг.) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 38, "fire_rate": 1.0, "range": 3, "shot_cost": 0.064, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 221, "g": 160, "b": 221, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PE5", "name": "PE (Сплит-маг.) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 69, "fire_rate": 1.0, "range": 3, "shot_cost": 0.07, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 221, "g": 160, "b": 221, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PE6", "name": "PE (Сплит-маг.) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 365, "fire_rate": 1.0, "range": 3, "shot_cost": 0.077, "attack": {"type": "PROJECTILE", "damage_type": "MAGICAL", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 221, "g": 160, "b": 221, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PO1", "name": "PO (Сплит-чист.) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 6, "fire_rate": 1.0, "range": 3, "shot_cost": 0.08, "attack": {"type": "PROJECTILE", "damage_type": "PURE", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 224, "g": 255, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PO2", "name": "PO (Сплит-чист.) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 10, "fire_rate": 1.0, "range": 3, "shot_cost": 0.088, "attack": {"type": "PROJECTILE", "damage_type": "PURE", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 224, "g": 255, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PO3", "name": "PO (Сплит-чист.) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 18, "fire_rate": 1.0, "range": 3, "shot_cost": 0.097, "attack": {"type": "PROJECTILE", "damage_type": "PURE", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 224, "g": 255, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PO4", "name": "PO (Сплит-чист.) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 32, "fire_rate": 1.0, "range": 3, "shot_cost": 0.106, "attack": {"type": "PROJECTILE", "damage_type": "PURE", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 224, "g": 255, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PO5", "name": "PO (Сплит-чист.) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 58, "fire_rate": 1.0, "range": 3, "shot_cost": 0.117, "attack": {"type": "PROJECTILE", "damage_type": "PURE", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 224, "g": 255, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "PO6", "name": "PO (Сплит-чист.) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 310, "fire_rate": 1.0, "range": 3, "shot_cost": 0.129, "attack": {"type": "PROJECTILE", "damage_type": "PURE", "params": {"split_count": 2}}}, "visuals": {"color": {"r": 224, "g": 255, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
+  {
+    "id": "TA1",
+    "name": "TA (Физ. атака) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 15,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.048,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 80,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TA2",
+    "name": "TA (Физ. атака) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 22,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.053,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 80,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TA3",
+    "name": "TA (Физ. атака) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 45,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.058,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 80,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TA4",
+    "name": "TA (Физ. атака) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 80,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.064,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 80,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TA5",
+    "name": "TA (Физ. атака) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 145,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.07,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 80,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TA6",
+    "name": "TA (Физ. атака) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 830,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.077,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 80,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TE1",
+    "name": "TE (Маг. атака) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 9,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.056,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 32,
+        "b": 240,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TE2",
+    "name": "TE (Маг. атака) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 17,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.062,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 32,
+        "b": 240,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TE3",
+    "name": "TE (Маг. атака) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 36,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.068,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 32,
+        "b": 240,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TE4",
+    "name": "TE (Маг. атака) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 66,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.075,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 32,
+        "b": 240,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TE5",
+    "name": "TE (Маг. атака) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 130,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.082,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 32,
+        "b": 240,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TE6",
+    "name": "TE (Маг. атака) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 800,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.09,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 32,
+        "b": 240,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TO1",
+    "name": "TO (Чист. атака) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 7,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.032,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 173,
+        "g": 216,
+        "b": 230,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TO2",
+    "name": "TO (Чист. атака) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 14,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.035,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 173,
+        "g": 216,
+        "b": 230,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TO3",
+    "name": "TO (Чист. атака) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 22,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.039,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 173,
+        "g": 216,
+        "b": 230,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TO4",
+    "name": "TO (Чист. атака) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 35,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.043,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 173,
+        "g": 216,
+        "b": 230,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TO5",
+    "name": "TO (Чист. атака) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 55,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.047,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 173,
+        "g": 216,
+        "b": 230,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TO6",
+    "name": "TO (Чист. атака) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 600,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.052,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 173,
+        "g": 216,
+        "b": 230,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PA1",
+    "name": "PA (Сплит-физ.) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 8,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.064,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 140,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PA2",
+    "name": "PA (Сплит-физ.) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 8,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.07,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 140,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PA3",
+    "name": "PA (Сплит-физ.) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 24,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.077,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 140,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PA4",
+    "name": "PA (Сплит-физ.) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 50,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.085,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 140,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PA5",
+    "name": "PA (Сплит-физ.) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 110,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.094,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 140,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PA6",
+    "name": "PA (Сплит-физ.) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 510,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.103,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 140,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PE1",
+    "name": "PE (Сплит-маг.) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 4,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.048,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 221,
+        "g": 160,
+        "b": 221,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PE2",
+    "name": "PE (Сплит-маг.) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 8,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.053,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 221,
+        "g": 160,
+        "b": 221,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PE3",
+    "name": "PE (Сплит-маг.) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 18,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.058,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 221,
+        "g": 160,
+        "b": 221,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PE4",
+    "name": "PE (Сплит-маг.) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 33,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.064,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 221,
+        "g": 160,
+        "b": 221,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PE5",
+    "name": "PE (Сплит-маг.) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 60,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.07,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 221,
+        "g": 160,
+        "b": 221,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PE6",
+    "name": "PE (Сплит-маг.) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 450,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.077,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 221,
+        "g": 160,
+        "b": 221,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PO1",
+    "name": "PO (Сплит-чист.) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 4,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.064,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 224,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PO2",
+    "name": "PO (Сплит-чист.) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 7,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.088,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 224,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PO3",
+    "name": "PO (Сплит-чист.) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 12,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.097,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 224,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PO4",
+    "name": "PO (Сплит-чист.) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 18,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.106,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 224,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PO5",
+    "name": "PO (Сплит-чист.) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 28,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.117,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 224,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "PO6",
+    "name": "PO (Сплит-чист.) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 330,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.129,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "split_count": 2
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 224,
+        "g": 255,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
   {
     "id": "TOWER_SILVER",
     "name": "Сильвер",
@@ -42,21 +1032,26 @@
     "crafting_level": 1,
     "level": 2,
     "combat": {
-      "damage": 127,
+      "damage": 141,
       "fire_rate": 1.08,
       "range": 4,
-      "shot_cost": 0.15,
+      "shot_cost": 0.135,
       "attack": {
         "type": "LASER",
         "damage_type": "PHYSICAL",
         "params": {
-          "slow_multiplier": 0.5,
+          "slow_multiplier": 0.3,
           "slow_duration": 2.0
         }
       }
     },
     "visuals": {
-      "color": {"r": 192, "g": 192, "b": 192, "a": 255},
+      "color": {
+        "r": 192,
+        "g": 192,
+        "b": 192,
+        "a": 255
+      },
       "radius_factor": 0.35,
       "stroke_width": 2.0
     }
@@ -68,10 +1063,10 @@
     "crafting_level": 1,
     "level": 2,
     "combat": {
-      "damage": 22,
+      "damage": 26,
       "fire_rate": 1.1,
       "range": 4,
-      "shot_cost": 0.3,
+      "shot_cost": 0.09,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",
@@ -87,47 +1082,1108 @@
       }
     },
     "visuals": {
-      "color": {"r": 11, "g": 128, "b": 96, "a": 255},
+      "color": {
+        "r": 11,
+        "g": 128,
+        "b": 96,
+        "a": 255
+      },
       "radius_factor": 0.35,
       "stroke_width": 2.0
     }
   },
-  {"id": "DE1", "name": "DE (Аура) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.04, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "speed_multiplier": 1.6}, "visuals": {"color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "DE2", "name": "DE (Аура) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.044, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "speed_multiplier": 1.92}, "visuals": {"color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "DE3", "name": "DE (Аура) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.048, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "speed_multiplier": 2.4}, "visuals": {"color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "DE4", "name": "DE (Аура) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.053, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "speed_multiplier": 2.96}, "visuals": {"color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "DE5", "name": "DE (Аура) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.059, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "speed_multiplier": 3.68}, "visuals": {"color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "DE6", "name": "DE (Аура) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.065, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "speed_multiplier": 4.8}, "visuals": {"color": {"r": 50, "g": 205, "b": 50, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "DA1", "name": "DA (Аура урона) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.04, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "damage_bonus": 8}, "visuals": {"color": {"r": 220, "g": 80, "b": 60, "a": 255}, "radius_factor": 0.5, "stroke_width": 2}},
-  {"id": "DA2", "name": "DA (Аура урона) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.044, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "damage_bonus": 16}, "visuals": {"color": {"r": 220, "g": 80, "b": 60, "a": 255}, "radius_factor": 0.5, "stroke_width": 2}},
-  {"id": "DA3", "name": "DA (Аура урона) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.048, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 2, "damage_bonus": 29}, "visuals": {"color": {"r": 220, "g": 80, "b": 60, "a": 255}, "radius_factor": 0.5, "stroke_width": 2}},
-  {"id": "DA4", "name": "DA (Аура урона) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.053, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 3, "damage_bonus": 52}, "visuals": {"color": {"r": 220, "g": 80, "b": 60, "a": 255}, "radius_factor": 0.5, "stroke_width": 2}},
-  {"id": "DA5", "name": "DA (Аура урона) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.059, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 3, "damage_bonus": 86}, "visuals": {"color": {"r": 220, "g": 80, "b": 60, "a": 255}, "radius_factor": 0.5, "stroke_width": 2}},
-  {"id": "DA6", "name": "DA (Аура урона) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.065, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}}, "aura": {"radius": 4, "damage_bonus": 288}, "visuals": {"color": {"r": 220, "g": 80, "b": 60, "a": 255}, "radius_factor": 0.5, "stroke_width": 2}},
-  {"id": "NI1", "name": "NI (Замедление) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 1, "fire_rate": 1.67, "range": 3, "shot_cost": 0.072, "attack": {"type": "PROJECTILE", "damage_type": "SLOW", "params": {"slow_factor": 0.4}}}, "visuals": {"color": {"r": 0, "g": 191, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NI2", "name": "NI (Замедление) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 1, "fire_rate": 1.67, "range": 3, "shot_cost": 0.079, "attack": {"type": "PROJECTILE", "damage_type": "SLOW", "params": {"slow_factor": 0.5}}}, "visuals": {"color": {"r": 0, "g": 191, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NI3", "name": "NI (Замедление) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 2, "fire_rate": 1.67, "range": 3, "shot_cost": 0.087, "attack": {"type": "PROJECTILE", "damage_type": "SLOW", "params": {"slow_factor": 0.6}}}, "visuals": {"color": {"r": 0, "g": 191, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NI4", "name": "NI (Замедление) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 2, "fire_rate": 1.67, "range": 3, "shot_cost": 0.096, "attack": {"type": "PROJECTILE", "damage_type": "SLOW", "params": {"slow_factor": 0.7}}}, "visuals": {"color": {"r": 0, "g": 191, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NI5", "name": "NI (Замедление) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 2, "fire_rate": 1.67, "range": 3, "shot_cost": 0.105, "attack": {"type": "PROJECTILE", "damage_type": "SLOW", "params": {"slow_factor": 0.8}}}, "visuals": {"color": {"r": 0, "g": 191, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NI6", "name": "NI (Замедление) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 3, "fire_rate": 1.67, "range": 3, "shot_cost": 0.116, "attack": {"type": "PROJECTILE", "damage_type": "SLOW", "params": {"slow_factor": 0.95}}}, "visuals": {"color": {"r": 0, "g": 191, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NU1", "name": "NU (Яд) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 1, "fire_rate": 0.8, "range": 3, "shot_cost": 0.056, "attack": {"type": "PROJECTILE", "damage_type": "POISON", "params": {"poison_dps": 5}}}, "visuals": {"color": {"r": 127, "g": 255, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NU2", "name": "NU (Яд) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 2, "fire_rate": 0.8, "range": 3, "shot_cost": 0.062, "attack": {"type": "PROJECTILE", "damage_type": "POISON", "params": {"poison_dps": 9}}}, "visuals": {"color": {"r": 127, "g": 255, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NU3", "name": "NU (Яд) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 3, "fire_rate": 0.8, "range": 3, "shot_cost": 0.068, "attack": {"type": "PROJECTILE", "damage_type": "POISON", "params": {"poison_dps": 16}}}, "visuals": {"color": {"r": 127, "g": 255, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NU4", "name": "NU (Яд) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 4, "fire_rate": 0.8, "range": 3, "shot_cost": 0.075, "attack": {"type": "PROJECTILE", "damage_type": "POISON", "params": {"poison_dps": 29}}}, "visuals": {"color": {"r": 127, "g": 255, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NU5", "name": "NU (Яд) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 5, "fire_rate": 0.8, "range": 3, "shot_cost": 0.082, "attack": {"type": "PROJECTILE", "damage_type": "POISON", "params": {"poison_dps": 52}}}, "visuals": {"color": {"r": 127, "g": 255, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NU6", "name": "NU (Яд) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 6, "fire_rate": 0.8, "range": 3, "shot_cost": 0.09, "attack": {"type": "PROJECTILE", "damage_type": "POISON", "params": {"poison_dps": 94}}}, "visuals": {"color": {"r": 127, "g": 255, "b": 0, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NA1", "name": "NA (Снижение физ. брони) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 3, "fire_rate": 1.2, "range": 3, "shot_cost": 0.064, "attack": {"type": "PROJECTILE", "damage_type": "PHYS_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 8}}}, "visuals": {"color": {"r": 210, "g": 105, "b": 30, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NA2", "name": "NA (Снижение физ. брони) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 4, "fire_rate": 1.2, "range": 3, "shot_cost": 0.07, "attack": {"type": "PROJECTILE", "damage_type": "PHYS_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 15}}}, "visuals": {"color": {"r": 210, "g": 105, "b": 30, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NA3", "name": "NA (Снижение физ. брони) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 5, "fire_rate": 1.2, "range": 3, "shot_cost": 0.077, "attack": {"type": "PROJECTILE", "damage_type": "PHYS_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 32}}}, "visuals": {"color": {"r": 210, "g": 105, "b": 30, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NA4", "name": "NA (Снижение физ. брони) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 6, "fire_rate": 1.2, "range": 3, "shot_cost": 0.085, "attack": {"type": "PROJECTILE", "damage_type": "PHYS_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 58}}}, "visuals": {"color": {"r": 210, "g": 105, "b": 30, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NA5", "name": "NA (Снижение физ. брони) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 7, "fire_rate": 1.2, "range": 3, "shot_cost": 0.094, "attack": {"type": "PROJECTILE", "damage_type": "PHYS_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 105}}}, "visuals": {"color": {"r": 210, "g": 105, "b": 30, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NA6", "name": "NA (Снижение физ. брони) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 8, "fire_rate": 1.2, "range": 3, "shot_cost": 0.103, "attack": {"type": "PROJECTILE", "damage_type": "PHYS_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 190}}}, "visuals": {"color": {"r": 210, "g": 105, "b": 30, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NE1", "name": "NE (Снижение маг. брони) Lv.1", "type": "ATTACK", "crafting_level": 0, "level": 1, "combat": {"damage": 1, "fire_rate": 1.2, "range": 3, "shot_cost": 0.064, "attack": {"type": "PROJECTILE", "damage_type": "MAG_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 8}}}, "visuals": {"color": {"r": 140, "g": 90, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NE2", "name": "NE (Снижение маг. брони) Lv.2", "type": "ATTACK", "crafting_level": 0, "level": 2, "combat": {"damage": 2, "fire_rate": 1.2, "range": 3, "shot_cost": 0.07, "attack": {"type": "PROJECTILE", "damage_type": "MAG_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 15}}}, "visuals": {"color": {"r": 140, "g": 90, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NE3", "name": "NE (Снижение маг. брони) Lv.3", "type": "ATTACK", "crafting_level": 0, "level": 3, "combat": {"damage": 2, "fire_rate": 1.2, "range": 3, "shot_cost": 0.077, "attack": {"type": "PROJECTILE", "damage_type": "MAG_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 32}}}, "visuals": {"color": {"r": 140, "g": 90, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NE4", "name": "NE (Снижение маг. брони) Lv.4", "type": "ATTACK", "crafting_level": 0, "level": 4, "combat": {"damage": 3, "fire_rate": 1.2, "range": 3, "shot_cost": 0.085, "attack": {"type": "PROJECTILE", "damage_type": "MAG_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 58}}}, "visuals": {"color": {"r": 140, "g": 90, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NE5", "name": "NE (Снижение маг. брони) Lv.5", "type": "ATTACK", "crafting_level": 0, "level": 5, "combat": {"damage": 3, "fire_rate": 1.2, "range": 3, "shot_cost": 0.094, "attack": {"type": "PROJECTILE", "damage_type": "MAG_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 105}}}, "visuals": {"color": {"r": 140, "g": 90, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
-  {"id": "NE6", "name": "NE (Снижение маг. брони) Lv.6", "type": "ATTACK", "crafting_level": 0, "level": 6, "combat": {"damage": 5, "fire_rate": 1.2, "range": 3, "shot_cost": 0.103, "attack": {"type": "PROJECTILE", "damage_type": "MAG_ARMOR_DEBUFF", "params": {"armor_debuff_amount": 190}}}, "visuals": {"color": {"r": 140, "g": 90, "b": 255, "a": 255}, "radius_factor": 0.5, "stroke_width": 2.0}},
+  {
+    "id": "DE1",
+    "name": "DE (Аура) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.04,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 1.3
+    },
+    "visuals": {
+      "color": {
+        "r": 50,
+        "g": 205,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "DE2",
+    "name": "DE (Аура) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.044,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 1.62
+    },
+    "visuals": {
+      "color": {
+        "r": 50,
+        "g": 205,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "DE3",
+    "name": "DE (Аура) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.048,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 1.95
+    },
+    "visuals": {
+      "color": {
+        "r": 50,
+        "g": 205,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "DE4",
+    "name": "DE (Аура) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.053,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 2.4
+    },
+    "visuals": {
+      "color": {
+        "r": 50,
+        "g": 205,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "DE5",
+    "name": "DE (Аура) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.059,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 3.1
+    },
+    "visuals": {
+      "color": {
+        "r": 50,
+        "g": 205,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "DE6",
+    "name": "DE (Аура) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.065,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "speed_multiplier": 4.5
+    },
+    "visuals": {
+      "color": {
+        "r": 50,
+        "g": 205,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "DA1",
+    "name": "DA (Аура урона) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.04,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "damage_bonus_percent": 0.15
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 80,
+        "b": 60,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "DA2",
+    "name": "DA (Аура урона) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.044,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "damage_bonus_percent": 0.21
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 80,
+        "b": 60,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "DA3",
+    "name": "DA (Аура урона) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.048,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 2,
+      "damage_bonus_percent": 0.30
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 80,
+        "b": 60,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "DA4",
+    "name": "DA (Аура урона) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.053,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 3,
+      "damage_bonus_percent": 0.42
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 80,
+        "b": 60,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "DA5",
+    "name": "DA (Аура урона) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.059,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 3,
+      "damage_bonus_percent": 0.60
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 80,
+        "b": 60,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "DA6",
+    "name": "DA (Аура урона) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.065,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 4,
+      "damage_bonus_percent": 1.80
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 80,
+        "b": 60,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2
+    }
+  },
+  {
+    "id": "NI1",
+    "name": "NI (Замедление) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.0612,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW",
+        "params": {
+          "slow_factor": 0.75
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 0,
+        "g": 191,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NI2",
+    "name": "NI (Замедление) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.0672,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW",
+        "params": {
+          "slow_factor": 0.70
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 0,
+        "g": 191,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NI3",
+    "name": "NI (Замедление) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 2,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.074,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW",
+        "params": {
+          "slow_factor": 0.65
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 0,
+        "g": 191,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NI4",
+    "name": "NI (Замедление) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 2,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.0816,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW",
+        "params": {
+          "slow_factor": 0.60
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 0,
+        "g": 191,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NI5",
+    "name": "NI (Замедление) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 2,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.0893,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW",
+        "params": {
+          "slow_factor": 0.50
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 0,
+        "g": 191,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NI6",
+    "name": "NI (Замедление) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 3,
+      "fire_rate": 1.67,
+      "range": 3,
+      "shot_cost": 0.0986,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "SLOW",
+        "params": {
+          "slow_factor": 0.30
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 0,
+        "g": 191,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NU1",
+    "name": "NU (Яд) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.056,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON",
+        "params": {
+          "poison_dps": 5
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 127,
+        "g": 255,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NU2",
+    "name": "NU (Яд) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.062,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON",
+        "params": {
+          "poison_dps": 9
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 127,
+        "g": 255,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NU3",
+    "name": "NU (Яд) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 3,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.068,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON",
+        "params": {
+          "poison_dps": 16
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 127,
+        "g": 255,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NU4",
+    "name": "NU (Яд) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 3,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.075,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON",
+        "params": {
+          "poison_dps": 29
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 127,
+        "g": 255,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NU5",
+    "name": "NU (Яд) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 4,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.082,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON",
+        "params": {
+          "poison_dps": 52
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 127,
+        "g": 255,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NU6",
+    "name": "NU (Яд) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 5,
+      "fire_rate": 0.8,
+      "range": 3,
+      "shot_cost": 0.09,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "POISON",
+        "params": {
+          "poison_dps": 94
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 127,
+        "g": 255,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NA1",
+    "name": "NA (Снижение физ. брони) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 3,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.064,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYS_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 8
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 210,
+        "g": 105,
+        "b": 30,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NA2",
+    "name": "NA (Снижение физ. брони) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 2,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.07,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYS_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 15
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 210,
+        "g": 105,
+        "b": 30,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NA3",
+    "name": "NA (Снижение физ. брони) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 4,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.077,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYS_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 32
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 210,
+        "g": 105,
+        "b": 30,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NA4",
+    "name": "NA (Снижение физ. брони) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 5,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.085,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYS_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 58
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 210,
+        "g": 105,
+        "b": 30,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NA5",
+    "name": "NA (Снижение физ. брони) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 6,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.094,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYS_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 105
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 210,
+        "g": 105,
+        "b": 30,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NA6",
+    "name": "NA (Снижение физ. брони) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 7,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.103,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYS_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 190
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 210,
+        "g": 105,
+        "b": 30,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NE1",
+    "name": "NE (Снижение маг. брони) Lv.1",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 1,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.064,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAG_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 8
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 140,
+        "g": 90,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NE2",
+    "name": "NE (Снижение маг. брони) Lv.2",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 2,
+    "combat": {
+      "damage": 1,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.07,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAG_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 15
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 140,
+        "g": 90,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NE3",
+    "name": "NE (Снижение маг. брони) Lv.3",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 3,
+    "combat": {
+      "damage": 2,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.077,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAG_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 32
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 140,
+        "g": 90,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NE4",
+    "name": "NE (Снижение маг. брони) Lv.4",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 4,
+    "combat": {
+      "damage": 3,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.085,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAG_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 58
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 140,
+        "g": 90,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NE5",
+    "name": "NE (Снижение маг. брони) Lv.5",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 5,
+    "combat": {
+      "damage": 3,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.094,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAG_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 105
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 140,
+        "g": 90,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "NE6",
+    "name": "NE (Снижение маг. брони) Lv.6",
+    "type": "ATTACK",
+    "crafting_level": 0,
+    "level": 6,
+    "combat": {
+      "damage": 4,
+      "fire_rate": 1.2,
+      "range": 3,
+      "shot_cost": 0.103,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAG_ARMOR_DEBUFF",
+        "params": {
+          "armor_debuff_amount": 190
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 140,
+        "g": 90,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.5,
+      "stroke_width": 2.0
+    }
+  },
   {
     "id": "TOWER_MINER",
     "name": "Шахтер",
@@ -139,7 +2195,12 @@
       "line_degradation_factor": 0.6
     },
     "visuals": {
-      "color": {"r": 255, "g": 215, "b": 0, "a": 255},
+      "color": {
+        "r": 255,
+        "g": 215,
+        "b": 0,
+        "a": 255
+      },
       "radius_factor": 0.55,
       "stroke_width": 2.0
     }
@@ -151,9 +2212,39 @@
     "crafting_level": 0,
     "level": 1,
     "visuals": {
-      "color": {"r": 105, "g": 105, "b": 105, "a": 255},
+      "color": {
+        "r": 105,
+        "g": 105,
+        "b": 105,
+        "a": 255
+      },
       "radius_factor": 0.4,
       "stroke_width": 0
+    }
+  },
+  {
+    "id": "TOWER_BATTERY",
+    "name": "Батарея",
+    "type": "BATTERY",
+    "crafting_level": 1,
+    "level": 1,
+    "energy": {
+      "transfer_radius": 5,
+      "storage_max": 200,
+      "charge_rate": 0.5,
+      "discharge_rate": 0.1,
+      "consume_rate": 0.05
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 215,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.65,
+      "stroke_width": 2.0,
+      "outline_color": "red"
     }
   },
   {
@@ -163,17 +2254,22 @@
     "crafting_level": 1,
     "level": 2,
     "combat": {
-      "damage": 26,
+      "damage": 28,
       "fire_rate": 0.5,
       "range": 2,
-      "shot_cost": 0.25,
+      "shot_cost": 0.225,
       "attack": {
         "type": "NONE",
         "damage_type": "PHYSICAL"
       }
     },
     "visuals": {
-      "color": {"r": 255, "g": 69, "b": 0, "a": 255},
+      "color": {
+        "r": 255,
+        "g": 69,
+        "b": 0,
+        "a": 255
+      },
       "radius_factor": 0.35,
       "stroke_width": 2.0
     }
@@ -185,10 +2281,10 @@
     "crafting_level": 1,
     "level": 2,
     "combat": {
-      "damage": 48,
+      "damage": 34,
       "fire_rate": 1.0,
       "range": 4,
-      "shot_cost": 0.20,
+      "shot_cost": 0.18,
       "attack": {
         "type": "NONE",
         "damage_type": "PURE",
@@ -199,7 +2295,46 @@
       }
     },
     "visuals": {
-      "color": { "r": 255, "g": 255, "b": 102, "a": 255 },
+      "color": {
+        "r": 255,
+        "g": 255,
+        "b": 102,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_KAILUN",
+    "name": "Кайлун",
+    "type": "ATTACK",
+    "crafting_level": 2,
+    "level": 2,
+    "combat": {
+      "damage": 264,
+      "fire_rate": 1.0,
+      "range": 4,
+      "shot_cost": 0.367,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "PURE",
+        "params": {
+          "rotation_speed": 1.5,
+          "arc_angle": 120,
+          "range_multiplier": 1.3,
+          "incinerate_chance_num": 1,
+          "incinerate_chance_den": 720
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 220,
+        "b": 80,
+        "a": 255
+      },
       "radius_factor": 0.35,
       "stroke_width": 2.0
     }
@@ -214,7 +2349,7 @@
       "damage": 5,
       "fire_rate": 1.125,
       "range": 4,
-      "shot_cost": 0.12,
+      "shot_cost": 0.108,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",
@@ -226,7 +2361,75 @@
       }
     },
     "visuals": {
-      "color": {"r": 152, "g": 251, "b": 152, "a": 255},
+      "color": {
+        "r": 152,
+        "g": 251,
+        "b": 152,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_GREY",
+    "name": "Грей",
+    "type": "ATTACK",
+    "crafting_level": 2,
+    "level": 2,
+    "combat": {
+      "damage": 6,
+      "fire_rate": 1.3,
+      "range": 4.5,
+      "shot_cost": 0.158,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "effect": "JADE_POISON",
+          "visual_type": "ELLIPSE",
+          "poison_damage_multiplier": 1.3
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 128,
+        "g": 128,
+        "b": 128,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_PINK",
+    "name": "Пинк",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 2,
+    "combat": {
+      "damage": 890,
+      "fire_rate": 1.1,
+      "range": 5,
+      "shot_cost": 0.18,
+      "attack": {
+        "type": "LASER",
+        "damage_type": "PURE",
+        "params": {
+          "crit_chance": 0.35,
+          "crit_mult": 2.6
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 105,
+        "b": 180,
+        "a": 255
+      },
       "radius_factor": 0.35,
       "stroke_width": 2.0
     }
@@ -237,20 +2440,65 @@
     "type": "ATTACK",
     "crafting_level": 2,
     "combat": {
-      "damage": 1040,
+      "damage": 1144,
       "fire_rate": 1.08,
       "range": 4,
-      "shot_cost": 0.18,
+      "shot_cost": 0.158,
       "attack": {
         "type": "LASER",
         "damage_type": "PHYSICAL",
         "params": {
+          "slow_multiplier": 0.4,
+          "slow_duration": 2.0
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 220,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_HUGE",
+    "name": "Хьюдж",
+    "type": "ATTACK",
+    "crafting_level": 3,
+    "level": 3,
+    "combat": {
+      "damage": 3900,
+      "fire_rate": 1.3,
+      "range": 5,
+      "shot_cost": 0.25,
+      "attack": {
+        "type": "LASER",
+        "damage_type": "SPLIT",
+        "params": {
+          "damage_split": { "PHYSICAL": 0.5, "PURE": 0.5 },
+          "crit_chance": 0.1,
+          "crit_mult": 9.0,
+          "crit_splash_radius_hex": 0.7,
+          "crit_splash_factor": 0.3,
           "slow_multiplier": 0.6,
           "slow_duration": 2.0
         }
       }
     },
-    "visuals": {"color": {"r": 220, "g": 220, "b": 255, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 200,
+        "b": 80,
+        "a": 255
+      },
+      "radius_factor": 0.4,
+      "stroke_width": 2.0
+    }
   },
   {
     "id": "TOWER_VIVID_MALACHITE",
@@ -258,19 +2506,68 @@
     "type": "ATTACK",
     "crafting_level": 2,
     "combat": {
-      "damage": 267,
+      "damage": 294,
       "fire_rate": 1.1,
       "range": 4,
-      "shot_cost": 0.32,
+      "shot_cost": 0.282,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",
         "params": {
-          "impact_burst": {"radius": 3, "target_count": 7, "damage_factor": 0.4, "direct_hit_multiplier": 2.0}
+          "impact_burst": {
+            "radius": 3,
+            "target_count": 7,
+            "damage_factor": 0.4,
+            "direct_hit_multiplier": 2.0
+          }
         }
       }
     },
-    "visuals": {"color": {"r": 30, "g": 180, "b": 120, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "visuals": {
+      "color": {
+        "r": 30,
+        "g": 180,
+        "b": 120,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_ANTIQUE",
+    "name": "Антик",
+    "type": "ATTACK",
+    "crafting_level": 2,
+    "level": 1,
+    "combat": {
+      "damage": 250,
+      "fire_rate": 0.5,
+      "range": 4,
+      "shot_cost": 0.25,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "mag_armor_debuff_per_hit": 0.2,
+          "mag_armor_debuff_duration": 7.0,
+          "chain_lightning_chance_per_tick": 0.02,
+          "chain_lightning_damage": 4000,
+          "chain_lightning_count": 7,
+          "chain_lightning_range_px": 450
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 139,
+        "g": 90,
+        "b": 43,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   },
   {
     "id": "TOWER_RUBY",
@@ -278,13 +2575,29 @@
     "type": "ATTACK",
     "crafting_level": 2,
     "combat": {
-      "damage": 216,
+      "damage": 238,
       "fire_rate": 0.5,
       "range": 2,
-      "shot_cost": 0.28,
-      "attack": {"type": "NONE", "damage_type": "MAGICAL", "params": {"mag_armor_debuff_per_hit": 0.2, "mag_armor_debuff_duration": 7.0}}
+      "shot_cost": 0.295,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "mag_armor_debuff_per_hit": 0.2,
+          "mag_armor_debuff_duration": 7.0
+        }
+      }
     },
-    "visuals": {"color": {"r": 220, "g": 40, "b": 60, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 40,
+        "b": 60,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   },
   {
     "id": "TOWER_GOLD",
@@ -293,10 +2606,10 @@
     "crafting_level": 1,
     "level": 1,
     "combat": {
-      "damage": 17,
+      "damage": 31,
       "fire_rate": 1.1,
       "range": 3,
-      "shot_cost": 0.1,
+      "shot_cost": 0.09,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PURE",
@@ -307,7 +2620,52 @@
         }
       }
     },
-    "visuals": {"color": {"r": 255, "g": 215, "b": 0, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 215,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_EGYPT",
+    "name": "Египт",
+    "type": "ATTACK",
+    "crafting_level": 2,
+    "level": 1,
+    "combat": {
+      "damage": 33,
+      "fire_rate": 1.2,
+      "range": 4,
+      "shot_cost": 0.158,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "armor_debuff_phys": 25,
+          "armor_debuff_mag": 25,
+          "armor_debuff_duration": 5.0,
+          "slow_factor": 0.08,
+          "slow_duration": 2.0,
+          "ore_drop_chance": 0.20,
+          "ore_drop_amount": 5.0
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 200,
+        "b": 50,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   },
   {
     "id": "TOWER_LIBRA",
@@ -316,17 +2674,63 @@
     "crafting_level": 1,
     "level": 1,
     "combat": {
-      "damage": 4,
+      "damage": 4.4,
       "fire_rate": 0.9,
       "range": 3,
-      "shot_cost": 0.08,
+      "shot_cost": 0.065,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "MAGICAL",
-        "params": {"split_count": 3, "poison_dps": 15, "poison_duration": 4.0}
+        "params": {
+          "split_count": 3,
+          "poison_dps": 18,
+          "poison_duration": 4.0
+        }
       }
     },
-    "visuals": {"color": {"r": 180, "g": 255, "b": 100, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "visuals": {
+      "color": {
+        "r": 180,
+        "g": 255,
+        "b": 100,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_BLOODSTONE",
+    "name": "Бладстоун",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 1,
+    "combat": {
+      "damage": 100,
+      "fire_rate": 1.08,
+      "range": 5,
+      "shot_cost": 0.2,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "chain_lightning_chance": 0.17,
+          "chain_lightning_damage": 950,
+          "chain_lightning_count": 5,
+          "chain_lightning_range_px": 450
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 180,
+        "g": 60,
+        "b": 80,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   },
   {
     "id": "TOWER_GRUSS",
@@ -335,26 +2739,187 @@
     "crafting_level": 1,
     "level": 1,
     "combat": {
-      "damage": 8,
+      "damage": 11,
       "fire_rate": 1.4,
       "range": 3,
-      "shot_cost": 0.09,
+      "shot_cost": 0.0405,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "SLOW",
-        "params": {"split_count": 3, "slow_factor": 0.5, "slow_duration": 3.0}
+        "params": {
+          "split_count": 3,
+          "slow_factor": 0.5,
+          "slow_duration": 3.0
+        }
       }
     },
-    "visuals": {"color": {"r": 100, "g": 200, "b": 255, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "visuals": {
+      "color": {
+        "r": 100,
+        "g": 200,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_AURIGA",
+    "name": "Аурига",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 1,
+    "combat": {
+      "damage": 24,
+      "fire_rate": 1.0,
+      "range": 4,
+      "shot_cost": 0.0287,
+      "attack": {
+        "type": "LINE_BEAM",
+        "damage_type": "PURE",
+        "params": {
+          "line_length": 4
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 240,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.4,
+      "stroke_width": 2.0
+    }
   },
   {
     "id": "TOWER_QUARTZ",
     "name": "Кварц",
     "type": "ATTACK",
     "crafting_level": 1,
-    "combat": {"damage": 0, "fire_rate": 1.0, "range": 1, "shot_cost": 0.05, "attack": {"type": "PROJECTILE", "damage_type": "INTERNAL"}},
-    "aura": {"radius": 3, "flying_only": true, "slow_factor": 0.6},
-    "visuals": {"color": {"r": 200, "g": 220, "b": 255, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.045,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 3,
+      "flying_only": true,
+      "slow_factor": 0.6
+    },
+    "visuals": {
+      "color": {
+        "r": 200,
+        "g": 220,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_CHARMING",
+    "name": "Чарминг",
+    "type": "ATTACK",
+    "crafting_level": 2,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.055,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 4,
+      "flying_only": true,
+      "slow_factor": 0.7,
+      "flying_damage_taken_bonus": 0.2
+    },
+    "visuals": {
+      "color": {
+        "r": 220,
+        "g": 180,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_LAKICHINZ",
+    "name": "Лакичинз",
+    "type": "ATTACK",
+    "crafting_level": 2,
+    "combat": {
+      "damage": 90,
+      "fire_rate": 1.4,
+      "range": 3,
+      "shot_cost": 0.1,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "lucky_heal_chance": 0.00625,
+          "lucky_heal_amount": 1
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 255,
+        "g": 215,
+        "b": 0,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_PARAIBA",
+    "name": "Парайба",
+    "type": "ATTACK",
+    "crafting_level": 2,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.053,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 4,
+      "slow_factor": 0.65,
+      "all_enemies_slow": true,
+      "exit_slow_factor": 0.6,
+      "exit_slow_duration": 2.0,
+      "damage_taken_bonus": 0.15
+    },
+    "visuals": {
+      "color": {
+        "r": 80,
+        "g": 220,
+        "b": 200,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   },
   {
     "id": "TOWER_EMERALD",
@@ -363,10 +2928,10 @@
     "crafting_level": 1,
     "level": 2,
     "combat": {
-      "damage": 22,
+      "damage": 24,
       "fire_rate": 1.25,
       "range": 3,
-      "shot_cost": 0.058,
+      "shot_cost": 0.052,
       "attack": {
         "type": "PROJECTILE",
         "damage_type": "PHYSICAL",
@@ -376,6 +2941,190 @@
         }
       }
     },
-    "visuals": {"color": {"r": 80, "g": 200, "b": 120, "a": 255}, "radius_factor": 0.35, "stroke_width": 2.0}
+    "visuals": {
+      "color": {
+        "r": 80,
+        "g": 200,
+        "b": 120,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_TOURNAMENT",
+    "name": "Турнамент",
+    "type": "ATTACK",
+    "crafting_level": 3,
+    "level": 1,
+    "combat": {
+      "damage": 50,
+      "fire_rate": 1.4,
+      "range": 4,
+      "shot_cost": 0.02,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PURE",
+        "params": {
+          "bash_chance": 0.4,
+          "bash_duration": 3.5,
+          "scream_chance": 0.008333,
+          "scream_zone_radius_hex": 4.0,
+          "scream_zone_duration": 7.5,
+          "scream_required_time_in_zone": 2.0,
+          "scream_stun_duration": 8.0,
+          "scream_damage_bonus": 0.5,
+          "scream_debuff_duration": 6.0
+        }
+      }
+    },
+    "aura": {
+      "radius": 4,
+      "slow_factor": 0.7,
+      "all_enemies_slow": true,
+      "exit_slow_factor": 0.6,
+      "exit_slow_duration": 2.0,
+      "damage_taken_bonus": 0.3,
+      "ore_cost": 0.04
+    },
+    "visuals": {
+      "color": {
+        "r": 180,
+        "g": 100,
+        "b": 220,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_DIPSEA",
+    "name": "Дипсеа",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 5,
+    "combat": {
+      "damage": 0,
+      "fire_rate": 1.0,
+      "range": 1,
+      "shot_cost": 0.064,
+      "attack": {
+        "type": "NONE",
+        "damage_type": "INTERNAL"
+      }
+    },
+    "aura": {
+      "radius": 3,
+      "debuff_immunity": true
+    },
+    "visuals": {
+      "color": {
+        "r": 100,
+        "g": 180,
+        "b": 220,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_238",
+    "name": "238",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 1,
+    "combat": {
+      "damage": 327,
+      "fire_rate": 1.5,
+      "range": 5,
+      "shot_cost": 0.12,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 9,
+          "projectile_speed_multiplier": 1.4
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 200,
+        "g": 100,
+        "b": 255,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_U235",
+    "name": "U235",
+    "type": "ATTACK",
+    "crafting_level": 3,
+    "level": 1,
+    "combat": {
+      "damage": 510,
+      "fire_rate": 1.6,
+      "range": 6,
+      "shot_cost": 0.1,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "MAGICAL",
+        "params": {
+          "split_count": 11,
+          "projectile_speed_multiplier": 1.5,
+          "impact_burst": {
+            "radius": 4,
+            "target_count": 2,
+            "fixed_damage": 380,
+            "fragment_speed_multiplier": 1.6
+          },
+          "repeat_hit_bonus_damage": 6,
+          "repeat_hit_stack_duration": 7.0
+        }
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 180,
+        "g": 220,
+        "b": 100,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
+  },
+  {
+    "id": "TOWER_MIMIC",
+    "name": "Мимик",
+    "type": "ATTACK",
+    "crafting_level": 1,
+    "level": 1,
+    "combat": {
+      "damage": 10,
+      "fire_rate": 1.0,
+      "range": 3,
+      "shot_cost": 0.05,
+      "attack": {
+        "type": "PROJECTILE",
+        "damage_type": "PHYSICAL"
+      }
+    },
+    "visuals": {
+      "color": {
+        "r": 160,
+        "g": 80,
+        "b": 200,
+        "a": 255
+      },
+      "radius_factor": 0.35,
+      "stroke_width": 2.0
+    }
   }
 ]

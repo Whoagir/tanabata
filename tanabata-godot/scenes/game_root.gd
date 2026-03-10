@@ -28,7 +28,11 @@ var aura_system
 var crafting_system
 var volcano_system
 var beacon_system
+var auriga_system
+var battery_system
 var line_drag_handler
+var boss_reward_overlay: Control = null
+var game_over_overlay: Node = null  # Popup (меню конца игры)
 var ore_renderer: Node2D
 var energy_line_renderer: Node2D
 var wall_renderer: Node2D
@@ -100,8 +104,24 @@ func _ready():
 	var power_finder = func(tid): return GameManager.energy_network._find_power_sources(tid) if GameManager.energy_network else []
 	volcano_system = VolcanoSystemScript.new(GameManager.ecs, power_finder)
 	beacon_system = BeaconSystemScript.new(GameManager.ecs, power_finder)
+	var AurigaSystemScript = preload("res://core/systems/auriga_system.gd")
+	auriga_system = AurigaSystemScript.new(GameManager.ecs, GameManager.hex_map, power_finder)
+	var BatterySystemScript = preload("res://core/systems/battery_system.gd")
+	battery_system = BatterySystemScript.new(GameManager.ecs, GameManager.energy_network)
 	var LineDragHandlerScript = preload("res://core/systems/line_drag_handler.gd")
 	line_drag_handler = LineDragHandlerScript.new(GameManager.ecs, GameManager.hex_map, GameManager.energy_network)
+	
+	boss_reward_overlay = preload("res://godot_adapter/ui/boss_reward_overlay.gd").new()
+	var boss_layer = CanvasLayer.new()
+	boss_layer.layer = 15
+	add_child(boss_layer)
+	boss_layer.add_child(boss_reward_overlay)
+	
+	game_over_overlay = preload("res://godot_adapter/ui/game_over_overlay.gd").new()
+	var game_over_layer = CanvasLayer.new()
+	game_over_layer.layer = 16
+	add_child(game_over_layer)
+	game_over_layer.add_child(game_over_overlay)
 	
 	# Регистрируем в GameManager
 	GameManager.input_system = input_system
@@ -157,14 +177,28 @@ func _ready():
 	var tower_preview = preload("res://godot_adapter/rendering/tower_preview.gd").new()
 	hex_layer.add_child(tower_preview)
 	
-	# Добавляем HUD
-	var hud = preload("res://godot_adapter/ui/game_hud.gd").new()
+	# Добавляем HUD (load вместо preload — при ошибке парсера в game_hud.gd проект хотя бы открывается)
+	var hud_script = load("res://godot_adapter/ui/game_hud.gd") as GDScript
+	if hud_script == null:
+		push_error("Failed to load game_hud.gd — check Output for parse error details.")
+		return
+	var hud = hud_script.new()
+	hud.layer = 0
 	add_child(hud)
-	
-	# Добавляем InfoPanel (плашка информации о башне/враге)
-	var info_panel = preload("res://godot_adapter/ui/info_panel.gd").new()
+
+	# UILayer выше HUD: инфопанель и кнопки паузы/скорости поверх списка бонусов/проклятий
+	ui_layer.layer = 5
+
+	# Добавляем InfoPanel (плашка информации о башне/враге; верстка в info_panel.tscn)
+	var info_panel = preload("res://godot_adapter/ui/info_panel.tscn").instantiate()
 	ui_layer.add_child(info_panel)
 	GameManager.info_panel = info_panel
+
+	# Кнопки паузы и ускорения поверх InfoPanel (репарентим в ui_layer)
+	hud.remove_child(hud.pause_button)
+	ui_layer.add_child(hud.pause_button)
+	hud.remove_child(hud.speed_button)
+	ui_layer.add_child(hud.speed_button)
 
 	# Добавляем RecipeBook на отдельном CanvasLayer поверх всего (layer=10)
 	var recipe_book_layer = CanvasLayer.new()
@@ -299,6 +333,20 @@ func _get_hex_outline(size: float) -> PackedVector2Array:
 # ============================================================================
 
 func _process(delta):
+	# Конец игры: показать оверлей и не обновлять игровые системы
+	var game_over = GameManager.ecs.game_state.get("game_over", false)
+	if game_over and game_over_overlay:
+		if not game_over_overlay.visible:
+			GameManager.log_snapshot_on_game_over()
+			game_over_overlay.show_end_screen()
+		_update_camera_controls(delta)
+		queue_redraw()
+		return
+	
+	# Карты награды за босса: показать оверлей при pending_boss_cards
+	if GameManager.pending_boss_cards and boss_reward_overlay and not boss_reward_overlay.visible:
+		boss_reward_overlay.show_cards()
+	
 	# Обновляем камеру
 	_update_camera_controls(delta)
 	
@@ -328,7 +376,10 @@ func _process(delta):
 		# Применяем скорость времени (как в Go: delta * SpeedMultiplier)
 		var time_speed = GameManager.ecs.game_state.get("time_speed", 1.0)
 		var scaled_delta = delta * time_speed
-		
+		# Игровое время волны (для аналитики: логи одинаковы при любом time_speed)
+		if GameManager.ecs.game_state.get("phase", -1) == GameTypes.GamePhase.WAVE_STATE:
+			GameManager.ecs.game_state["wave_game_time"] = GameManager.ecs.game_state.get("wave_game_time", 0.0) + scaled_delta
+
 		# Обновляем системы
 		input_system.update(delta)  # Обрабатываем очередь команд
 		wave_system.update(scaled_delta)
@@ -340,7 +391,16 @@ func _process(delta):
 		combat_system.update(scaled_delta)
 		volcano_system.update(scaled_delta)
 		beacon_system.update(scaled_delta)
+		auriga_system.update(scaled_delta)
+		battery_system.update(scaled_delta)
 		projectile_system.update(scaled_delta)
+		# Мерцание сети при малом запасе руды (руда ещё восстанавливается)
+		if GameManager.ecs.game_state.get("phase", -1) == GameTypes.GamePhase.WAVE_STATE:
+			var totals = GameManager.get_ore_network_totals()
+			var ore_cur = totals.get("total_current", 0.0)
+			GameManager.ecs.game_state["ore_flicker"] = ore_cur > 0.0 and ore_cur < Config.ORE_FLICKER_THRESHOLD
+		else:
+			GameManager.ecs.game_state["ore_flicker"] = false
 	
 	# Дебаг-панель: только обновить подпись (0 = не прыгать, дальше по счётчику)
 	if debug_mode and debug_wave_panel and debug_wave_panel.visible and debug_wave_label:
@@ -390,8 +450,10 @@ func _input(event):
 			KEY_I:
 				debug_mode = !debug_mode
 				_toggle_debug_labels(debug_mode)
-				# Также включаем visual debug для FPS счетчика
 				Config.visual_debug_mode = debug_mode
+				# Режим разработчика: кликабельный индикатор фазы, HP ниже нуля не завершает игру
+				GameManager.ecs.game_state["developer_mode"] = debug_mode
+				Config.god_mode = debug_mode
 				print("[Debug] Debug mode: %s, visual_debug_mode: %s" % [debug_mode, Config.visual_debug_mode])
 				queue_redraw()
 			KEY_1:
@@ -404,6 +466,14 @@ func _input(event):
 			KEY_3:
 				GameManager.ecs.game_state["debug_tower_type"] = "TOWER_WALL"
 				print("[Debug] TOWER_WALL")
+			KEY_6:
+				# Режим тестовой башни: 6 вкл, повторное 6 выкл (список Config.DEBUG_TEST_TOWER_IDS)
+				if GameManager.ecs.game_state.get("debug_tower_type") == "DEBUG_TEST":
+					GameManager.ecs.game_state.erase("debug_tower_type")
+					print("[Debug] Test tower mode OFF")
+				else:
+					GameManager.ecs.game_state["debug_tower_type"] = "DEBUG_TEST"
+					print("[Debug] Test tower mode ON (list: %s)" % [str(Config.DEBUG_TEST_TOWER_IDS)])
 			KEY_0:
 				# Выключить дебаг режим
 				GameManager.ecs.game_state.erase("debug_tower_type")
@@ -863,7 +933,6 @@ func _debug_go_to_build():
 func _draw():
 	# FPS перенесён в game_hud (над кнопками паузы и ускорения), здесь только дебаг-инфо
 	var y_offset = 30
-	var screen_width = get_viewport_rect().size.x
 	const FPS_X = 320
 	
 	if debug_mode:

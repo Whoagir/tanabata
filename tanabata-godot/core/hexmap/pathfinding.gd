@@ -184,6 +184,32 @@ static func find_path_through_checkpoints(start: Hex, checkpoints: Array[Hex], g
 	
 	return full_path
 
+# То же, что find_path_through_checkpoints, плюс длины сегментов: [в-1, 1-2, 2-3, 3-4, 4-5, 5-6, 6-в].
+# Возвращает { "path": Array[Hex], "segment_lengths": Array[int] } или { "path": [], "segment_lengths": [] } при неудаче.
+static func find_path_through_checkpoints_with_segments(start: Hex, checkpoints: Array, goal: Hex, hex_map: HexMap, ignore_passable: bool = false) -> Dictionary:
+	var full_path: Array[Hex] = []
+	var segment_lengths: Array = []
+	var current = start
+	
+	for checkpoint in checkpoints:
+		var segment = find_path(current, checkpoint, hex_map, ignore_passable)
+		if segment.size() == 0:
+			return {"path": [], "segment_lengths": []}
+		var seg_len = segment.size() - 1
+		segment_lengths.append(seg_len)
+		for i in range(1, segment.size()):
+			full_path.append(segment[i])
+		current = checkpoint
+	
+	var final_segment = find_path(current, goal, hex_map, ignore_passable)
+	if final_segment.size() == 0:
+		return {"path": [], "segment_lengths": []}
+	segment_lengths.append(final_segment.size() - 1)
+	for i in range(1, final_segment.size()):
+		full_path.append(final_segment[i])
+	
+	return {"path": full_path, "segment_lengths": segment_lengths}
+
 # ============================================================================
 # Min-heap (хранит [f, q, r] вместо [f, Hex] — без аллокации Hex)
 # ============================================================================

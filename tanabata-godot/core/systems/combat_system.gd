@@ -55,6 +55,8 @@ func _apply_untouchable_to_tower(tower_id: int, target_enemy_id: int) -> void:
 		return
 	if not ecs.combat.has(tower_id):
 		return
+	if ecs.aura_effects.get(tower_id, {}).get("debuff_immunity", false):
+		return
 	var attack_type = str(ecs.combat[tower_id].get("attack_type_data", {}).get("type", "PROJECTILE")).to_upper()
 	if attack_type == "NONE" or attack_type == "AREA_OF_EFFECT":
 		return
@@ -86,7 +88,8 @@ func _apply_disarm_from_enemies() -> void:
 			if tower_hex == null:
 				continue
 			if enemy_hex.distance_to(tower_hex) <= range_hex:
-				ecs.tower_disarm[tid] = { "timer": duration }
+				if not ecs.aura_effects.get(tid, {}).get("debuff_immunity", false):
+					ecs.tower_disarm[tid] = { "timer": duration }
 
 func update(delta: float):
 	var current_phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
@@ -120,6 +123,9 @@ func update(delta: float):
 				var def_id = t.get("def_id", "?")
 				lines.append("%d(%s active=%s)" % [tid, def_id, active])
 			print("[CombatDebug] Wave %d started, enemies=%d. Combat towers: %s" % [current_wave, ecs.enemies.size(), ", ".join(lines)])
+	var player_level = ecs.get_player_level()
+	var aura_ore_factor = Config.get_aura_ore_cost_factor(player_level)
+	var aura_speed_factor = Config.get_aura_speed_ore_cost_factor(player_level)
 	for tower_id in ecs.combat.keys():
 		var tower = ecs.towers.get(tower_id)
 		if not tower:
@@ -128,6 +134,8 @@ func update(delta: float):
 		if ecs.tower_disarm.get(tower_id, {}).get("timer", 0) > 0:
 			continue
 		
+		if tower.get("is_manually_disabled", false):
+			continue
 		var is_active = tower.get("is_active", false)
 		if not is_active:
 			if Config.COMBAT_DEBUG:
@@ -142,7 +150,7 @@ func update(delta: float):
 		# Обновляем cooldown (с учетом aura и антачибла)
 		var cooldown = combat_data.get("fire_cooldown", 0.0)
 		if cooldown > 0:
-			var cooldown_reduction = delta
+			var cooldown_reduction = delta * GameManager.get_card_attack_speed_mult()
 			if ecs.aura_effects.has(tower_id):
 				var aura_mult = ecs.aura_effects[tower_id].get("speed_multiplier", 1.0)
 				cooldown_reduction *= aura_mult
@@ -164,17 +172,24 @@ func update(delta: float):
 			continue
 		
 		var total_reserve = 0.0
-		for source_id in power_sources:
-			if ecs.ores.has(source_id):
-				total_reserve += ecs.ores[source_id].get("current_reserve", 0.0)
+		if GameManager.energy_network:
+			for s in power_sources:
+				total_reserve += GameManager.energy_network.get_power_source_reserve(s)
 		
 		var shot_cost = combat_data.get("shot_cost", 0.0)
-		# Ауры тратят меньше руды (Config.AURA_ORE_COST_FACTOR); под аурой скорости — ещё AURA_SPEED_ORE_COST_FACTOR
+		# Ауры: множитель руды от уровня игрока (кэш aura_ore_factor/aura_speed_factor раз в кадр)
 		var effective_cost = shot_cost
 		if ecs.auras.has(tower_id):
-			effective_cost = shot_cost * Config.AURA_ORE_COST_FACTOR
+			effective_cost = shot_cost * aura_ore_factor
 			if ecs.auras[tower_id].get("speed_multiplier", 1.0) > 1.0:
-				effective_cost *= Config.AURA_SPEED_ORE_COST_FACTOR
+				effective_cost *= aura_speed_factor
+			# Турнамент: дополнительный расход за ауру (ore_cost) за каждый цикл выстрела
+			var aura_ore = ecs.auras[tower_id].get("ore_cost", -1.0)
+			if aura_ore >= 0:
+				var extra = aura_ore
+				if tower.get("crafting_level", 0) >= 1:
+					extra *= Config.ORE_COST_TIER2_MULTIPLIER
+				effective_cost += extra
 		else:
 			effective_cost = shot_cost
 		# Башни второго яруса крафта (crafting_level >= 1): расход руды на 70% больше
@@ -185,6 +200,9 @@ func update(delta: float):
 			var speed_mult = ecs.aura_effects[tower_id].get("speed_multiplier", 1.0)
 			if speed_mult > 1.0:
 				effective_cost = effective_cost / speed_mult
+		var extra_ore = GameManager.get_curse_extra_ore_per_shot()
+		var split_extra = GameManager.get_curse_split_extra_ore() if combat_data.get("split_count", 1) > 1 else 0.0
+		effective_cost += extra_ore + split_extra
 		# Небольшая толерантность к float, чтобы сплит-башни (PA и др. с большим shot_cost) не молчали
 		if total_reserve < effective_cost - 1e-5:
 			if Config.COMBAT_DEBUG:
@@ -199,10 +217,49 @@ func update(delta: float):
 		if typeof(attack_type_data) != TYPE_DICTIONARY:
 			attack_type_data = {}
 		var attack_method = str(attack_type_data.get("type", "PROJECTILE")).to_upper()
-		if attack_method == "NONE" or attack_method == "AREA_OF_EFFECT":
+		if attack_method == "NONE":
+			# Дипсеа и подобные: только аура, пассивный расход руды (shot_cost * aura_ore, без tier2)
+			if ecs.auras.has(tower_id) and ecs.auras[tower_id].get("debuff_immunity", false):
+				var drain_cost = shot_cost * aura_ore_factor
+				var next_cd = combat_data.get("fire_cooldown", 0.0) - delta
+				if next_cd <= 0 and total_reserve >= drain_cost - 1e-5:
+					_consume_energy(power_sources, drain_cost, tower_id)
+					next_cd = 1.0 / combat_data.get("fire_rate", 1.0)
+				combat_data["fire_cooldown"] = next_cd
+				continue
+			# Парайба: аура замедления всех, расход руды как у DE4 (или aura.ore_cost для Турнамента)
+			if ecs.auras.has(tower_id) and ecs.auras[tower_id].get("all_enemies_slow", false):
+				var aura_ore = ecs.auras[tower_id].get("ore_cost", -1.0)
+				var drain_cost = shot_cost * aura_ore_factor
+				if aura_ore >= 0:
+					drain_cost = aura_ore
+				var next_cd = combat_data.get("fire_cooldown", 0.0) - delta
+				if next_cd <= 0 and total_reserve >= drain_cost - 1e-5:
+					_consume_energy(power_sources, drain_cost, tower_id)
+					next_cd = 1.0 / combat_data.get("fire_rate", 1.0)
+				combat_data["fire_cooldown"] = next_cd
+				continue
+			# Чарминг и подобные: flying_only аура с расходом (NONE, не стреляет)
+			if ecs.auras.has(tower_id) and ecs.auras[tower_id].get("flying_only", false):
+				var drain_cost = shot_cost * aura_ore_factor
+				var next_cd = combat_data.get("fire_cooldown", 0.0) - delta
+				if next_cd <= 0 and total_reserve >= drain_cost - 1e-5:
+					_consume_energy(power_sources, drain_cost, tower_id)
+					next_cd = 1.0 / combat_data.get("fire_rate", 1.0)
+				combat_data["fire_cooldown"] = next_cd
 			continue
-		# Кварц и подобные: только аура (flying_only), без атаки
+		if attack_method == "AREA_OF_EFFECT":
+			continue
+		if attack_method == "LINE_BEAM":
+			continue
+		# Кварц и подобные: только аура (flying_only), без атаки — обязательный расход руды как у ауры
 		if attack_method == "PROJECTILE" and combat_data.get("damage", 0) == 0 and ecs.auras.has(tower_id) and ecs.auras[tower_id].get("flying_only", false):
+			var drain_cost = shot_cost * aura_ore_factor
+			var next_cd = combat_data.get("fire_cooldown", 0.0) - delta
+			if next_cd <= 0 and total_reserve >= drain_cost - 1e-5:
+				_consume_energy(power_sources, drain_cost, tower_id)
+				next_cd = 1.0 / combat_data.get("fire_rate", 1.0)
+			combat_data["fire_cooldown"] = next_cd
 			continue
 
 		# Ищем цели
@@ -223,7 +280,7 @@ func update(delta: float):
 		
 		if attack_performed:
 			# Списываем энергию
-			_consume_energy(power_sources, effective_cost)
+			_consume_energy(power_sources, effective_cost, tower_id)
 			# Устанавливаем cooldown
 			var fire_rate = combat_data.get("fire_rate", 1.0)
 			combat_data["fire_cooldown"] = 1.0 / fire_rate
@@ -257,6 +314,8 @@ func _find_targets(tower: Dictionary, combat_data: Dictionary) -> Array:
 	
 	var range_radius = combat_data.get("range", 3)
 	var split_count = combat_data.get("split_count", 1)
+	if GameManager.has_curse_split() and split_count > 1:
+		split_count += 1
 	
 	# Агрро: если танк с активным агрро в радиусе 4 гекса от вышки — бьём только его
 	var aggro_enemy_id = -1
@@ -325,22 +384,30 @@ func _create_projectiles(tower_id: int, tower: Dictionary, combat_data: Dictiona
 	
 	var tower_pos = tower_hex.to_pixel(Config.HEX_SIZE)
 	
-	# Рассчитываем урон с бустом от руды
-	var chosen_source = power_sources[randi() % power_sources.size()]
-	var ore = ecs.ores.get(chosen_source)
-	var boost_multiplier = _calculate_ore_boost(ore.get("current_reserve", 0.0))
-	
+	# Множитель урона от руды в сети: много руды в сети — обычный урон (1.0), мало руды — повышенный (до 1.5)
 	var network_mult = 1.0
 	if GameManager.energy_network:
 		network_mult = GameManager.energy_network.get_network_ore_damage_mult(tower_id)
 	var mvp_mult = GameManager.get_mvp_damage_mult(tower_id)
-	var base_damage = combat_data.get("damage", 10)
-	var final_damage = int(base_damage * boost_multiplier * network_mult * mvp_mult)
-	var damage_bonus = ecs.aura_effects.get(tower_id, {}).get("damage_bonus", 0)
+	var resistance_mult = GameManager.get_resistance_mult(tower_id)
+	var early_mult = GameManager.get_early_craft_curse_damage_multiplier(tower_id)
+	var base_damage = GameManager.get_tower_base_damage(tower_id)
+	var final_damage = int(base_damage * network_mult * mvp_mult * resistance_mult * early_mult)
+	var aura_eff = ecs.aura_effects.get(tower_id, {})
+	var damage_bonus = aura_eff.get("damage_bonus", 0)
+	var damage_bonus_percent = aura_eff.get("damage_bonus_percent", 0.0)
+	if damage_bonus_percent > 0:
+		final_damage = int(final_damage * (1.0 + damage_bonus_percent))
 	final_damage += damage_bonus
-	
+	final_damage += GameManager.get_card_damage_bonus_global()
 	var attack_type = combat_data.get("attack_type", "physical")
-	var projectile_color = _get_projectile_color(attack_type)
+	if attack_type.to_upper() == "PHYSICAL":
+		final_damage += GameManager.get_card_phys_damage_bonus()
+	elif attack_type.to_upper() == "MAGICAL":
+		final_damage += GameManager.get_card_mag_damage_bonus()
+	
+	var attack_type_upper = attack_type.to_upper()
+	var projectile_color = _get_projectile_color(attack_type_upper)
 	
 	# Создаем снаряды для каждой цели
 	for target_id in targets:
@@ -358,10 +425,12 @@ func _create_projectiles(tower_id: int, tower: Dictionary, combat_data: Dictiona
 		
 		
 		# Запоминаем текущий slow_factor для умной донаводки
-		var current_slow_factor = 1.0
-		if ecs.slow_effects.has(target_id):
-			current_slow_factor = ecs.slow_effects[target_id].get("slow_factor", 1.0)
+		var current_slow_factor = ecs.get_combined_slow_factor(target_id)
 		
+		# Грей: по соло-цели урон x3 (как у вулкана)
+		var damage_this = final_damage
+		if tower.get("def_id", "") == "TOWER_GREY" and targets.size() == 1:
+			damage_this = int(final_damage * 3)
 		# Impact burst (Malachite и т.п.) — данные для взрыва при попадании
 		var proj_data = {
 			"source_id": tower_id,
@@ -369,18 +438,25 @@ func _create_projectiles(tower_id: int, tower: Dictionary, combat_data: Dictiona
 			"target_pos": target_pos_predict,
 			"direction": direction,
 			"last_slow_factor": current_slow_factor,
-			"damage": final_damage,
-			"speed": Config.PROJECTILE_SPEED,
-			"attack_type": attack_type
+		"damage": damage_this,
+		"speed": Config.PROJECTILE_SPEED,
+		"attack_type": attack_type_upper
 		}
 		var params = combat_data.get("attack_type_data", {}).get("params", {})
 		if typeof(params) == TYPE_DICTIONARY:
+			var speed_mult = params.get("projectile_speed_multiplier", 1.0)
+			if speed_mult != 1.0:
+				proj_data["speed"] = Config.PROJECTILE_SPEED * speed_mult
 			var ib = params.get("impact_burst", {})
 			if not ib.is_empty():
 				proj_data["impact_burst_radius"] = ib.get("radius", 1.5)
 				proj_data["impact_burst_target_count"] = ib.get("target_count", 4)
 				proj_data["impact_burst_damage_factor"] = ib.get("damage_factor", 0.4)
 				proj_data["direct_damage_multiplier"] = ib.get("direct_hit_multiplier", 1.0)
+				if ib.get("fixed_damage", 0) > 0:
+					proj_data["impact_burst_fixed_damage"] = int(ib["fixed_damage"])
+				var frag_speed = ib.get("fragment_speed_multiplier", 0.8)
+				proj_data["impact_burst_fragment_speed_multiplier"] = frag_speed
 			if params.get("effect", "") == "JADE_POISON":
 				proj_data["effect"] = "JADE_POISON"
 		# Пишем в тот же ECS, что читает projectile_system (явно GameManager.ecs)
@@ -393,20 +469,6 @@ func _create_projectiles(tower_id: int, tower: Dictionary, combat_data: Dictiona
 		}
 	
 	return true
-
-func _calculate_ore_boost(current_reserve: float) -> float:
-	# Логика из Go: чем меньше руды, тем больше урон
-	var low_t = 10.0
-	var high_t = 100.0
-	var max_mult = 2.0
-	var min_mult = 0.8
-	
-	if current_reserve <= low_t:
-		return max_mult
-	if current_reserve >= high_t:
-		return min_mult
-	
-	return (current_reserve - low_t) * (min_mult - max_mult) / (high_t - low_t) + max_mult
 
 func _get_projectile_color(attack_type: String) -> Color:
 	match attack_type.to_upper():
@@ -427,33 +489,81 @@ func _create_laser_attack(tower_id: int, tower: Dictionary, combat_data: Diction
 	if GameManager.energy_network:
 		network_mult = GameManager.energy_network.get_network_ore_damage_mult(tower_id)
 	var mvp_mult = GameManager.get_mvp_damage_mult(tower_id)
-	var base_damage = combat_data.get("damage", 10)
-	var damage_bonus = ecs.aura_effects.get(tower_id, {}).get("damage_bonus", 0)
-	var laser_damage = int((base_damage + damage_bonus) * network_mult * mvp_mult)
+	var resistance_mult = GameManager.get_resistance_mult(tower_id)
+	var early_mult = GameManager.get_early_craft_curse_damage_multiplier(tower_id)
+	var base_damage = GameManager.get_tower_base_damage(tower_id)
+	var aura_eff = ecs.aura_effects.get(tower_id, {})
+	var damage_bonus = aura_eff.get("damage_bonus", 0)
+	var damage_bonus_percent = aura_eff.get("damage_bonus_percent", 0.0)
+	var laser_base = (base_damage + damage_bonus) * network_mult * mvp_mult * resistance_mult * early_mult
+	if damage_bonus_percent > 0:
+		laser_base *= (1.0 + damage_bonus_percent)
+	var laser_damage = int(laser_base)
+	laser_damage += GameManager.get_card_damage_bonus_global()
 	var attack_type = combat_data.get("attack_type", "PHYSICAL")
+	var at_upper = attack_type.to_upper()
+	if at_upper == "PHYSICAL":
+		laser_damage += GameManager.get_card_phys_damage_bonus()
+	elif at_upper == "MAGICAL":
+		laser_damage += GameManager.get_card_mag_damage_bonus()
+	# SPLIT: бонус физ. урона добавим к физ. части при применении
 	
-	# Мгновенный урон для каждой цели
+	var params = combat_data.get("attack_type_data", {}).get("params", {})
+	var crit_chance = params.get("crit_chance", 0.0) if typeof(params) == TYPE_DICTIONARY else 0.0
+	var crit_mult = params.get("crit_mult", 2.0) if typeof(params) == TYPE_DICTIONARY else 2.0
+	
+	# Мгновенный урон для каждой цели (крит — свой на каждую цель)
 	for target_id in targets:
 		var target_pos = ecs.positions.get(target_id)
 		if not target_pos:
 			continue
 		
-		# Создаем визуальный эффект лазера
+		var is_crit = crit_chance > 0.0 and randf() < crit_chance
+		var damage_this = int(laser_damage * (crit_mult if is_crit else 1.0))
+		
+		# Создаем визуальный эффект лазера (def_id для толщины луча и числа осколков при крите)
+		var tower_def_id = ecs.towers.get(tower_id, {}).get("def_id", "")
 		var laser_id = ecs.create_entity()
 		ecs.add_component(laser_id, "laser", {
 			"start_pos": tower_pos,
 			"target_pos": target_pos,
 			"timer": Config.LASER_DURATION,
-			"color": _get_laser_color(attack_type)
+			"color": _get_laser_color(attack_type),
+			"is_crit": is_crit,
+			"def_id": tower_def_id
 		})
 		
 		if GameManager.roll_evasion(target_id):
 			continue
-		# Наносим урон
-		_apply_laser_damage(target_id, laser_damage, attack_type, tower_id)
+		# Наносим урон (SPLIT = 50% физ, 50% чистый)
+		if at_upper == "SPLIT":
+			var split_phys = int(damage_this * 0.5) + GameManager.get_card_phys_damage_bonus()
+			var split_pure = damage_this - int(damage_this * 0.5)
+			_apply_laser_damage(target_id, split_phys, "PHYSICAL", tower_id)
+			_apply_laser_damage(target_id, split_pure, "PURE", tower_id)
+		else:
+			_apply_laser_damage(target_id, damage_this, at_upper, tower_id)
 		_apply_untouchable_to_tower(tower_id, target_id)
+		# Крит-сплеш Хьюдж: вокруг цели в радиусе 0.7 гекса — 30% от урона крита (половинки физ/пуре)
+		if is_crit and typeof(params) == TYPE_DICTIONARY:
+			var splash_radius_hex = params.get("crit_splash_radius_hex", 0.0)
+			var splash_factor = params.get("crit_splash_factor", 0.0)
+			if splash_radius_hex > 0 and splash_factor > 0:
+				var splash_damage_total = int(damage_this * splash_factor)
+				var splash_radius_px = splash_radius_hex * Config.HEX_SIZE
+				for other_id in ecs.enemies.keys():
+					if other_id == target_id:
+						continue
+					var other_pos = ecs.positions.get(other_id)
+					if other_pos == null:
+						continue
+					if target_pos.distance_to(other_pos) > splash_radius_px:
+						continue
+					var sp_phys = int(splash_damage_total * 0.5)
+					var sp_pure = splash_damage_total - sp_phys
+					_apply_laser_damage(other_id, sp_phys, "PHYSICAL", tower_id)
+					_apply_laser_damage(other_id, sp_pure, "PURE", tower_id)
 		# Замедление (если есть в params) — только если враг не имеет неуязвимости к эффектам
-		var params = combat_data.get("attack_type_data", {}).get("params", {})
 		if typeof(params) == TYPE_DICTIONARY:
 			var slow_mult = params.get("slow_multiplier", 0.0)
 			var slow_dur = params.get("slow_duration", 0.0)
@@ -461,16 +571,27 @@ func _create_laser_attack(tower_id: int, tower: Dictionary, combat_data: Diction
 				var enemy_data = ecs.enemies.get(target_id)
 				var abilities = enemy_data.get("abilities", []) if enemy_data else []
 				if not abilities.has("effect_immunity"):
-					ecs.slow_effects[target_id] = {
-						"timer": slow_dur,
-						"slow_factor": 1.0 - slow_mult
-					}
+					var path_len = ecs.game_state.get("wave_path_length", 0)
+					var effect_mult = Config.get_path_length_effectiveness_mult(path_len)
+					slow_dur *= effect_mult
+					slow_mult = minf(0.95, slow_mult * effect_mult)
+					var def_id = ""
+					if tower_id >= 0 and ecs.towers.has(tower_id):
+						def_id = ecs.towers[tower_id].get("def_id", "")
+					if def_id.is_empty():
+						def_id = "laser"
+					if not ecs.slow_effects.has(target_id):
+						ecs.slow_effects[target_id] = {}
+					ecs.slow_effects[target_id][def_id] = {"timer": slow_dur, "slow_factor": 1.0 - slow_mult}
 
 	return true
 
 func _apply_laser_damage(entity_id: int, damage: int, attack_type: String, source_tower_id: int = -1):
 	var health = ecs.healths.get(entity_id)
 	if not health:
+		return
+	# 100% маг. неуязвимость (БКБ): сразу выходим
+	if attack_type.to_upper() == "MAGICAL" and GameManager.is_magic_immune(entity_id):
 		return
 	var enemy = ecs.enemies.get(entity_id)
 	if enemy and enemy.get("abilities", []).has("reflection"):
@@ -485,19 +606,40 @@ func _apply_laser_damage(entity_id: int, damage: int, attack_type: String, sourc
 	if enemy:
 		match attack_type.to_upper():
 			"PHYSICAL":
-				var arm = GameManager.get_effective_physical_armor(entity_id)
-				final_damage = int(damage * GameManager.armor_to_damage_factor(float(arm)))
+				if GameManager.is_physical_immune(entity_id):
+					final_damage = 0
+				else:
+					var arm = GameManager.get_effective_physical_armor(entity_id)
+					final_damage = int(damage * GameManager.armor_to_damage_factor(float(arm)))
 			"MAGICAL":
-				var arm = GameManager.get_effective_magical_armor(entity_id)
-				final_damage = int(damage * GameManager.armor_to_damage_factor(float(arm)))
+				if GameManager.is_magic_immune(entity_id):
+					final_damage = 0
+				else:
+					var arm = GameManager.get_effective_magical_armor(entity_id)
+					final_damage = int(damage * GameManager.armor_to_damage_factor(float(arm)))
 			"PURE":
-				pass
+				var arm = GameManager.get_effective_pure_armor(entity_id)
+				final_damage = int(damage * GameManager.armor_to_damage_factor(float(arm)))
+				var pure_res = GameManager.get_pure_damage_resistance(entity_id)
+				if pure_res > 0.0:
+					final_damage = int(final_damage * (1.0 - pure_res))
 	
-	# Минимум 1 урон при любом положительном входящем
-	if final_damage < 1 and damage > 0:
+	if GameManager.has_curse_hp_percent():
+		var max_hp = health.get("max", 100)
+		final_damage += int(max_hp * 0.004)
+	
+	# Минимум 1 урон при любом положительном входящем (кроме 100% физ/маг неуязвимости — там 0)
+	var at_upper = attack_type.to_upper()
+	var full_immune = (at_upper == "MAGICAL" and GameManager.is_magic_immune(entity_id)) or (at_upper == "PHYSICAL" and GameManager.is_physical_immune(entity_id))
+	if final_damage < 1 and damage > 0 and not full_immune:
 		final_damage = 1
 	elif final_damage < 0:
 		final_damage = 0
+	
+	# Длина лабиринта и «медленная вторая половина»: множитель урона по врагу
+	final_damage = int(final_damage * GameManager.get_damage_to_enemy_multiplier(entity_id, source_tower_id))
+	if final_damage < 1 and damage > 0 and not full_immune:
+		final_damage = 1
 	
 	health["current"] = max(0, health["current"] - final_damage)
 	
@@ -513,26 +655,15 @@ func _get_laser_color(attack_type: String) -> Color:
 		"PHYSICAL": return Color(1.0, 0.3, 0.0, 0.8)  # Красно-оранжевый
 		"MAGICAL": return Color(0.5, 0.3, 1.0, 0.8)   # Фиолетовый
 		"PURE": return Color(0.7, 0.95, 1.0, 0.8)     # Голубовато-белый
+		"SPLIT": return Color(1.0, 0.85, 0.3, 0.9)   # Золотой (Хьюдж)
 		_: return Color(1.0, 1.0, 1.0, 0.8)
 
-func _consume_energy(power_sources: Array, amount: float):
+func _consume_energy(power_sources: Array, amount: float, tower_id: int = -1):
 	if power_sources.size() == 0:
 		return
-	
 	var chosen_source = power_sources[randi() % power_sources.size()]
-	var ore = ecs.ores.get(chosen_source)
-	if ore:
-		var mult = 1.0
-		if GameManager.energy_network:
-			mult = GameManager.energy_network.get_miner_efficiency_for_ore(chosen_source)
-		var deduct = amount / mult
-		# Обучение уровень 1: гиперболизированная трата руды (в 3–5 раз), чтобы было наглядно
-		deduct *= GameManager.get_ore_consumption_multiplier()
-		ore["current_reserve"] = max(0.0, ore["current_reserve"] - deduct)
-		
-		if ore["current_reserve"] < 0.1:
-			if GameManager.energy_network:
-				GameManager.energy_network.rebuild_energy_network()
+	if GameManager.energy_network:
+		GameManager.energy_network.consume_from_power_source(chosen_source, amount, tower_id)
 
 func _predict_target_position(target_id: int, start_pos: Vector2) -> Vector2:
 	"""Предсказывает где будет цель когда снаряд долетит (учёт замедления и раша)"""
@@ -549,10 +680,9 @@ func _predict_target_position(target_id: int, start_pos: Vector2) -> Vector2:
 		return target_pos
 	
 	var effective_speed = enemy.get("speed", 80.0)
-	if ecs.bash_effects.has(target_id):
+	if ecs.bash_effects.has(target_id) or ecs.scream_stun.has(target_id):
 		effective_speed = 0.0
-	if ecs.slow_effects.has(target_id):
-		effective_speed *= ecs.slow_effects[target_id].get("slow_factor", 1.0)
+	effective_speed *= ecs.get_combined_slow_factor(target_id)
 	if ecs.jade_poisons.has(target_id):
 		var jade = ecs.jade_poisons[target_id]
 		var stacks = jade.get("instances", []).size()

@@ -56,6 +56,12 @@ func _determine_preview_tower_type() -> String:
 	# Дебаг режим
 	if ecs.game_state.has("debug_tower_type"):
 		var debug_type = ecs.game_state["debug_tower_type"]
+		if debug_type == "DEBUG_TEST":
+			var ids = Config.DEBUG_TEST_TOWER_IDS
+			if ids.is_empty():
+				return "NONE"
+			var def = GameManager.get_tower_def(ids[0])
+			return def.get("type", "ATTACK")
 		var def = GameManager.get_tower_def(debug_type)
 		return def.get("type", "ATTACK")
 	
@@ -72,11 +78,9 @@ func _determine_preview_tower_type() -> String:
 			return "MINER"
 		return "ATTACK"
 	
-	# Определяем как в input_system: первая башня в волнах 1–4 = майнер
+	# Как в input_system: первые 5 волн в блоке (1–5, 11–15, 21–25…) — первая башня майнер
 	var current_wave = ecs.game_state.get("current_wave", 0)
-	var wave_mod_10 = (current_wave - 1) % 10
-	
-	if wave_mod_10 < 4 and towers_built == 0:
+	if current_wave % 10 < 5 and towers_built == 0:
 		return "MINER"
 	
 	return "ATTACK"  # По умолчанию атакующая

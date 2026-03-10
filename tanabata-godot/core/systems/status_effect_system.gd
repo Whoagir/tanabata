@@ -22,23 +22,31 @@ func update(delta: float):
 	_update_jade_poison(delta)
 	_update_reactive_armor_timers(delta)
 	_update_enemy_regen(delta)
+	_update_tower_hit_stacks(delta)
 
 # ============================================================================
 # SLOW EFFECTS
 # ============================================================================
 
 func _update_slow_effects(delta: float):
-	var to_remove = []
-	
 	for entity_id in ecs.slow_effects.keys():
-		var effect = ecs.slow_effects[entity_id]
-		effect["timer"] -= delta
-		
-		if effect["timer"] <= 0:
-			to_remove.append(entity_id)
-	
-	for entity_id in to_remove:
-		ecs.slow_effects.erase(entity_id)
+		var by_source = ecs.slow_effects[entity_id]
+		if not by_source is Dictionary:
+			ecs.slow_effects.erase(entity_id)
+			continue
+		var to_remove_sources = []
+		for source_key in by_source.keys():
+			var effect = by_source[source_key]
+			if not effect is Dictionary:
+				to_remove_sources.append(source_key)
+				continue
+			effect["timer"] = effect.get("timer", 0.0) - delta
+			if effect["timer"] <= 0:
+				to_remove_sources.append(source_key)
+		for k in to_remove_sources:
+			by_source.erase(k)
+		if by_source.is_empty():
+			ecs.slow_effects.erase(entity_id)
 
 # ============================================================================
 # BASH EFFECTS (оглушение: враг стоит, не использует скиллы)
@@ -74,27 +82,65 @@ func _update_reflection(delta: float):
 			enemy["reflection_cooldown_left"] = Config.REFLECTION_COOLDOWN
 
 # ============================================================================
+# TOWER HIT STACKS (U235: стаки повторных попаданий, таймер 7 сек)
+# ============================================================================
+
+func _update_tower_hit_stacks(delta: float):
+	if not ecs.game_state.has("tower_hit_stacks"):
+		return
+	var by_entity = ecs.game_state["tower_hit_stacks"]
+	var entities_to_clean = []
+	for entity_id in by_entity.keys():
+		var by_tower = by_entity[entity_id]
+		if not by_tower is Dictionary:
+			entities_to_clean.append(entity_id)
+			continue
+		var towers_to_remove = []
+		for tower_key in by_tower.keys():
+			var entry = by_tower[tower_key]
+			if not entry is Dictionary:
+				towers_to_remove.append(tower_key)
+				continue
+			entry["timer"] = entry.get("timer", 0.0) - delta
+			if entry["timer"] <= 0:
+				towers_to_remove.append(tower_key)
+		for k in towers_to_remove:
+			by_tower.erase(k)
+		if by_tower.is_empty():
+			entities_to_clean.append(entity_id)
+	for eid in entities_to_clean:
+		by_entity.erase(eid)
+
+# ============================================================================
 # POISON EFFECTS
 # ============================================================================
 
 func _update_poison_effects(delta: float):
-	var to_remove = []
-	
+	var to_remove_entities = []
 	for entity_id in ecs.poison_effects.keys():
-		var effect = ecs.poison_effects[entity_id]
-		effect["timer"] -= delta
-		
-		if effect["timer"] <= 0:
-			to_remove.append(entity_id)
-			continue
-		
-		# Tick damage (каждую секунду)
-		effect["tick_timer"] -= delta
-		if effect["tick_timer"] <= 0:
-			_apply_poison_damage(entity_id, effect["damage_per_sec"], effect.get("source_tower_id", -1))
-			effect["tick_timer"] = 1.0  # Сброс таймера
-	
-	for entity_id in to_remove:
+		var container = ecs.poison_effects[entity_id]
+		# Старый формат (одна запись): переводим в формат по источникам
+		if container.get("timer", null) != null and container.get("damage_per_sec", null) != null:
+			container = { "?": container }
+			ecs.poison_effects[entity_id] = container
+		var to_remove_sources = []
+		for def_id in container.keys():
+			var effect = container[def_id]
+			if not effect is Dictionary:
+				continue
+			effect["timer"] = effect.get("timer", 0.0) - delta
+			if effect["timer"] <= 0:
+				to_remove_sources.append(def_id)
+				continue
+			effect["tick_timer"] = effect.get("tick_timer", 1.0) - delta
+			if effect["tick_timer"] <= 0:
+				_apply_poison_damage(entity_id, effect["damage_per_sec"], effect.get("source_tower_id", -1))
+				effect["tick_timer"] = 1.0
+		for def_id in to_remove_sources:
+			container.erase(def_id)
+		if container.is_empty():
+			to_remove_entities.append(entity_id)
+	for entity_id in to_remove_entities:
 		ecs.poison_effects.erase(entity_id)
 
 # ============================================================================
@@ -173,6 +219,8 @@ func _update_jade_poison(delta: float):
 						var ed = ecs.enemies[entity_id]
 						if ed.get("flying", false) and ed.get("def_id", "") != "ENEMY_BOSS":
 							damage = max(1, int(damage * 2.5))
+					var path_len = ecs.game_state.get("wave_path_length", 0)
+					damage = max(1, int(damage * Config.get_path_length_effectiveness_mult(path_len)))
 					_apply_poison_damage(entity_id, damage, src_id)
 					inst["tick_timer"] = 1.0
 				active.append(inst)
@@ -252,15 +300,21 @@ func _update_reactive_armor_timers(delta: float):
 # ============================================================================
 
 func _apply_poison_damage(entity_id: int, damage: int, source_tower_id: int = -1):
-	"""Наносит урон от яда (чистый урон). source_tower_id — для статистики вышек (NU, Jade)."""
+	"""Наносит урон от яда (магический). БКБ блокирует."""
+	if GameManager.is_magic_immune(entity_id):
+		return
 	# Либра: при одной отравленной цели (solo) урон яда x3
 	if source_tower_id >= 0 and ecs.towers.has(source_tower_id):
 		var tower = ecs.towers[source_tower_id]
 		if tower.get("def_id", "") == "TOWER_LIBRA":
 			var count = 0
 			for eid in ecs.poison_effects:
-				if ecs.poison_effects[eid].get("source_tower_id", -1) == source_tower_id:
-					count += 1
+				var cont = ecs.poison_effects[eid]
+				for key in cont:
+					var eff = cont[key] if cont[key] is Dictionary else {}
+					if eff.get("source_tower_id", -1) == source_tower_id:
+						count += 1
+						break
 			if count == 1:
 				damage = damage * 3
 	var health = ecs.healths.get(entity_id)
@@ -272,6 +326,9 @@ func _apply_poison_damage(entity_id: int, damage: int, source_tower_id: int = -1
 		if stacks > 0:
 			enemy["reflection_stacks"] = stacks - 1
 			return
+	damage = int(damage * GameManager.get_damage_to_enemy_multiplier(entity_id, source_tower_id))
+	if damage < 1:
+		damage = 1
 	health["current"] = max(0, health["current"] - damage)
 	
 	# Учёт урона в статистике вышек

@@ -85,7 +85,9 @@ var towers: Dictionary = {}     # entity_id -> {def_id: String, level: int, hex:
     "physical_armor": 10,
     "magical_armor": 5,
     "last_checkpoint_index": -1,  # Индекс последнего пройденного чекпоинта
-    "damage_to_player": 10        # Урон при достижении Exit
+    "damage_to_player": 10,       # Урон при достижении Exit
+    "spawned_wave": 1,            # Номер волны при спавне (из wave_def)
+    "pure_damage_resistance": 0.0 # 0–1, доля снижения PURE-урона (из wave_def, напр. волна 11)
 }
 ```
 
@@ -140,7 +142,8 @@ var towers: Dictionary = {}     # entity_id -> {def_id: String, level: int, hex:
     "max_reserve": 150.0,     # Максимальный запас
     "current_reserve": 150.0, # Текущий запас
     "hex": Hex.new(0, 0),     # Позиция руды
-    "pulse_rate": 2.0         # Скорость пульсации (для визуализации)
+    "pulse_rate": 2.0,        # Скорость пульсации (для визуализации)
+    "sector": 0               # 0=центр, 1=середина, 2=край (для логов и аналитики)
 }
 ```
 

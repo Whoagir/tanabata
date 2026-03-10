@@ -19,9 +19,11 @@
 
 Когда расстояние до цели меньше чем скорость за один кадр (или меньше порога) — считается попаданием. Наносится урон, снаряд удаляется. Урон учитывает броню врага по типу атаки (physical, magical, pure). Минимум 1 урон если базовый урон больше нуля.
 
-**Impact burst** (Malachite) — при попадании в радиусе 3 гексов создаются вторичные снаряды к соседям (до 6 целей, 40% урона); у этих снарядов homing: true.
+**Impact burst** (Malachite, U235 и др.) — при попадании в радиусе radius_hex гексов создаются вторичные снаряды (fragment_count целей). Могут задаваться fixed_damage (фиксированный урон осколка) и fragment_speed_multiplier (скорость осколков). У осколков Malachite homing: true и доля урона от основного; у U235 — fixed_damage и fragment_speed_multiplier из params.
 
 **JADE_POISON** — при попадании добавляется стак в ecs.jade_poisons. DoT и замедление обрабатываются StatusEffectSystem и MovementSystem.
+
+**Повторные попадания (U235)** — при попадании по врагу от башни с params repeat_hit_bonus_damage/repeat_hit_stack_duration в game_state["tower_hit_stacks"] хранятся стаки по паре (враг, def_id башни). К урону добавляется bonus_per_stack × stacks. Таймер стака уменьшается в StatusEffectSystem (_update_tower_hit_stacks); при destroy_entity врага запись из tower_hit_stacks удаляется.
 
 ## Смерть врага
 

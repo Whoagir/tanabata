@@ -7,14 +7,21 @@ var ecs: ECSWorld
 var selected_entity_id: int = -1
 var is_visible_flag: bool = false
 
-# UI элементы
+# UI элементы (дерево сцены: Panel/MarginContainer/MainHBox -> LeftColumn + CraftsInfoPanel)
 var panel: Panel
-var header_hbox: HBoxContainer
+var header_row: HBoxContainer
+var header_tower_switch: HBoxContainer  # 50px отступ + слайдер вкл/выкл (только для башен, не стена)
+var tower_enabled_slider: HSlider
+var _tower_slider_block: bool = false  # не реагировать на value_changed при программном set value
+var crafts_info_panel: VBoxContainer
 var title_label: Label
 var info_icon: Label  # Буква "i" рядом с названием
-var content_section: Control  # Описание — показывается при наведении
+var crafts_into_label: RichTextLabel  # "Crafts into: X", зелёный только то что можно скрафтить сейчас
+var content_section: Control  # HBox: описание (скролл) + квадратики скиллов
 var info_vbox: VBoxContainer
 var scroll_container: ScrollContainer
+var status_bar: HBoxContainer  # Мини-квадраты в полоске над контентом (эффекты на вышку)
+var skills_row: HBoxContainer  # Горизонтальный ряд скиллов (3–6 иконок)
 var buttons_hbox: HBoxContainer
 var select_button: Button
 var craft_button: Button
@@ -41,176 +48,69 @@ const BUTTON_HEIGHT = 40
 
 func _ready():
 	ecs = GameManager.ecs
-	
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	# Корень: клики проходят сквозь пустые области (карта остаётся кликабельной)
-	mouse_filter = Control.MOUSE_FILTER_PASS
-	
-	# Плашка внизу слева (без общего бекграунда — только квадратик с инфой)
-	panel = Panel.new()
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	panel.offset_left = 15
-	panel.offset_top = -PANEL_HEIGHT - 15
-	panel.offset_right = 15 + PANEL_WIDTH
-	panel.offset_bottom = -15
-	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.12, 0.12, 0.15, 0.92)
-	panel_style.border_width_left = 2
-	panel_style.border_width_top = 2
-	panel_style.border_width_right = 2
-	panel_style.border_width_bottom = 2
-	panel_style.border_color = Color(0.4, 0.4, 0.5, 1.0)
-	panel.add_theme_stylebox_override("panel", panel_style)
-	add_child(panel)
-	
-	var margin_container = MarginContainer.new()
-	margin_container.add_theme_constant_override("margin_left", 15)
-	margin_container.add_theme_constant_override("margin_top", 12)
-	margin_container.add_theme_constant_override("margin_right", 15)
-	margin_container.add_theme_constant_override("margin_bottom", 12)
-	margin_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	margin_container.mouse_filter = Control.MOUSE_FILTER_PASS
-	panel.add_child(margin_container)
-	
-	var vbox = VBoxContainer.new()
-	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.mouse_filter = Control.MOUSE_FILTER_PASS
-	margin_container.add_child(vbox)
-	
-	# Заголовок: [Название] [i] — фиксирован, не двигается
-	header_hbox = HBoxContainer.new()
-	header_hbox.custom_minimum_size = Vector2(0, 32)
-	header_hbox.add_theme_constant_override("separation", 6)
-	header_hbox.mouse_filter = Control.MOUSE_FILTER_STOP
-	header_hbox.mouse_entered.connect(_on_header_hover_enter)
-	header_hbox.mouse_exited.connect(_on_header_hover_exit)
-	vbox.add_child(header_hbox)
-	
-	title_label = Label.new()
-	title_label.add_theme_font_size_override("font_size", 18)
-	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	header_hbox.add_child(title_label)
-	
-	# Буква i (без смайлов)
-	var icon_center = CenterContainer.new()
-	icon_center.custom_minimum_size = Vector2(24, 24)
-	icon_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	header_hbox.add_child(icon_center)
-	info_icon = Label.new()
-	info_icon.text = "i"
-	info_icon.add_theme_font_size_override("font_size", 14)
-	info_icon.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
-	icon_center.add_child(info_icon)
-	
-	# Крестик — закрыть панель
-	close_button = Button.new()
-	close_button.text = "×"
-	close_button.add_theme_font_size_override("font_size", 22)
-	close_button.custom_minimum_size = Vector2(36, 32)
-	close_button.flat = true
-	close_button.tooltip_text = "Закрыть"
-	close_button.pressed.connect(hide_panel)
-	header_hbox.add_child(close_button)
-	
-	# Секция с описанием — при наведении только показывается/скрывается, ширина задаётся константой
-	content_section = VBoxContainer.new()
-	content_section.custom_minimum_size = Vector2(INFO_BLOCK_WIDTH, INFO_CONTENT_HEIGHT)
-	content_section.mouse_filter = Control.MOUSE_FILTER_STOP
+	# Ссылки на узлы из сцены info_panel.tscn (верстку можно править в редакторе)
+	panel = get_node("VBox/Panel")
+	header_row = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow")
+	header_tower_switch = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow/HeaderTowerSwitch")
+	_setup_tower_enabled_slider()
+	crafts_info_panel = get_node("VBox/Panel/MarginContainer/MainHBox/CraftsInfoPanel")
+	title_label = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow/TitleLabel")
+	info_icon = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow/IconCenter/InfoIcon")
+	crafts_into_label = get_node("VBox/Panel/MarginContainer/MainHBox/CraftsInfoPanel/CraftsIntoLabel")
+	close_button = get_node("VBox/Panel/MarginContainer/MainHBox/CraftsInfoPanel/CloseRow/CloseButton")
+	content_section = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection")
+	scroll_container = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/DescriptionScroll")
+	info_vbox = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/DescriptionScroll/InfoVbox")
+	status_bar = get_node("VBox/StatusBarWrapper/StatusBar")
+	skills_row = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ContentSection/SkillsRow")
+	buttons_hbox = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox")
+	select_button = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox/SelectButton")
+	craft_button = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox/CraftButton")
+	craft_button_2 = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox/CraftButton2")
+	simplify_button = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox/SimplifyButton")
+	x2_button = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox/X2Button")
+	x4_button = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/ButtonsHbox/X4Button")
+	# Сигналы (логика остаётся в коде)
+	header_row.mouse_entered.connect(_on_header_hover_enter)
+	header_row.mouse_exited.connect(_on_header_hover_exit)
+	crafts_info_panel.mouse_entered.connect(_on_header_hover_enter)
+	crafts_info_panel.mouse_exited.connect(_on_header_hover_exit)
 	content_section.mouse_entered.connect(_on_header_hover_enter)
 	content_section.mouse_exited.connect(_on_header_hover_exit)
-	vbox.add_child(content_section)
-	
-	scroll_container = ScrollContainer.new()
-	scroll_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll_container.custom_minimum_size = Vector2(0, INFO_SCROLL_HEIGHT)
-	scroll_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	content_section.add_child(scroll_container)
-	
-	info_vbox = VBoxContainer.new()
-	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_container.add_child(info_vbox)
-	
-	# Кнопки — всегда внизу, фиксированы
-	buttons_hbox = HBoxContainer.new()
-	buttons_hbox.custom_minimum_size = Vector2(0, BUTTON_HEIGHT)
-	buttons_hbox.add_theme_constant_override("separation", 10)
-	buttons_hbox.mouse_filter = Control.MOUSE_FILTER_STOP
 	buttons_hbox.mouse_entered.connect(_on_header_hover_enter)
 	buttons_hbox.mouse_exited.connect(_on_header_hover_exit)
-	vbox.add_child(buttons_hbox)
-	
-	select_button = Button.new()
-	select_button.text = "СОХРАНИТЬ"
-	select_button.custom_minimum_size = Vector2(120, BUTTON_HEIGHT)
-	select_button.visible = false
-	select_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	close_button.pressed.connect(hide_panel)
+	close_button.tooltip_text = "Закрыть"
 	select_button.pressed.connect(_on_select_button_pressed)
 	select_button.button_down.connect(_on_select_button_pressed)
 	select_button.gui_input.connect(_on_button_gui_input)
-	buttons_hbox.add_child(select_button)
-	
-	craft_button = Button.new()
-	craft_button.text = "ОБЪЕДИНИТЬ"  # Подставляется имя результата при показе крафта
-	craft_button.custom_minimum_size = Vector2(130, BUTTON_HEIGHT)
-	craft_button.visible = false
-	craft_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	craft_button.pressed.connect(_on_craft_button_pressed)
 	craft_button.button_down.connect(_on_craft_button_pressed)
 	craft_button.gui_input.connect(_on_craft_gui_input)
-	buttons_hbox.add_child(craft_button)
-	
-	craft_button_2 = Button.new()
-	craft_button_2.text = "ОБЪЕДИНИТЬ"
-	craft_button_2.custom_minimum_size = Vector2(130, BUTTON_HEIGHT)
-	craft_button_2.visible = false
-	craft_button_2.mouse_filter = Control.MOUSE_FILTER_STOP
 	craft_button_2.pressed.connect(_on_craft_button_2_pressed)
 	craft_button_2.button_down.connect(_on_craft_button_2_pressed)
 	craft_button_2.gui_input.connect(_on_craft_2_gui_input)
-	buttons_hbox.add_child(craft_button_2)
-	
-	simplify_button = Button.new()
-	simplify_button.text = "УПРОСТИТЬ (3)"
-	simplify_button.custom_minimum_size = Vector2(120, BUTTON_HEIGHT)
-	simplify_button.visible = false
-	simplify_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	simplify_button.pressed.connect(_on_simplify_button_pressed)
-	buttons_hbox.add_child(simplify_button)
-	
-	x2_button = Button.new()
-	x2_button.text = "х2"
-	x2_button.custom_minimum_size = Vector2(44, BUTTON_HEIGHT)
-	x2_button.visible = false
-	x2_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	x2_button.pressed.connect(_on_x2_button_pressed)
 	x2_button.button_down.connect(_on_x2_button_pressed)
 	x2_button.gui_input.connect(_on_x2_gui_input)
-	buttons_hbox.add_child(x2_button)
-	
-	x4_button = Button.new()
-	x4_button.text = "х4"
-	x4_button.custom_minimum_size = Vector2(44, BUTTON_HEIGHT)
-	x4_button.visible = false
-	x4_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	x4_button.pressed.connect(_on_x4_button_pressed)
 	x4_button.button_down.connect(_on_x4_button_pressed)
 	x4_button.gui_input.connect(_on_x4_gui_input)
-	buttons_hbox.add_child(x4_button)
-	
 	_hover_timer = Timer.new()
 	_hover_timer.one_shot = true
 	_hover_timer.timeout.connect(_on_hover_timer_timeout)
 	add_child(_hover_timer)
-	
+	# Слайдер вкл/выкл башни (в заголовке, 50px правее названия)
+	# Корень: клики сквозь пустые области; позиция панели внизу
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_PASS
 	anchors_preset = Control.PRESET_BOTTOM_WIDE
 	offset_top = -PANEL_HEIGHT - PANEL_MARGIN
 	offset_bottom = -PANEL_MARGIN
 	offset_left = PANEL_MARGIN
 	offset_right = -PANEL_MARGIN
-	mouse_filter = Control.MOUSE_FILTER_PASS
-	
 	hide()
 
 func show_entity(entity_id: int):
@@ -218,7 +118,7 @@ func show_entity(entity_id: int):
 	selected_entity_id = entity_id
 	is_visible_flag = true
 	_update_info()
-	_set_content_visible(false)
+	_set_content_visible(true)  # Описание всегда показывается
 	show()
 	# Дебаг крафта: один раз при открытии инфо о башне в SELECTION/WAVE
 	var phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
@@ -231,9 +131,9 @@ func show_entity(entity_id: int):
 		# if CRAFT_DEBUG: print("[Craft] открыта башня ...")  # отключено, чтобы не засорять консоль
 
 func get_blocking_rect() -> Rect2:
-	"""Область, в которой клики не уходят в игру (сама плашка). Для game_root."""
-	if is_instance_valid(panel):
-		return panel.get_global_rect()
+	"""Область, в которой клики не уходят в игру (StatusBar + Panel). Для game_root."""
+	if is_instance_valid(panel) and is_instance_valid(panel.get_parent()):
+		return panel.get_parent().get_global_rect()
 	return Rect2()
 
 func hide_panel():
@@ -255,7 +155,7 @@ func hide_panel():
 	hide()
 
 func _set_content_visible(show_content: bool):
-	"""Показать/скрыть только текст описания. Размер панели не меняется."""
+	"""Показать/скрыть только текст описания (описание всегда показывается — наведение на i не требуется)."""
 	scroll_container.modulate.a = 1.0 if show_content else 0.0
 	scroll_container.mouse_filter = Control.MOUSE_FILTER_STOP if show_content else Control.MOUSE_FILTER_IGNORE
 
@@ -267,11 +167,10 @@ func _on_header_hover_exit():
 	_hover_timer.start(0.2)
 
 func _on_hover_timer_timeout():
-	var mouse_pos = get_global_mouse_position()
-	if not get_global_rect().has_point(mouse_pos):
-		_set_content_visible(false)
+	# Описание всегда видно, не скрываем по таймеру
+	pass
 
-func _process(_delta):
+func _process(_delta: float):
 	if is_visible_flag and selected_entity_id >= 0:
 		_update_info()
 
@@ -286,16 +185,26 @@ func _update_info():
 		hide_panel()
 		return
 	
+	# Слайдер вкл/выкл показываем только для башни (не стена)
+	header_tower_switch.visible = false
+	# Статус-бар над MarginContainer: мини-квадраты эффектов (скрыть для не-башни)
+	_update_status_bar()
+	# Скиллы по умолчанию скрыты; показываем только если у сущности есть способности
+	_set_skills_visible([])
+	
 	# Башня
 	if ecs.towers.has(selected_entity_id):
 		_show_tower_info()
 	# Враг
 	elif ecs.enemies.has(selected_entity_id):
+		crafts_into_label.visible = false
 		_show_enemy_info()
 	# Руда
 	elif ecs.ores.has(selected_entity_id):
+		crafts_into_label.visible = false
 		_show_ore_info()
 	else:
+		crafts_into_label.visible = false
 		title_label.text = "Unknown Entity"
 		craft_button.visible = false
 		craft_button_2.visible = false
@@ -318,33 +227,81 @@ func _show_tower_info():
 		return
 	
 	title_label.text = tower_def.get("name", "Tower")
+	# Слайдер вкл/выкл или режим батареи (Добыча/Трата)
+	if tower_def.get("type") == "WALL":
+		header_tower_switch.visible = false
+	elif tower_def.get("type") == "BATTERY":
+		header_tower_switch.visible = true
+		_tower_slider_block = true
+		tower_enabled_slider.value = 1.0 if tower.get("battery_manual_discharge", false) else 0.0
+		_tower_slider_block = false
+		tower_enabled_slider.tooltip_text = "Добыча (накопление) / Трата (отдача в сеть)"
+		_update_tower_slider_style()
+	else:
+		header_tower_switch.visible = true
+		_tower_slider_block = true
+		tower_enabled_slider.value = 1.0 if not tower.get("is_manually_disabled", false) else 0.0
+		_tower_slider_block = false
+		tower_enabled_slider.tooltip_text = "Вкл/выкл башню (или ПКМ по башне)"
+		_update_tower_slider_style()
+	var tower_abilities = tower_def.get("abilities", [])
+	_set_skills_visible(tower_abilities)
 	
-	# Level
-	_add_info_line("Level: %d" % tower.get("level", 1))
+	var def_id = tower.get("def_id", "")
+	var tw_level = tower.get("level", 1)
+	var outputs = _get_crafts_into_outputs(def_id, tw_level)
+	crafts_into_label.visible = true
+	if outputs.is_empty():
+		crafts_into_label.text = ""
+	else:
+		var craftable_ids: Dictionary = {}
+		for oid in (GameManager.get_craftable_output_ids_now() if GameManager else []):
+			craftable_ids[oid] = true
+		var lines: Array = []
+		for item in outputs:
+			var name_str = item.get("name", "")
+			var out_id = item.get("output_id", "")
+			if craftable_ids.get(out_id, false):
+				lines.append("[color=#4cd964]" + name_str + "[/color]")
+			else:
+				lines.append(name_str)
+		crafts_into_label.text = "\n".join(lines)
 	
-	# Type
-	_add_info_line("Type: %s" % tower_def.get("type", "UNKNOWN"))
-	
-	# Active status
-	var is_active = tower.get("is_active", false)
-	_add_info_line("Active: %s" % ("Yes" if is_active else "No"))
-	
-	# MVP бафф (у каждой вышки 0–5, +20% урона за уровень)
 	var mvp_level = int(tower.get("mvp_level", 0))
-	if mvp_level > 0:
-		var mvp_pct = mvp_level * 20
-		_add_info_line("MVP: %d — урон +%d%%" % [mvp_level, mvp_pct], Color(1.0, 0.85, 0.4))
 
-	# Combat info
+	# Для майнера: в первую очередь руда под ним и сеть
+	if tower_def.get("type") == "MINER":
+		_add_separator()
+		_add_miner_ore_and_network_info(selected_entity_id, tower)
+
+	# Combat info (важные показатели)
 	if ecs.combat.has(selected_entity_id):
 		var combat = ecs.combat[selected_entity_id]
 		var base_dmg = combat.get("damage", 0)
-		var aura_dmg = ecs.aura_effects.get(selected_entity_id, {}).get("damage_bonus", 0)
-		var dmg_before_mvp = base_dmg + aura_dmg
+		var aura_eff = ecs.aura_effects.get(selected_entity_id, {})
+		var aura_dmg = aura_eff.get("damage_bonus", 0)
+		var aura_dmg_pct = aura_eff.get("damage_bonus_percent", 0.0)
+		var dmg_before_mvp = int(base_dmg * (1.0 + aura_dmg_pct)) + aura_dmg if aura_dmg_pct > 0 else (base_dmg + aura_dmg)
 		var mvp_mult = GameManager.get_mvp_damage_mult(selected_entity_id) if GameManager else 1.0
-		var effective_dmg = int(dmg_before_mvp * mvp_mult)
-		if mvp_level > 0:
-			_add_info_line("Damage: %d (база %d, MVP x%.1f) = %d" % [effective_dmg, dmg_before_mvp, mvp_mult, effective_dmg])
+		var early_mult = GameManager.get_early_craft_curse_damage_multiplier(selected_entity_id) if GameManager else 1.0
+		var effective_dmg = int(dmg_before_mvp * mvp_mult * early_mult)
+		var early_info = GameManager.get_early_craft_curse_info(selected_entity_id) if GameManager else {}
+		var touch_info = GameManager.get_touch_curse_info(selected_entity_id) if GameManager else {}
+		var has_curse = early_info.get("has_curse", false)
+		var has_touch = touch_info.get("has_curse", false)
+		if mvp_level > 0 or has_curse or has_touch:
+			var parts = ["Damage: %d" % effective_dmg]
+			parts.append("база %d" % dmg_before_mvp)
+			if mvp_level > 0:
+				parts.append("MVP x%.2f" % mvp_mult)
+			if has_curse:
+				var early_only_mult = 1.0 - (float(early_info.get("percent", 0)) / 100.0)
+				parts.append("раннего крафта x%.2f" % early_only_mult)
+			if has_touch:
+				parts.append("касания x0.85")
+			_add_info_line("%s (%s) = %d" % [parts[0], ", ".join(parts.slice(1, parts.size())), effective_dmg])
+		elif aura_dmg_pct > 0:
+			_add_info_line("Damage: %d (+%d%%) = %d" % [base_dmg, int(aura_dmg_pct * 100), dmg_before_mvp])
 		elif aura_dmg > 0:
 			_add_info_line("Damage: %d (+%d) = %d" % [base_dmg, aura_dmg, dmg_before_mvp])
 		else:
@@ -352,16 +309,32 @@ func _show_tower_info():
 		_add_info_line("Fire Rate: %.2f/s" % combat.get("fire_rate", 0.0))
 		_add_info_line("Range: %d" % combat.get("range", 0))
 		_add_info_line("Attack Type: %s" % combat.get("attack_type", "NONE"))
-		
-		# Aura buff (полученный от DE/DA соседей)
-		if ecs.aura_effects.has(selected_entity_id):
-			var aura = ecs.aura_effects[selected_entity_id]
-			var speed_mult = aura.get("speed_multiplier", 1.0)
-			var dmg_bonus = aura.get("damage_bonus", 0)
-			if speed_mult > 1.0:
-				_add_info_line("Aura Buff: x%.1f speed" % speed_mult, Color.GREEN)
-			if dmg_bonus > 0:
-				_add_info_line("Damage bonus: +%d" % dmg_bonus, Color.GREEN)
+		if has_curse:
+			_add_info_line("Проклятие раннего крафта: -%d%% урона (при крафте снимется)" % early_info.get("percent", 0), Color(0.9, 0.5, 0.3))
+		if has_touch:
+			_add_info_line("Проклятие касания: -15% урона (при крафте или благословении снимется)", Color(0.9, 0.5, 0.3))
+	
+	# Второстепенные показатели (ниже)
+	_add_separator()
+	if mvp_level > 0:
+		var mvp_pct = mvp_level * 20
+		_add_info_line("MVP: %d — урон +%d%%" % [mvp_level, mvp_pct], Color(1.0, 0.85, 0.4))
+	
+	# Aura buff (полученный от DE/DA/Дипсеа соседей)
+	if ecs.combat.has(selected_entity_id) and ecs.aura_effects.has(selected_entity_id):
+		var aura = ecs.aura_effects[selected_entity_id]
+		var speed_mult = aura.get("speed_multiplier", 1.0)
+		var dmg_bonus = aura.get("damage_bonus", 0)
+		var dmg_bonus_pct = aura.get("damage_bonus_percent", 0.0)
+		var debuff_immunity = aura.get("debuff_immunity", false)
+		if speed_mult > 1.0:
+			_add_info_line("Aura Buff: x%.1f speed" % speed_mult, Color.GREEN)
+		if dmg_bonus_pct > 0:
+			_add_info_line("Damage: +%d%%" % int(dmg_bonus_pct * 100), Color.GREEN)
+		if dmg_bonus > 0:
+			_add_info_line("Damage bonus: +%d" % dmg_bonus, Color.GREEN)
+		if debuff_immunity:
+			_add_info_line("Immunity to debuffs (Dipsea)", Color.GREEN)
 	
 	# Aura (если это аура-башня — сама раздаёт бафф)
 	if ecs.auras.has(selected_entity_id):
@@ -369,10 +342,38 @@ func _show_tower_info():
 		_add_info_line("Aura Radius: %d" % aura.get("radius", 0), Color.GREEN)
 		var speed_mult = aura.get("speed_multiplier", 1.0)
 		var dmg_bonus = aura.get("damage_bonus", 0)
+		var dmg_bonus_pct = aura.get("damage_bonus_percent", 0.0)
 		if speed_mult > 1.0:
 			_add_info_line("Speed Mult: x%.1f" % speed_mult, Color.GREEN)
+		if dmg_bonus_pct > 0:
+			_add_info_line("Damage: +%d%%" % int(dmg_bonus_pct * 100), Color.GREEN)
 		if dmg_bonus > 0:
 			_add_info_line("Damage Bonus: +%d per hit" % dmg_bonus, Color.GREEN)
+		if aura.get("debuff_immunity", false):
+			_add_info_line("Grants: Immunity to debuffs", Color.GREEN)
+	
+	# Дебафф неприкасаемости (враг с Untouchable попал по вышке)
+	if ecs.tower_attack_slow.has(selected_entity_id):
+		var entry = ecs.tower_attack_slow[selected_entity_id]
+		var timer = entry.get("timer", 0.0)
+		var mult = entry.get("multiplier", Config.UNTOUCHABLE_SLOW_MULTIPLIER)
+		_add_info_line("Дебафф неприкасаемости: атака в %.0f раз медленнее, осталось %.1f с" % [mult, timer], Color(1.0, 0.5, 0.4))
+	
+	# Для батареи: запас, режим, сеть (после основной инфы, до карт босса)
+	if tower_def.get("type") == "BATTERY":
+		_add_separator()
+		_add_battery_info(selected_entity_id, tower)
+	
+	# Карты босса — всегда после основной информации о вышке
+	var blessing_ids = GameManager.active_blessing_ids if GameManager else []
+	var curse_ids = GameManager.active_curse_ids if GameManager else []
+	if blessing_ids.size() > 0 or curse_ids.size() > 0:
+		_add_separator()
+		_add_info_line("Карты босса:", Color(0.9, 0.85, 0.6))
+		for bid in blessing_ids:
+			_add_info_line("  " + CardsData.get_card_name(bid), Color(0.5, 0.9, 0.5))
+		for cid in curse_ids:
+			_add_info_line("  " + CardsData.get_card_name(cid), Color(0.95, 0.5, 0.5))
 	
 	# === КРАФТ — в SELECTION (из 5 поставленных) или в WAVE ===
 	var current_phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
@@ -415,22 +416,31 @@ func _show_tower_info():
 				elif sz == 4 and not seen_4.get(out_id, false):
 					seen_4[out_id] = true
 					crafts_4.append(c)
+			# Shift-выделение: комбинации, целиком из is_manually_selected, ставим первыми
+			crafts_3 = _prefer_manual_selection_crafts(crafts_3)
+			crafts_2 = _prefer_manual_selection_crafts(crafts_2)
+			crafts_4 = _prefer_manual_selection_crafts(crafts_4)
 			if crafts_3.size() > 0:
 				var c0 = crafts_3[0]
 				_pending_craft = {"combination": c0.get("combination", []), "recipe": c0.get("recipe", {})}
 				craft_button.visible = true
 				var cost0 = GameManager.crafting_system.get_craft_energy_cost_for_recipe(c0.get("recipe", {}), c0.get("combination", []).size()) if GameManager.crafting_system else 0
-				craft_button.text = _get_output_tower_name(c0.get("recipe", {}).get("output_id", "")) + (" (%d)" % cost0 if cost0 > 0 else "")
+				var out_id0 = c0.get("recipe", {}).get("output_id", "")
+				craft_button.text = _get_output_tower_name(out_id0) + (" (%d)" % cost0 if cost0 > 0 else "")
+				craft_button.add_theme_color_override("font_color", Color(1.0, 0.35, 0.35) if GameManager.would_craft_have_early_curse(out_id0) else Color.WHITE)
 				var ore_total = GameManager.get_ore_network_totals().get("total_current", 0.0)
 				craft_button.disabled = cost0 > 0 and ore_total < cost0
 				if GameManager.crafting_visual:
-					GameManager.crafting_visual.set_selected_combination(c0.get("combination", []), c0.get("recipe", {}))
+					var all_comb = ecs.combinables.keys()
+					GameManager.crafting_visual.set_selected_combination(c0.get("combination", []), c0.get("recipe", {}), all_comb, selected_entity_id)
 			if crafts_3.size() > 1:
 				var c1 = crafts_3[1]
 				_pending_craft_2 = {"combination": c1.get("combination", []), "recipe": c1.get("recipe", {})}
 				craft_button_2.visible = true
 				var cost1 = GameManager.crafting_system.get_craft_energy_cost_for_recipe(c1.get("recipe", {}), c1.get("combination", []).size()) if GameManager.crafting_system else 0
-				craft_button_2.text = _get_output_tower_name(c1.get("recipe", {}).get("output_id", "")) + (" (%d)" % cost1 if cost1 > 0 else "")
+				var out_id1 = c1.get("recipe", {}).get("output_id", "")
+				craft_button_2.text = _get_output_tower_name(out_id1) + (" (%d)" % cost1 if cost1 > 0 else "")
+				craft_button_2.add_theme_color_override("font_color", Color(1.0, 0.35, 0.35) if GameManager.would_craft_have_early_curse(out_id1) else Color.WHITE)
 				var ore_total_2 = GameManager.get_ore_network_totals().get("total_current", 0.0)
 				craft_button_2.disabled = cost1 > 0 and ore_total_2 < cost1
 			if current_phase == GameTypes.GamePhase.TOWER_SELECTION_STATE and crafts_2.size() > 0:
@@ -438,7 +448,9 @@ func _show_tower_info():
 				_pending_craft_x2 = {"combination": c2.get("combination", []), "recipe": c2.get("recipe", {})}
 				x2_button.visible = true
 				var cost2 = GameManager.crafting_system.get_craft_energy_cost_for_recipe(c2.get("recipe", {}), 2) if GameManager.crafting_system else 0
-				x2_button.text = _get_output_tower_name(c2.get("recipe", {}).get("output_id", "")) + (" (%d)" % cost2 if cost2 > 0 else "")
+				var out_id2 = c2.get("recipe", {}).get("output_id", "")
+				x2_button.text = _get_output_tower_name(out_id2) + (" (%d)" % cost2 if cost2 > 0 else "")
+				x2_button.add_theme_color_override("font_color", Color(1.0, 0.35, 0.35) if GameManager.would_craft_have_early_curse(out_id2) else Color.WHITE)
 				var ore_x2 = GameManager.get_ore_network_totals().get("total_current", 0.0)
 				x2_button.disabled = cost2 > 0 and ore_x2 < cost2
 			if current_phase == GameTypes.GamePhase.TOWER_SELECTION_STATE and crafts_4.size() > 0:
@@ -446,14 +458,17 @@ func _show_tower_info():
 				_pending_craft_x4 = {"combination": c4.get("combination", []), "recipe": c4.get("recipe", {})}
 				x4_button.visible = true
 				var cost4 = GameManager.crafting_system.get_craft_energy_cost_for_recipe(c4.get("recipe", {}), 4) if GameManager.crafting_system else 0
-				x4_button.text = _get_output_tower_name(c4.get("recipe", {}).get("output_id", "")) + (" (%d)" % cost4 if cost4 > 0 else "")
+				var out_id4 = c4.get("recipe", {}).get("output_id", "")
+				x4_button.text = _get_output_tower_name(out_id4) + (" (%d)" % cost4 if cost4 > 0 else "")
+				x4_button.add_theme_color_override("font_color", Color(1.0, 0.35, 0.35) if GameManager.would_craft_have_early_curse(out_id4) else Color.WHITE)
 				var ore_x4 = GameManager.get_ore_network_totals().get("total_current", 0.0)
 				x4_button.disabled = cost4 > 0 and ore_x4 < cost4
 			if _pending_craft.is_empty() and GameManager.crafting_visual:
+				var all_comb = ecs.combinables.keys()
 				if crafts_2.size() > 0:
-					GameManager.crafting_visual.set_selected_combination(crafts_2[0].get("combination", []), crafts_2[0].get("recipe", {}))
+					GameManager.crafting_visual.set_selected_combination(crafts_2[0].get("combination", []), crafts_2[0].get("recipe", {}), all_comb, selected_entity_id)
 				elif crafts_4.size() > 0:
-					GameManager.crafting_visual.set_selected_combination(crafts_4[0].get("combination", []), crafts_4[0].get("recipe", {}))
+					GameManager.crafting_visual.set_selected_combination(crafts_4[0].get("combination", []), crafts_4[0].get("recipe", {}), all_comb, selected_entity_id)
 	
 	# Кнопка "Сохранить" только в фазе TOWER_SELECTION_STATE для временных башен
 	if current_phase == GameTypes.GamePhase.TOWER_SELECTION_STATE and is_temporary:
@@ -504,10 +519,6 @@ func _show_tower_info():
 		x4_button.visible = false
 		simplify_button.visible = false
 	
-	# Для майнера: руда под ним и сеть
-	if tower_def.get("type") == "MINER":
-		_add_separator()
-		_add_miner_ore_and_network_info(selected_entity_id, tower)
 
 func _show_ore_info():
 	"""Информация о руде (при клике на руду)"""
@@ -577,6 +588,86 @@ func _add_miner_ore_and_network_info(tower_id: int, tower: Dictionary):
 				stats.get("total_current", 0.0), stats.get("total_max", 0.0), stats.get("mined", 0.0)
 			])
 
+func _add_battery_info(tower_id: int, tower: Dictionary):
+	"""Блок для батареи: запас, режим, сеть"""
+	var storage = tower.get("battery_storage", 0.0)
+	var def = GameManager.get_tower_def(tower.get("def_id", "")) if GameManager else {}
+	var storage_max = 200.0
+	if def and def.get("energy", {}).has("storage_max"):
+		storage_max = float(def["energy"]["storage_max"])
+	_add_info_line("Запас: %.0f / %.0f" % [storage, storage_max])
+	var manual = tower.get("battery_manual_discharge", false)
+	var mode_text = "Трата" if manual else "Добыча"
+	_add_info_line("Режим: %s" % mode_text)
+	var is_active = tower.get("is_active", false)
+	_add_info_line("Сеть: %s" % ("активна" if is_active else "неактивна"))
+	if GameManager and GameManager.energy_network:
+		var stats = GameManager.energy_network.get_network_ore_stats(tower_id)
+		if stats.get("total_max", 0.0) > 0 or stats.get("total_current", 0.0) > 0:
+			_add_info_line("В сети руды: %.0f / %.0f" % [stats.get("total_current", 0.0), stats.get("total_max", 0.0)])
+
+func _set_skills_visible(abilities: Array):
+	"""Показывает ряд скиллов только если у сущности есть способности; видимы первые N квадратов по числу способностей."""
+	skills_row.visible = abilities.size() > 0
+	var children = skills_row.get_children()
+	for i in range(children.size()):
+		children[i].visible = i < abilities.size()
+
+func _update_status_bar():
+	"""Заполняет мини-квадраты над MarginContainer: эффекты, воздействующие на вышку (пока без иконок — цветом)."""
+	var slots = status_bar.get_children()
+	for s in slots:
+		if s is ColorRect:
+			s.visible = false
+	if not ecs.towers.has(selected_entity_id):
+		return
+	var idx = 0
+	# Аура: скорость
+	if ecs.aura_effects.has(selected_entity_id) and ecs.aura_effects[selected_entity_id].get("speed_multiplier", 1.0) > 1.0:
+		if idx < slots.size() and slots[idx] is ColorRect:
+			slots[idx].color = Color(0.3, 0.8, 0.4, 1)
+			slots[idx].visible = true
+		idx += 1
+	# Аура: урон
+	if ecs.aura_effects.has(selected_entity_id) and (ecs.aura_effects[selected_entity_id].get("damage_bonus", 0) > 0 or ecs.aura_effects[selected_entity_id].get("damage_bonus_percent", 0) > 0):
+		if idx < slots.size() and slots[idx] is ColorRect:
+			slots[idx].color = Color(0.4, 0.6, 1.0, 1)
+			slots[idx].visible = true
+		idx += 1
+	# Иммунитет к дебаффам
+	if ecs.aura_effects.has(selected_entity_id) and ecs.aura_effects[selected_entity_id].get("debuff_immunity", false):
+		if idx < slots.size() and slots[idx] is ColorRect:
+			slots[idx].color = Color(0.6, 0.5, 1.0, 1)
+			slots[idx].visible = true
+		idx += 1
+	# Дебафф неприкасаемости (атака замедлена)
+	if ecs.tower_attack_slow.has(selected_entity_id):
+		if idx < slots.size() and slots[idx] is ColorRect:
+			slots[idx].color = Color(1.0, 0.45, 0.3, 1)
+			slots[idx].visible = true
+		idx += 1
+	# Проклятие раннего крафта
+	var early_info = GameManager.get_early_craft_curse_info(selected_entity_id) if GameManager else {}
+	if early_info.get("has_curse", false):
+		if idx < slots.size() and slots[idx] is ColorRect:
+			slots[idx].color = Color(0.9, 0.5, 0.2, 1)
+			slots[idx].visible = true
+		idx += 1
+	# Проклятие касания
+	var touch_info = GameManager.get_touch_curse_info(selected_entity_id) if GameManager else {}
+	if touch_info.get("has_curse", false):
+		if idx < slots.size() and slots[idx] is ColorRect:
+			slots[idx].color = Color(0.85, 0.45, 0.25, 1)
+			slots[idx].visible = true
+		idx += 1
+	# MVP бафф
+	var tower = ecs.towers[selected_entity_id]
+	if int(tower.get("mvp_level", 0)) > 0:
+		if idx < slots.size() and slots[idx] is ColorRect:
+			slots[idx].color = Color(1.0, 0.8, 0.2, 1)
+			slots[idx].visible = true
+		idx += 1
+
 func _show_enemy_info():
 	"""Отображает информацию о враге"""
 	craft_button.visible = false
@@ -593,6 +684,8 @@ func _show_enemy_info():
 		return
 	
 	title_label.text = enemy_def.get("name", "Enemy")
+	var enemy_abilities = enemy.get("abilities", [])
+	_set_skills_visible(enemy_abilities)
 	
 	# Health
 	if ecs.healths.has(selected_entity_id):
@@ -608,6 +701,9 @@ func _show_enemy_info():
 	var eff_mag = GameManager.get_effective_magical_armor(selected_entity_id)
 	_add_info_line("Physical Armor: %d" % eff_phys)
 	_add_info_line("Magical Armor: %d" % eff_mag)
+	var eff_pure = GameManager.get_effective_pure_armor(selected_entity_id)
+	if eff_pure != 0:
+		_add_info_line("Pure Armor: %d" % eff_pure)
 	
 	# Abilities (имя и тип пассив/актив из ability_definitions при наличии)
 	var abilities = enemy.get("abilities", [])
@@ -623,21 +719,57 @@ func _show_enemy_info():
 	
 	# Status effects
 	if ecs.slow_effects.has(selected_entity_id):
-		var slow = ecs.slow_effects[selected_entity_id]
-		_add_info_line("SLOWED: %.1f%% speed (%.1fs)" % [(slow.get("slow_factor", 1.0) * 100), slow.get("timer", 0.0)], Config.ENEMY_SLOW_COLOR)
+		var combined = ecs.get_combined_slow_factor(selected_entity_id)
+		var max_timer = 0.0
+		var by_source = ecs.slow_effects[selected_entity_id]
+		if by_source is Dictionary:
+			for k in by_source:
+				var e = by_source[k]
+				if e is Dictionary:
+					max_timer = maxf(max_timer, e.get("timer", 0.0))
+		_add_info_line("SLOWED: %.1f%% speed (%.1fs)" % [(combined * 100), max_timer], Config.ENEMY_SLOW_COLOR)
 	if ecs.bash_effects.has(selected_entity_id):
 		var bash = ecs.bash_effects[selected_entity_id]
 		_add_info_line("BASHED: стоит на месте, без скиллов (%.1fs)" % bash.get("timer", 0.0), Config.ENEMY_BASH_COLOR)
 	
 	if ecs.poison_effects.has(selected_entity_id):
 		var poison = ecs.poison_effects[selected_entity_id]
-		_add_info_line("POISONED: %d dps (%.1fs)" % [poison.get("damage_per_sec", 0), poison.get("timer", 0.0)], Config.ENEMY_POISON_COLOR)
+		var total_dps = 0
+		var max_timer = 0.0
+		if poison.get("timer", null) != null and poison.get("damage_per_sec", null) != null:
+			total_dps = poison.get("damage_per_sec", 0)
+			max_timer = poison.get("timer", 0.0)
+		else:
+			for _def_id in poison:
+				var eff = poison[_def_id] if poison[_def_id] is Dictionary else {}
+				total_dps += eff.get("damage_per_sec", 0)
+				max_timer = maxf(max_timer, eff.get("timer", 0.0))
+		_add_info_line("POISONED: %d dps (%.1fs)" % [total_dps, max_timer], Config.ENEMY_POISON_COLOR)
 	if ecs.phys_armor_debuffs.has(selected_entity_id):
 		var d = GameManager.get_armor_debuff_display(selected_entity_id, true)
 		_add_info_line("Phys armor -%d (%.1fs)" % [d.total, d.min_timer], Config.ENEMY_PHYS_ARMOR_DEBUFF_COLOR)
 	if ecs.mag_armor_debuffs.has(selected_entity_id):
 		var d = GameManager.get_armor_debuff_display(selected_entity_id, false)
 		_add_info_line("Mag armor -%d (%.1fs)" % [d.total, d.min_timer], Config.ENEMY_MAG_ARMOR_DEBUFF_COLOR)
+
+func _prefer_manual_selection_crafts(crafts_list: Array) -> Array:
+	"""Ставит первыми комбинации, целиком из shift-выделенных башен (is_manually_selected). Без шифта порядок не меняется."""
+	var manual_first: Array = []
+	var rest: Array = []
+	for c in crafts_list:
+		var combo = c.get("combination", [])
+		var all_manual = true
+		for tid in combo:
+			var t = ecs.towers.get(tid, {})
+			if not t.get("is_manually_selected", false):
+				all_manual = false
+				break
+		if all_manual:
+			manual_first.append(c)
+		else:
+			rest.append(c)
+	manual_first.append_array(rest)
+	return manual_first
 
 func _get_output_tower_name(output_id: String) -> String:
 	"""Возвращает отображаемое имя башни по output_id рецепта (для кнопок объединения)."""
@@ -665,7 +797,32 @@ func _ability_display_name(ability_id: String) -> String:
 		"hus": return "Хус"
 		"healer_aura": return "Аура лечения"
 		"aggro": return "Агрро"
+		"bkb": return "БКБ"
+		"ivasion": return "Ивейжн"
 		_: return ability_id
+
+func _get_crafts_into_outputs(def_id: String, level: int) -> Array:
+	"""Рецепты уровня крафта 1 и 2, в которых эта башня — ингредиент. Возвращает [{"name": str, "output_id": str}, ...] без дубликатов по output_id."""
+	var out_list: Array = []
+	var seen_ids: Dictionary = {}
+	var recipes = DataRepository.recipe_defs
+	if not recipes is Array:
+		return out_list
+	for recipe in recipes:
+		var out_id = recipe.get("output_id", "")
+		if out_id.is_empty() or seen_ids.has(out_id):
+			continue
+		var out_def = DataRepository.get_tower_def(out_id)
+		if out_def.is_empty():
+			continue
+		if out_def.get("crafting_level", 0) < 1 or out_def.get("crafting_level", 0) > 2:
+			continue
+		for inp in recipe.get("inputs", []):
+			if inp.get("id", "") == def_id and int(inp.get("level", 1)) == level:
+				seen_ids[out_id] = true
+				out_list.append({"name": out_def.get("name", out_id), "output_id": out_id})
+				break
+	return out_list
 
 func _add_info_line(text: String, color: Color = Color.WHITE):
 	"""Добавляет строку информации"""
@@ -674,6 +831,74 @@ func _add_info_line(text: String, color: Color = Color.WHITE):
 	label.add_theme_font_size_override("font_size", 14)
 	label.add_theme_color_override("font_color", color)
 	info_vbox.add_child(label)
+
+func _setup_tower_enabled_slider():
+	"""Слайдер вкл/выкл в заголовке (тип замок в самолёте: влево = выкл, вправо = вкл)."""
+	var container = get_node("VBox/Panel/MarginContainer/MainHBox/LeftColumn/HeaderRow/HeaderTowerSwitch/TowerEnabledSwitch")
+	tower_enabled_slider = HSlider.new()
+	tower_enabled_slider.custom_minimum_size = Vector2(54, 66)
+	tower_enabled_slider.min_value = 0.0
+	tower_enabled_slider.max_value = 1.0
+	tower_enabled_slider.step = 1.0
+	tower_enabled_slider.value = 1.0
+	tower_enabled_slider.tooltip_text = "Вкл/выкл башню (или ПКМ по башне)"
+	# Дорожка (линия) в 3 раза толще; приглушённые цвета по диз. доку
+	var groove = StyleBoxFlat.new()
+	groove.bg_color = Color(0.22, 0.22, 0.26, 1)
+	groove.set_corner_radius_all(33)
+	groove.set_content_margin_all(4)
+	tower_enabled_slider.add_theme_stylebox_override("slider", groove)
+	var grabber = StyleBoxFlat.new()
+	grabber.bg_color = Color(0.4, 0.6, 0.4)
+	grabber.set_corner_radius_all(24)
+	tower_enabled_slider.add_theme_stylebox_override("grabber_area", grabber)
+	tower_enabled_slider.add_theme_stylebox_override("grabber_area_highlight", grabber)
+	tower_enabled_slider.value_changed.connect(_on_tower_slider_value_changed)
+	container.add_child(tower_enabled_slider)
+
+func _deferred_battery_rebuild() -> void:
+	if GameManager and GameManager.energy_network:
+		GameManager.energy_network.rebuild_energy_network()
+	_update_info()
+
+func _update_tower_slider_style():
+	"""Цвет ползунка: для обычных башен зелёный = вкл (1), красный = выкл (0). Для батареи: зелёный = Добыча (0), красный = Трата (1)."""
+	if not tower_enabled_slider:
+		return
+	var grabber = tower_enabled_slider.get_theme_stylebox("grabber_area")
+	if grabber is StyleBoxFlat:
+		var is_battery = false
+		if selected_entity_id >= 0 and ecs.towers.has(selected_entity_id):
+			var def = GameManager.get_tower_def(ecs.towers[selected_entity_id].get("def_id", "")) if GameManager else {}
+			is_battery = def.get("type") == "BATTERY"
+		var on_right = tower_enabled_slider.value >= 0.5
+		if is_battery:
+			# Добыча (0) = зелёный, Трата (1) = красный
+			(grabber as StyleBoxFlat).bg_color = Color(0.65, 0.4, 0.4) if on_right else Color(0.4, 0.6, 0.4)
+		else:
+			(grabber as StyleBoxFlat).bg_color = Color(0.4, 0.6, 0.4) if on_right else Color(0.65, 0.4, 0.4)
+		tower_enabled_slider.queue_redraw()
+
+func _on_tower_slider_value_changed(_val: float):
+	if _tower_slider_block or selected_entity_id < 0:
+		return
+	var v = 1.0 if _val >= 0.5 else 0.0
+	_tower_slider_block = true
+	tower_enabled_slider.value = v
+	_tower_slider_block = false
+	_update_tower_slider_style()
+	if ecs.towers.has(selected_entity_id):
+		var tower = ecs.towers[selected_entity_id]
+		var def = GameManager.get_tower_def(tower.get("def_id", "")) if GameManager else {}
+		if def.get("type") == "BATTERY":
+			tower["battery_manual_discharge"] = (v >= 0.5)
+			# Отложенный rebuild на следующий кадр, чтобы не фризить при переключении
+			if get_tree():
+				get_tree().create_timer(0.0).timeout.connect(_deferred_battery_rebuild, CONNECT_ONE_SHOT)
+			return
+	if GameManager and GameManager.input_system:
+		GameManager.input_system.toggle_tower_enabled(selected_entity_id)
+		_update_info()
 
 func _add_separator():
 	"""Добавляет разделитель"""
@@ -770,7 +995,6 @@ func _on_x4_button_pressed():
 
 func _perform_craft(clicked_tower_id: int, combination: Array, recipe: Dictionary):
 	"""Выполняет крафт (как в Go: in-place). В SELECTION после крафта — результат сохраняется; только уже сохранённый майнер не в камень; остальные временные → стены."""
-	
 	if GameManager.crafting_system:
 		var phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
 		var saved_miner_ids: Array = []

@@ -16,8 +16,8 @@ func recalculate_combinations():
 	ecs.combinables = {}
 	
 	# 2. Группируем башни по типу (def_id) и уровню.
-	# В фазе SELECTION учитываем только поставленные в этом раунде (is_temporary).
-	# В WAVE — все башни на карте.
+	# В фазе SELECTION учитываем только поставленные в этом раунде (is_temporary) — крафт только из них.
+	# В BUILD и WAVE — все башни на карте.
 	var phase = ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE)
 	var only_temporary = (phase == GameTypes.GamePhase.TOWER_SELECTION_STATE)
 	
@@ -90,6 +90,9 @@ func recalculate_combinations():
 		# 6. Если ингредиентов достаточно, находим все возможные комбинации
 		_find_and_mark_combinations(recipe, needed, tower_buckets)
 	
+	# 7. Shift-выделение: если ровно 3 (или 2/4) башни с is_manually_selected образуют рецепт — добавляем эту комбинацию в начало possible_crafts
+	_inject_manual_selection_combinations(phase)
+	
 	if CRAFT_DEBUG and (phase == GameTypes.GamePhase.TOWER_SELECTION_STATE or phase == GameTypes.GamePhase.WAVE_STATE):
 		print("[Craft] recalc done: combinables.size=%d" % ecs.combinables.size())
 	
@@ -101,59 +104,103 @@ func _find_and_mark_combinations(recipe: Dictionary, needed: Dictionary, buckets
 	
 	var found_combinations: Dictionary = {}  # Избегаем дубликатов
 	
-	# Рекурсивный поиск комбинаций
-	var find_recursive = func(key_index: int, current_combination: Array, _self_ref):
-		# Базовый случай: нашли ингредиенты для всех типов
-		if key_index == needed_keys.size():
-			var sorted_combo = current_combination.duplicate()
-			sorted_combo.sort()
-			var combo_key = _combination_key(sorted_combo)
-			
-			if not found_combinations.has(combo_key):
-				found_combinations[combo_key] = true
-				var craft_info = {
-					"recipe": recipe,
-					"combination": sorted_combo
-				}
-				for id in sorted_combo:
-					if not ecs.combinables.has(id):
-						ecs.combinables[id] = {
-							"possible_crafts": []
-						}
-					ecs.combinables[id]["possible_crafts"].append(craft_info)
-				if CRAFT_DEBUG:
-					print("[Craft] комбо добавлена: %s -> tower_ids %s" % [recipe.get("output_id", "?"), sorted_combo])
-			return
-		
-		# Рекурсивный шаг
-		var ingredient_key = needed_keys[key_index]
-		var required_count = needed[ingredient_key]
-		var available_towers = buckets.get(ingredient_key, [])
-		
-		# Генерируем комбинации из required_count башен
-		var generate_combinations = func(start_idx: int, combination_part: Array, _gen_self_ref):
-			if combination_part.size() == required_count:
-				# Собрали нужное количество, переходим к следующему типу
-				var new_combination = current_combination.duplicate()
-				new_combination.append_array(combination_part)
-				_self_ref.call(key_index + 1, new_combination, _self_ref)
-				return
-			
-			if start_idx >= available_towers.size():
-				return
-			
-			for i in range(start_idx, available_towers.size()):
-				var new_part = combination_part.duplicate()
-				new_part.append(available_towers[i])
-				_gen_self_ref.call(i + 1, new_part, _gen_self_ref)
-		
-		generate_combinations.call(0, [], generate_combinations)
-	
-	find_recursive.call(0, [], find_recursive)
+	# Рекурсия без вложенного callable: для каждого ведра явно перебираем каждую башню (чтобы при 2x DA1 обе попали в combinables)
+	_find_combos_recursive(recipe, needed, needed_keys, buckets, found_combinations, 0, [])
+
+func _find_combos_recursive(recipe: Dictionary, needed: Dictionary, needed_keys: Array, buckets: Dictionary, found_combinations: Dictionary, key_index: int, current_combination: Array):
+	if key_index == needed_keys.size():
+		var sorted_combo = current_combination.duplicate()
+		sorted_combo.sort()
+		var combo_key = _combination_key(sorted_combo)
+		if not found_combinations.has(combo_key):
+			found_combinations[combo_key] = true
+			var craft_info = {
+				"recipe": recipe,
+				"combination": sorted_combo
+			}
+			for id in sorted_combo:
+				if not ecs.combinables.has(id):
+					ecs.combinables[id] = {
+						"possible_crafts": []
+					}
+				ecs.combinables[id]["possible_crafts"].append(craft_info)
+			if CRAFT_DEBUG:
+				print("[Craft] комбо добавлена: %s -> tower_ids %s" % [recipe.get("output_id", "?"), sorted_combo])
+		return
+	var ingredient_key = needed_keys[key_index]
+	var required_count = needed[ingredient_key]
+	var available_towers = buckets.get(ingredient_key, [])
+	# Перебираем все способы набрать required_count башен из ведра (без повторов, по индексам)
+	_pick_from_bucket(recipe, needed, needed_keys, buckets, found_combinations, key_index, current_combination, available_towers, required_count, 0, [])
+
+func _pick_from_bucket(recipe: Dictionary, needed: Dictionary, needed_keys: Array, buckets: Dictionary, found_combinations: Dictionary, key_index: int, current_combination: Array, available_towers: Array, required_count: int, start_idx: int, picked: Array):
+	if picked.size() == required_count:
+		var new_combo = current_combination.duplicate()
+		new_combo.append_array(picked)
+		_find_combos_recursive(recipe, needed, needed_keys, buckets, found_combinations, key_index + 1, new_combo)
+		return
+	if start_idx >= available_towers.size():
+		return
+	for i in range(start_idx, available_towers.size()):
+		var new_picked = picked.duplicate()
+		new_picked.append(available_towers[i])
+		_pick_from_bucket(recipe, needed, needed_keys, buckets, found_combinations, key_index, current_combination, available_towers, required_count, i + 1, new_picked)
 
 # Создает уникальный ключ для комбинации
 func _combination_key(ids: Array) -> String:
 	return str(ids)
+
+# Если ровно N башен с is_manually_selected образуют рецепт — добавляем эту комбинацию в начало possible_crafts для каждой из них
+func _inject_manual_selection_combinations(phase: int):
+	var manual_ids: Array = []
+	for tower_id in ecs.towers.keys():
+		var t = ecs.towers[tower_id]
+		if t.get("def_id", "") == "TOWER_WALL":
+			continue
+		if phase == GameTypes.GamePhase.TOWER_SELECTION_STATE and not t.get("is_temporary", false):
+			continue
+		if t.get("is_manually_selected", false):
+			manual_ids.append(tower_id)
+	for n in [3, 2, 4]:
+		if manual_ids.size() != n:
+			continue
+		var keys_from_towers: Array = []
+		for tid in manual_ids:
+			var t = ecs.towers[tid]
+			var def_id = t.get("def_id", "")
+			var lv = int(t.get("level", 1))
+			keys_from_towers.append("%s-%d" % [def_id, lv])
+		keys_from_towers.sort()
+		var recipe_defs = DataRepository.recipe_defs
+		if recipe_defs == null or not (recipe_defs is Array):
+			continue
+		for recipe in recipe_defs:
+			if phase == GameTypes.GamePhase.WAVE_STATE and recipe.get("selection_only", false):
+				continue
+			var inputs = recipe.get("inputs", [])
+			if inputs.size() != n:
+				continue
+			var needed_keys: Array = []
+			for input in inputs:
+				var inp_id = input.get("id", "")
+				var inp_lv = int(input.get("level", 1))
+				needed_keys.append("%s-%d" % [inp_id, inp_lv])
+			needed_keys.sort()
+			if keys_from_towers != needed_keys:
+				continue
+			var sorted_combo = manual_ids.duplicate()
+			sorted_combo.sort()
+			var craft_info = {
+				"recipe": recipe,
+				"combination": sorted_combo
+			}
+			for tid in sorted_combo:
+				if not ecs.combinables.has(tid):
+					ecs.combinables[tid] = { "possible_crafts": [] }
+				ecs.combinables[tid]["possible_crafts"].insert(0, craft_info)
+			if CRAFT_DEBUG:
+				print("[Craft] manual combo: %s -> %s" % [recipe.get("output_id", "?"), sorted_combo])
+			return
 
 # ============================================================================
 # ВЫПОЛНЕНИЕ КРАФТА (как в Go: in-place трансформация)
@@ -242,6 +289,12 @@ func perform_craft(clicked_tower_id: int, combination: Array, recipe: Dictionary
 		print("[CraftingSystem] ERROR: No output_id in recipe!")
 		return GameTypes.INVALID_ENTITY_ID
 	
+	# Мимик: при крафте подменяем на случайную вышку уровня крафта 1
+	if output_id == "TOWER_MIMIC":
+		output_id = _get_random_crafting_level_1_tower_id()
+		if output_id.is_empty():
+			output_id = "TOWER_SILVER"  # fallback
+	
 	var output_def = DataRepository.get_tower_def(output_id)
 	if output_def.is_empty():
 		print("[CraftingSystem] ERROR: Output def %s not found!" % output_id)
@@ -269,6 +322,11 @@ func perform_craft(clicked_tower_id: int, combination: Array, recipe: Dictionary
 	# 1. Кликнутая башня -> результат
 	_transform_tower_to_output(clicked_tower_id, output_def)
 	ecs.towers[clicked_tower_id]["mvp_level"] = new_mvp
+	# Крафт с касания (в фазе выбора): результат без проклятия раннего крафта. Проклятие касания -15% только если получилась вышка уровня крафта 1+ (Auriga, Silver и т.д.); x2/x4 (TO1+TO1=TO2) — crafting_level 0, без проклятия. Батарея не получает проклятие касания.
+	var output_crafting_level = output_def.get("crafting_level", 0)
+	if phase == GameTypes.GamePhase.TOWER_SELECTION_STATE and output_def.get("type") != "BATTERY" and output_crafting_level >= 1:
+		ecs.towers[clicked_tower_id]["touch_curse"] = true
+	ecs.towers[clicked_tower_id]["early_craft_curse_cleared"] = true
 
 	# 2. Остальные из combination -> стены
 	for tower_id in combination:
@@ -290,11 +348,18 @@ func perform_craft(clicked_tower_id: int, combination: Array, recipe: Dictionary
 	return clicked_tower_id
 
 func _transform_tower_to_output(tower_id: int, output_def: Dictionary):
-	"""Превращает башню в результат крафта (in-place)"""
+	"""Превращает башню в результат крафта (in-place). Проклятие раннего крафта не наследуется — считаем по текущей волне."""
 	var tower = ecs.towers[tower_id]
 	tower["def_id"] = output_def.get("id", "")
 	tower["level"] = int(output_def.get("level", 1))
 	tower["crafting_level"] = output_def.get("crafting_level", 0)
+	tower["placed_at_wave"] = ecs.game_state.get("current_wave", 0)
+	if tower.has("early_craft_curse_cleared"):
+		tower.erase("early_craft_curse_cleared")
+	if tower.has("touch_curse"):
+		tower.erase("touch_curse")
+	if tower.has("touch_curse_cleared"):
+		tower.erase("touch_curse_cleared")
 	
 	# Combat
 	var combat_def = output_def.get("combat", {})
@@ -320,11 +385,23 @@ func _transform_tower_to_output(tower_id: int, output_def: Dictionary):
 		var aura_comp = {
 			"radius": aura_def.get("radius", 2),
 			"speed_multiplier": aura_def.get("speed_multiplier", 1.0),
-			"damage_bonus": aura_def.get("damage_bonus", 0)
+			"damage_bonus": aura_def.get("damage_bonus", 0),
+			"damage_bonus_percent": aura_def.get("damage_bonus_percent", 0.0)
 		}
 		if aura_def.get("flying_only", false):
 			aura_comp["flying_only"] = true
 			aura_comp["slow_factor"] = aura_def.get("slow_factor", 0.0)
+			aura_comp["flying_damage_taken_bonus"] = aura_def.get("flying_damage_taken_bonus", 0.0)
+		if aura_def.get("all_enemies_slow", false):
+			aura_comp["all_enemies_slow"] = true
+			aura_comp["slow_factor"] = aura_def.get("slow_factor", 0.0)
+			aura_comp["exit_slow_factor"] = aura_def.get("exit_slow_factor", 1.0)
+			aura_comp["exit_slow_duration"] = aura_def.get("exit_slow_duration", 0.0)
+			aura_comp["damage_taken_bonus"] = aura_def.get("damage_taken_bonus", 0.0)
+			if aura_def.has("ore_cost"):
+				aura_comp["ore_cost"] = aura_def.get("ore_cost", 0.0)
+		if aura_def.get("debuff_immunity", false):
+			aura_comp["debuff_immunity"] = true
 		ecs.auras[tower_id] = aura_comp
 	else:
 		ecs.auras.erase(tower_id)
@@ -371,3 +448,33 @@ func _transform_tower_to_wall(tower_id: int, wall_def: Dictionary):
 		"radius": Config.HEX_SIZE * visuals.get("radius_factor", 0.6),
 		"visible": true
 	}
+
+func _get_random_crafting_level_1_tower_id() -> String:
+	"""Взвешенный случайный id вышки уровня крафта 1 (ATTACK), кроме Мимика. Веса в data/mimic_weights.json."""
+	var ids = []
+	var weights = []
+	var total = 0.0
+	for tid in DataRepository.tower_defs:
+		var def = DataRepository.tower_defs[tid]
+		if def.get("type", "") != "ATTACK":
+			continue
+		if int(def.get("crafting_level", 0)) != 1:
+			continue
+		if tid == "TOWER_MIMIC":
+			continue
+		var w = 1.0
+		if DataRepository.mimic_weights.has(tid):
+			w = float(DataRepository.mimic_weights[tid])
+		if w <= 0.0:
+			continue
+		ids.append(tid)
+		weights.append(w)
+		total += w
+	if total <= 0.0:
+		return ""
+	var r = randf() * total
+	for i in ids.size():
+		r -= weights[i]
+		if r <= 0.0:
+			return ids[i]
+	return ids[ids.size() - 1]

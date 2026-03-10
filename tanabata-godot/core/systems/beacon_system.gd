@@ -15,15 +15,16 @@ func _init(ecs_world: ECSWorld, finder: Callable):
 func update(delta: float):
 	if ecs.game_state.get("phase", GameTypes.GamePhase.BUILD_STATE) != GameTypes.GamePhase.WAVE_STATE:
 		return
-
+	var aura_ore_factor = Config.get_aura_ore_cost_factor(ecs.get_player_level())
 	for tower_id in ecs.towers.keys():
 		var tower = ecs.towers[tower_id]
-		if tower.get("def_id", "") != "TOWER_LIGHTHOUSE" or not tower.get("is_active", false):
+		var def_id = tower.get("def_id", "")
+		if (def_id != "TOWER_LIGHTHOUSE" and def_id != "TOWER_KAILUN") or not tower.get("is_active", false) or tower.get("is_manually_disabled", false):
 			if ecs.beacon_sectors.has(tower_id):
 				ecs.beacon_sectors[tower_id]["is_visible"] = false
 			continue
 
-		var tower_def = DataRepository.get_tower_def("TOWER_LIGHTHOUSE")
+		var tower_def = DataRepository.get_tower_def(def_id)
 		var combat = ecs.combat.get(tower_id)
 		if not combat:
 			continue
@@ -49,7 +50,8 @@ func update(delta: float):
 		if not ecs.beacon_sectors.has(tower_id):
 			ecs.beacon_sectors[tower_id] = {}
 		var range_hex_base = combat.get("range", 4)
-		var range_hex = range_hex_base * Config.BEACON_RANGE_MULTIPLIER
+		var range_mult_extra = attack_params.get("range_multiplier", 1.0)
+		var range_hex = range_hex_base * Config.BEACON_RANGE_MULTIPLIER * range_mult_extra
 		ecs.beacon_sectors[tower_id]["is_visible"] = true
 		ecs.beacon_sectors[tower_id]["angle"] = beacon["current_angle"]
 		ecs.beacon_sectors[tower_id]["arc"] = arc_angle_rad
@@ -65,11 +67,12 @@ func update(delta: float):
 			continue
 
 		var total_reserve = 0.0
-		for sid in sources:
-			if ecs.ores.has(sid):
-				total_reserve += ecs.ores[sid].get("current_reserve", 0.0)
+		if GameManager.energy_network:
+			for s in sources:
+				total_reserve += GameManager.energy_network.get_power_source_reserve(s)
 
-		var tick_cost = (combat.get("shot_cost", 0.2) / BEACON_TICK_RATE) * Config.AURA_ORE_COST_FACTOR
+		var tick_cost = (combat.get("shot_cost", 0.2) / BEACON_TICK_RATE) * aura_ore_factor
+		tick_cost += GameManager.get_curse_extra_ore_per_shot() / BEACON_TICK_RATE
 		if tower.get("crafting_level", 0) >= 1:
 			tick_cost *= Config.ORE_COST_TIER2_MULTIPLIER
 		if total_reserve < tick_cost:
@@ -99,26 +102,60 @@ func update(delta: float):
 			continue
 
 		var chosen = sources[randi() % sources.size()]
-		if ecs.ores.has(chosen):
-			var ore = ecs.ores[chosen]
-			var mult = 1.0
-			if GameManager.energy_network:
-				mult = GameManager.energy_network.get_miner_efficiency_for_ore(chosen)
-			var deduct = tick_cost / mult * GameManager.get_ore_consumption_multiplier()
-			ore["current_reserve"] = max(0.0, ore.get("current_reserve", 0.0) - deduct)
+		if GameManager.energy_network:
+			GameManager.energy_network.consume_from_power_source(chosen, tick_cost, tower_id)
 
-		var base_damage = combat.get("damage", 35)
+		var base_damage = GameManager.get_tower_base_damage(tower_id)
 		# Маяк: +20% урона за тик; множитель от руды в сети (мало руды — до 1.5x); MVP
 		var network_mult = 1.0
 		if GameManager.energy_network:
 			network_mult = GameManager.energy_network.get_network_ore_damage_mult(tower_id)
 		var mvp_mult = GameManager.get_mvp_damage_mult(tower_id)
-		var tick_damage = max(1, int(float(base_damage) * Config.BEACON_DAMAGE_BASE_MULT * Config.BEACON_DAMAGE_BONUS_MULT / BEACON_TICK_RATE * network_mult * mvp_mult))
+		var resistance_mult = GameManager.get_resistance_mult(tower_id)
+		var early_mult = GameManager.get_early_craft_curse_damage_multiplier(tower_id)
+		var tick_damage = max(1, int(float(base_damage) * Config.BEACON_DAMAGE_BASE_MULT * Config.BEACON_DAMAGE_BONUS_MULT / BEACON_TICK_RATE * network_mult * mvp_mult * resistance_mult * early_mult))
+		tick_damage += GameManager.get_card_damage_bonus_global()
 		var damage_type = combat.get("attack_type", "PURE")
+		var dt_upper = damage_type.to_upper()
+		if dt_upper == "PHYSICAL":
+			tick_damage += GameManager.get_card_phys_damage_bonus()
+		elif dt_upper == "MAGICAL":
+			tick_damage += GameManager.get_card_mag_damage_bonus()
+
+		var incinerate_target_id = -1
+		var incinerate_num = int(attack_params.get("incinerate_chance_num", 0))
+		var incinerate_den = int(attack_params.get("incinerate_chance_den", 1))
+		if incinerate_den > 0 and incinerate_num > 0 and (randi() % incinerate_den) < incinerate_num:
+			var candidates = []
+			for eid in targets:
+				var enemy = ecs.enemies.get(eid, {})
+				if enemy.get("def_id", "") == "ENEMY_BOSS":
+					continue
+				var enemy_def = DataRepository.get_enemy_def(enemy.get("def_id", ""))
+				var ename = enemy_def.get("name", "")
+				if ename.to_lower().contains("тьма"):
+					continue
+				candidates.append(eid)
+			if not candidates.is_empty():
+				incinerate_target_id = candidates[randi() % candidates.size()]
 
 		for target_id in targets:
+			if target_id == incinerate_target_id:
+				var enemy_pos = ecs.positions.get(target_id)
+				var renderable = ecs.renderables.get(target_id, {})
+				var radius = renderable.get("radius", 10.0)
+				ecs.kill_enemy(target_id)
+				if enemy_pos:
+					var effect_id = ecs.create_entity()
+					ecs.volcano_effects[effect_id] = {
+						"pos": enemy_pos,
+						"timer": 0.25,
+						"max_radius": radius * 1.5,
+						"color": Color(1.0, 1.0, 0.88)
+					}
+				continue
 			if not GameManager.roll_evasion(target_id):
-				_apply_damage(target_id, tick_damage, damage_type, tower_id)
+				_apply_damage(target_id, tick_damage, dt_upper, tower_id)
 			var enemy_pos = ecs.positions.get(target_id)
 			if enemy_pos:
 				var renderable = ecs.renderables.get(target_id, {})
@@ -150,17 +187,35 @@ func _apply_damage(entity_id: int, damage: int, damage_type: String, source_towe
 	var health = ecs.healths.get(entity_id)
 	if not health:
 		return
+	if damage_type.to_upper() == "MAGICAL" and GameManager.is_magic_immune(entity_id):
+		return
 	var enemy = ecs.enemies.get(entity_id, {})
 	var final_damage = damage
 	match damage_type.to_upper():
 		"PHYSICAL":
-			var arm = GameManager.get_effective_physical_armor(entity_id)
-			final_damage = max(1, int(damage * GameManager.armor_to_damage_factor(float(arm))))
+			if GameManager.is_physical_immune(entity_id):
+				final_damage = 0
+			else:
+				var arm = GameManager.get_effective_physical_armor(entity_id)
+				final_damage = max(1, int(damage * GameManager.armor_to_damage_factor(float(arm))))
 		"MAGICAL":
-			var arm = GameManager.get_effective_magical_armor(entity_id)
-			final_damage = max(1, int(damage * GameManager.armor_to_damage_factor(float(arm))))
+			if GameManager.is_magic_immune(entity_id):
+				final_damage = 0
+			else:
+				var arm = GameManager.get_effective_magical_armor(entity_id)
+				final_damage = max(1, int(damage * GameManager.armor_to_damage_factor(float(arm))))
 		"PURE", "SLOW", "POISON":
-			pass
+			var arm = GameManager.get_effective_pure_armor(entity_id)
+			final_damage = int(damage * GameManager.armor_to_damage_factor(float(arm)))
+			var pure_res = GameManager.get_pure_damage_resistance(entity_id)
+			if pure_res > 0.0:
+				final_damage = int(final_damage * (1.0 - pure_res))
+	if GameManager.has_curse_hp_percent():
+		var max_hp = health.get("max", 100)
+		final_damage += int(max_hp * 0.004)
+	final_damage = int(final_damage * GameManager.get_damage_to_enemy_multiplier(entity_id, source_tower_id))
+	if final_damage < 1 and damage > 0:
+		final_damage = 1
 	health["current"] = max(0, health["current"] - final_damage)
 	GameManager.on_enemy_took_damage(entity_id, final_damage, source_tower_id)
 	ecs.damage_flashes[entity_id] = {"timer": 0.2}

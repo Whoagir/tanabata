@@ -43,9 +43,9 @@ var ores: Dictionary = {}           # entity_id -> {power: float, max_reserve: f
 var ore_hex_index: Dictionary = {}  # hex_key (String) -> ore_id (int) — O(1) поиск руды по гексу
 
 # Статус-эффекты
-var slow_effects: Dictionary = {}   # entity_id -> {slow_factor: float, timer: float}
+var slow_effects: Dictionary = {}   # entity_id -> { source_key (def_id или "hit_"+def_id) -> {slow_factor: float, timer: float} }; разные источники стакаются (перемножение)
 var bash_effects: Dictionary = {}  # entity_id -> {timer: float} — оглушение: не двигается, не использует активные скиллы
-var poison_effects: Dictionary = {} # entity_id -> {damage_per_sec: float, timer: float, tick_timer: float}
+var poison_effects: Dictionary = {} # entity_id -> { def_id (NU1, NU2, ...) -> {timer, damage_per_sec, tick_timer, source_tower_id} }; разный def_id стакается
 var phys_armor_debuffs: Dictionary = {}  # entity_id -> {amount: int, timer: float}
 var mag_armor_debuffs: Dictionary = {}   # entity_id -> {amount: int, timer: float}
 var jade_poisons: Dictionary = {}   # entity_id -> {target_id: int, instances: Array, ...}
@@ -53,8 +53,12 @@ var aura_effects: Dictionary = {}   # entity_id -> {speed_multiplier: float}
 
 # Ауры башен
 var auras: Dictionary = {}          # entity_id -> {radius: int, speed_multiplier: float, flying_only: bool, slow_factor: float}
-# Замедление летающих от аур (Кварц): enemy_id -> slow_factor (0.6 = 60% slow)
+# Замедление летающих от аур (Кварц, Чарминг): enemy_id -> множитель скорости (произведение (1 - slow) по башням; 1.0 = без замедления)
 var flying_aura_slows: Dictionary = {}
+# Бонус получаемого урона для летающих от аур (Чарминг): enemy_id -> bonus (0.2 = +20% урона)
+var flying_damage_taken_bonus: Dictionary = {}
+# Бонус получаемого урона в ауре Парайбы (all_enemies_slow + damage_taken_bonus): enemy_id -> bonus (0.15 = +15% урона)
+var paraba_damage_taken_bonus: Dictionary = {}
 
 # Визуальные эффекты
 var damage_flashes: Dictionary = {} # entity_id -> {timer: float}
@@ -90,12 +94,23 @@ var beacons: Dictionary = {}        # entity_id -> {current_angle: float, rotati
 var beacon_sectors: Dictionary = {} # entity_id -> {is_visible: bool, range: float, arc: float, angle: float}
 var volcano_auras: Dictionary = {}  # entity_id -> {radius: int, tick_timer: float, ...}
 var volcano_effects: Dictionary = {}# entity_id -> {max_radius: float, timer: float}
+var auriga_lines: Dictionary = {}    # tower_id -> {is_visible: bool, hexes: Array[String]}
 
 # Выбор башен
 var manual_selection_markers: Dictionary = {} # entity_id -> bool
 
 # Накопление дробного регена врагов (enemy_id -> float)
 var enemy_regen_accumulator: Dictionary = {}
+
+# Цепная молния (Бладстоун): массив { positions: Array[Vector2], timer: float }
+var chain_lightning_effects: Array = []
+
+# Крик (Турнамент): временные зоны { center: Vector2, radius_hex: float, created_at: float, duration: float, enemy_time: Dictionary }
+# enemy_time: enemy_id -> накопленные секунды в зоне; при >= zone_duration накладываем стан 6 с и +50% урона 6 с
+var scream_zones: Array = []
+# Дебаффы от крика: стан (враг не двигается) и бонус получаемого урона
+var scream_stun: Dictionary = {}       # enemy_id -> { timer: float }
+var scream_damage_bonus: Dictionary = {}  # enemy_id -> { timer: float, bonus: float }
 
 # Состояние игры (синглтон-компонент)
 var game_state: Dictionary = {}     # Единственный экземпляр: {phase: GamePhase, current_wave: int, ...}
@@ -110,13 +125,14 @@ func _init():
 		towers, combat, turrets, enemies, paths, projectiles, ores,
 		slow_effects, bash_effects, poison_effects,
 		phys_armor_debuffs, mag_armor_debuffs, jade_poisons,
-		aura_effects, auras, flying_aura_slows,
+		aura_effects, auras, flying_aura_slows, flying_damage_taken_bonus, paraba_damage_taken_bonus,
 		damage_flashes, lasers, aoe_effects, energy_lines, texts,
 		combinables, waves, player_states,
 		tower_disarm, tower_attack_slow, reactive_armor_stacks, kraken_damage_taken,
 		enemy_regen_accumulator,
-		beacons, beacon_sectors, volcano_auras, volcano_effects,
-		manual_selection_markers
+		beacons, beacon_sectors, volcano_auras, volcano_effects, auriga_lines,
+		manual_selection_markers,
+		scream_stun, scream_damage_bonus
 	]
 
 func create_entity() -> int:
@@ -139,6 +155,9 @@ func destroy_entity(entity_id: int):
 	# Автоматическая очистка из всех зарегистрированных хранилищ
 	for store in _component_stores:
 		store.erase(entity_id)
+	
+	if game_state.has("tower_hit_stacks") and game_state["tower_hit_stacks"].has(entity_id):
+		game_state["tower_hit_stacks"].erase(entity_id)
 	
 	entities.erase(entity_id)
 
@@ -186,9 +205,8 @@ func add_component(entity_id: int, component_type: String, data: Dictionary):
 		"beacon_sector": beacon_sectors[entity_id] = data
 		"volcano_aura": volcano_auras[entity_id] = data
 		"volcano_effect": volcano_effects[entity_id] = data
+		"auriga_line": auriga_lines[entity_id] = data
 		"manual_selection": manual_selection_markers[entity_id] = data
-		"energy_line": energy_lines[entity_id] = data
-		"ore": ores[entity_id] = data
 		_:
 			push_error("Unknown component type: %s" % component_type)
 
@@ -225,6 +243,7 @@ func remove_component(entity_id: int, component_type: String):
 		"beacon_sector": beacon_sectors.erase(entity_id)
 		"volcano_aura": volcano_auras.erase(entity_id)
 		"volcano_effect": volcano_effects.erase(entity_id)
+		"auriga_line": auriga_lines.erase(entity_id)
 		"manual_selection": manual_selection_markers.erase(entity_id)
 
 # Проверить наличие компонента
@@ -260,10 +279,25 @@ func has_component(entity_id: int, component_type: String) -> bool:
 		"beacon_sector": return entity_id in beacon_sectors
 		"volcano_aura": return entity_id in volcano_auras
 		"volcano_effect": return entity_id in volcano_effects
+		"auriga_line": return entity_id in auriga_lines
 		"manual_selection": return entity_id in manual_selection_markers
 		"energy_line": return entity_id in energy_lines
 		_:
 			return false
+
+func get_combined_slow_factor(entity_id: int) -> float:
+	"""Суммарный множитель скорости от всех стаков замедления (перемножение по источникам)."""
+	if not slow_effects.has(entity_id):
+		return 1.0
+	var data = slow_effects[entity_id]
+	if not data is Dictionary:
+		return 1.0
+	var combined := 1.0
+	for source_key in data:
+		var entry = data[source_key]
+		if entry is Dictionary:
+			combined *= entry.get("slow_factor", 1.0)
+	return combined
 
 # ============================================================================
 # ИНИЦИАЛИЗАЦИЯ СОСТОЯНИЯ ИГРЫ
@@ -278,13 +312,20 @@ func init_game_state():
 		"time_speed": 1.0,
 		"paused": false,
 		"total_enemies_killed": 0,
+		"total_ore_spent_cumulative": 0.0,
 		"line_edit_mode": false,  # Режим редактирования энерголиний (U)
 		"drag_source_tower_id": 0,
 		"drag_original_parent_id": 0,
 		"hidden_line_id": 0,
 		"future_path": [],           # Ключи гексов пути Entry→Exit (для отрисовки)
 		"cleared_checkpoints": {},    # hex_key -> true (пройденные чекпоинты по последнему врагу)
-		"difficulty": GameManager.difficulty if GameManager else GameTypes.Difficulty.MEDIUM
+		"difficulty": GameManager.difficulty if GameManager else GameTypes.Difficulty.MEDIUM,
+		"success_level": Config.SUCCESS_LEVEL_DEFAULT,
+		"success_scale": Config.SUCCESS_SCALE_MAX,
+		"alive_enemies_count": 0,  # для HUD; обновляется в wave_system (_spawn_enemy) и kill_enemy
+		"stash_queue": [],  # очередь стеша для фазы BUILD: массив "Б"/"А", при постановке — pop, при снятии Б — push в начало
+		"tower_hit_stacks": {},  # enemy_id -> { "TOWER_U235" -> { stacks, timer } } для бонуса повторных попаданий
+		"wave_snapshots": []  # снимки состояния в начале каждой волны (seed, current_wave, towers) для симуляций
 	}
 
 # ============================================================================
@@ -292,9 +333,49 @@ func init_game_state():
 # ============================================================================
 
 func kill_enemy(entity_id: int, source_tower_id: int = -1) -> void:
+	if GameManager:
+		GameManager.record_enemy_wave_progress(entity_id)
+		GameManager.on_enemy_killed(entity_id)
+	# Единый счётчик живых врагов для HUD (обновляется при убийстве и при спавне)
+	if game_state.has("alive_enemies_count"):
+		var c = game_state["alive_enemies_count"]
+		if c > 0:
+			game_state["alive_enemies_count"] = c - 1
+	var enemy = enemies.get(entity_id)
+	# Волна 40 (Тройник): при смерти одного босса у оставшихся удваиваются текущее/макс HP и реген
+	var triplet_ids: Array = game_state.get("wave_40_triplet_ids", [])
+	var was_in_triplet = entity_id in triplet_ids
+	if was_in_triplet:
+		for other_id in triplet_ids:
+			if other_id == entity_id:
+				continue
+			if not enemies.has(other_id):
+				continue
+			var other_health = healths.get(other_id)
+			var other_enemy = enemies.get(other_id)
+			if other_health and other_health.get("current", 0) > 0 and other_enemy:
+				other_health["current"] = mini(999999999, other_health["current"] * 2)
+				other_health["max"] = mini(999999999, other_health["max"] * 2)
+				other_enemy["regen"] = other_enemy.get("regen", 0) * 2.0
+		triplet_ids.erase(entity_id)
+		game_state["wave_40_triplet_ids"] = triplet_ids
+	# Лут босса: на волне 40 только когда убиты все 3 босса (последний из triplet)
+	if enemy and enemy.get("def_id", "") == "ENEMY_BOSS":
+		if GameManager:
+			if was_in_triplet and triplet_ids.size() == 0:
+				GameManager.on_boss_killed()
+			elif not was_in_triplet:
+				GameManager.on_boss_killed()
 	game_state["total_enemies_killed"] = game_state.get("total_enemies_killed", 0) + 1
+	if enemy and enemy.get("is_gold", false) and GameManager:
+		GameManager.distribute_gold_creature_ore_reward()
 	PlayerSystem.grant_xp_for_kill()
 	destroy_entity(entity_id)
+
+func get_player_level() -> int:
+	for _pid in player_states:
+		return player_states[_pid].get("level", 1)
+	return 1
 
 # ============================================================================
 # ДЕБАГ

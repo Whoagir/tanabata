@@ -33,13 +33,14 @@ static func create_tower(ecs: ECSWorld, hex_map: HexMap, hex: Hex, def_id: Strin
 # Вызов только из create_tower. Не трогает карту (hex_map).
 static func _apply_tower_components(ecs: ECSWorld, entity_id: int, hex: Hex, def_id: String, tower_def: Dictionary) -> void:
 	var tower_type = tower_def.get("type", "ATTACK")
-	ecs.add_component(entity_id, "tower", {
+	var tower_data = {
 		"def_id": def_id,
 		"level": tower_def.get("level", 1),
 		"hex_q": hex.q,
 		"hex_r": hex.r,
 		"hex": hex,
 		"is_active": false,
+		"is_manually_disabled": false,
 		"type": tower_type,
 		"is_temporary": true,
 		"is_permanent": false,
@@ -47,8 +48,13 @@ static func _apply_tower_components(ecs: ECSWorld, entity_id: int, hex: Hex, def
 		"is_manually_selected": false,
 		"is_highlighted": false,
 		"crafting_level": 0,
-		"mvp_level": 0
-	})
+		"mvp_level": 0,
+		"placed_at_wave": 0
+	}
+	if tower_type == "BATTERY":
+		tower_data["battery_storage"] = 0.0
+		tower_data["battery_manual_discharge"] = false  # false = добыча (заряд), true = трата (разряд)
+	ecs.add_component(entity_id, "tower", tower_data)
 	
 	# Renderable компонент (размер по уровню: Lv.1 меньше, Lv.6 близок к гексу)
 	var visuals = tower_def.get("visuals", {})
@@ -100,11 +106,23 @@ static func _apply_tower_components(ecs: ECSWorld, entity_id: int, hex: Hex, def
 		var aura_comp = {
 			"radius": aura_data.get("radius", 2),
 			"speed_multiplier": aura_data.get("speed_multiplier", 1.0),
-			"damage_bonus": aura_data.get("damage_bonus", 0)
+			"damage_bonus": aura_data.get("damage_bonus", 0),
+			"damage_bonus_percent": aura_data.get("damage_bonus_percent", 0.0)
 		}
 		if aura_data.get("flying_only", false):
 			aura_comp["flying_only"] = true
 			aura_comp["slow_factor"] = aura_data.get("slow_factor", 0.0)
+			aura_comp["flying_damage_taken_bonus"] = aura_data.get("flying_damage_taken_bonus", 0.0)
+		if aura_data.get("all_enemies_slow", false):
+			aura_comp["all_enemies_slow"] = true
+			aura_comp["slow_factor"] = aura_data.get("slow_factor", 0.5)
+			aura_comp["exit_slow_factor"] = aura_data.get("exit_slow_factor", 0.7)
+			aura_comp["exit_slow_duration"] = aura_data.get("exit_slow_duration", 0.0)
+			aura_comp["damage_taken_bonus"] = aura_data.get("damage_taken_bonus", 0.0)
+			if aura_data.has("ore_cost"):
+				aura_comp["ore_cost"] = aura_data.get("ore_cost", 0.0)
+		if aura_data.get("debuff_immunity", false):
+			aura_comp["debuff_immunity"] = true
 		ecs.add_component(entity_id, "aura", aura_comp)
 
 # Создать стену
@@ -128,6 +146,7 @@ static func create_wall(ecs: ECSWorld, hex_map: HexMap, hex: Hex) -> int:
 		"hex_r": hex.r,
 		"hex": hex,
 		"is_active": false,
+		"is_manually_disabled": false,
 		"type": "WALL",
 		"is_temporary": false,
 		"is_permanent": true,
